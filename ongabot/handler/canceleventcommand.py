@@ -31,7 +31,7 @@ def callback(update: Update, context: CallbackContext):
             + get_upcoming_wednesday_date(date.today()).strftime("%Y-%m-%d")
             + " cancelled successfully. The poll is still accessible in the channel history.",
         )
-        logger.debug("Cancelled event with msg id %s", pinned_poll.msg.id)
+        logger.debug("Cancelled event with msg id %s", pinned_poll.message_id)
     else:
         context.bot.send_message(
             update.effective_chat.id, "No event to cancel! Create a new event with /newevent first."
