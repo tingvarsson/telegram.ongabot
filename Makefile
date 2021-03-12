@@ -26,7 +26,7 @@ run:
 	cd ongabot && API_TOKEN=$(API_TOKEN) $(PYTHON) ongabot.py
 
 lint:
-	$(PYLINT) ongabot
+	$(PYLINT) --rcfile=setup.cfg ongabot
 
 pep8:
 	$(PEP8) ongabot tests
