@@ -40,6 +40,17 @@ def callback(update: Update, context: CallbackContext):
     }
     context.bot_data.update(poll_data)
 
+    #Retrieve prev pinned msg and unpin
+    pinnedPoll = context.chat_data.get("pinnedPollMsg")
+    if pinnedPoll is not None:
+        pinnedPoll.unpin()
+        logger.debug("unpin msg:" + pinnedPoll.poll.id)
+        
+    #Pin new message and save to database for future removal
+    message.pin(disable_notification=True)
+    context.chat_data["pinnedPollMsg"] = message
+    logger.debug("pin msg:" + message.poll.id)
+    
     logger.debug("context.bot_data:")
     logger.debug("%s", context.bot_data)
     logger.debug("EXIT: NewEventCommandHandler::callback")
