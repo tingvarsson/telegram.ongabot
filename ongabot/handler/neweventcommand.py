@@ -20,6 +20,22 @@ def callback(update: Update, context: CallbackContext):
     logger.debug("update:")
     logger.debug("%s", update)
 
+    # Retrieve prev pinned msg and unpin
+    pinned_poll = context.chat_data.get("pinned_poll_msg")
+
+    if pinned_poll is not None:
+        next_wed = get_upcoming_wednesday_date(date.today())
+        if next_wed.strftime("%Y-%m-%d") in pinned_poll.poll.question:
+            context.bot.send_message(
+                update.effective_chat.id,
+                "Event already exists for this date. "
+                + "Send /cancelevent first if you wish to create a new event.",
+            )
+            logger.debug("Attempted to create event for existing date.")
+            return
+        pinned_poll.unpin()
+        context.chat_data["pinned_poll_msg"] = None
+
     message = context.bot.send_poll(
         update.effective_chat.id,
         create_poll_text(),
@@ -39,20 +55,14 @@ def callback(update: Update, context: CallbackContext):
         }
     }
     context.bot_data.update(poll_data)
-
-    #Retrieve prev pinned msg and unpin
-    pinnedPoll = context.chat_data.get("pinnedPollMsg")
-    if pinnedPoll is not None:
-        pinnedPoll.unpin()
-        logger.debug("unpin msg:" + pinnedPoll.poll.id)
-        
-    #Pin new message and save to database for future removal
-    message.pin(disable_notification=True)
-    context.chat_data["pinnedPollMsg"] = message
-    logger.debug("pin msg:" + message.poll.id)
-    
     logger.debug("context.bot_data:")
     logger.debug("%s", context.bot_data)
+
+    # Pin new message and save to database for future removal
+    message.pin(disable_notification=True)
+    context.chat_data["pinned_poll_msg"] = message
+    logger.debug("pin msg: %d", message.poll.id)
+
     logger.debug("EXIT: NewEventCommandHandler::callback")
 
 

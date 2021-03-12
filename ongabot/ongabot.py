@@ -10,6 +10,7 @@ from handler import EventPollAnswerHandler
 from handler import EventPollHandler
 from handler import HelpCommandHandler
 from handler import NewEventCommandHandler
+from handler import CancelEventCommandHandler
 from handler import OngaCommandHandler
 from handler import StartCommandHandler
 
@@ -38,6 +39,7 @@ def main():
     dispatcher.add_handler(HelpCommandHandler())
     dispatcher.add_handler(OngaCommandHandler())
     dispatcher.add_handler(NewEventCommandHandler())
+    dispatcher.add_handler(CancelEventCommandHandler())
     dispatcher.add_handler(EventPollHandler())
     dispatcher.add_handler(EventPollAnswerHandler())
     dispatcher.add_error_handler(error)
