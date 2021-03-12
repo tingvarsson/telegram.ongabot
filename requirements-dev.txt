@@ -2,3 +2,4 @@ black==20.8b1
 flake8==3.8.4
 pylint==2.6.0
 pytest==6.2.2
+versioneer==0.19

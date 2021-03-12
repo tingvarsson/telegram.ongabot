@@ -1,0 +1,7 @@
+include README.md
+include LICENSE
+include requirements.txt
+graft ongabot
+recursive-exclude * *.py[co]
+include versioneer.py
+include ongabot/_version.py
