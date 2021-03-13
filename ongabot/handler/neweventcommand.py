@@ -1,9 +1,10 @@
 """This module contains the NewEventCommandHandler class."""
 import logging
-from datetime import date, timedelta
-
+from datetime import date
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
+
+import utils.helper as helper
 
 
 class NewEventCommandHandler(CommandHandler):
@@ -24,14 +25,16 @@ def callback(update: Update, context: CallbackContext):
     pinned_poll = context.chat_data.get("pinned_poll_msg")
 
     if pinned_poll is not None:
-        next_wed = get_upcoming_wednesday_date(date.today())
-        if next_wed.strftime("%Y-%m-%d") in pinned_poll.poll.question:
+        next_wed = helper.get_upcoming_wednesday_date(date.today()).strftime("%Y-%m-%d")
+        if next_wed in pinned_poll.poll.question:
             context.bot.send_message(
                 update.effective_chat.id,
-                "Event already exists for this date. "
-                + "Send /cancelevent first if you wish to create a new event.",
+                "Event already exists for: "
+                + next_wed
+                + "\nSend /cancelevent first if you wish to create a new event.",
             )
             logger.debug("Attempted to create event for existing date.")
+            logger.debug("EXIT: NewEventCommandHandler::callback")
             return
         pinned_poll.unpin()
         context.chat_data["pinned_poll_msg"] = None
@@ -69,7 +72,7 @@ def callback(update: Update, context: CallbackContext):
 def create_poll_text():
     """Create text field for poll"""
     title = "Event: ONGA"
-    when = f"When: {get_upcoming_wednesday_date(date.today())}"
+    when = f"When: {helper.get_upcoming_wednesday_date(date.today())}"
     message = f"{title}\n{when}"
     return message
 
@@ -86,10 +89,3 @@ def create_poll_options():
     ]
 
     return options
-
-
-def get_upcoming_wednesday_date(today):
-    """Get the date of the next upcoming wednesday"""
-    wednesday_day_of_week_index = 2  # 0-6, 0 is monday and 6 is sunday
-    next_wednesday_date = today + timedelta((wednesday_day_of_week_index - today.weekday()) % 7)
-    return next_wednesday_date

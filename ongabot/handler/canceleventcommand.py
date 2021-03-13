@@ -3,8 +3,7 @@ import logging
 from datetime import date
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
-
-from .neweventcommand import get_upcoming_wednesday_date
+import utils.helper as helper
 
 
 class CancelEventCommandHandler(CommandHandler):
@@ -17,23 +16,27 @@ class CancelEventCommandHandler(CommandHandler):
 def callback(update: Update, context: CallbackContext):
     """Cancel active event as result of command /cancelevent"""
     logger = logging.getLogger()
+    logger.debug("ENTER: CancelEventCommandHandler::callback")
 
     # Retrieve currently pinned message
     pinned_poll = context.chat_data.get("pinned_poll_msg")
+    print("{}{}".format("pinnedpollmsg ", pinned_poll))
 
-    if pinned_poll is not None:
-        pinned_poll.unpin()
-        context.chat_data["pinned_poll_msg"] = None
-
-        context.bot.send_message(
-            update.effective_chat.id,
-            "Event for "
-            + get_upcoming_wednesday_date(date.today()).strftime("%Y-%m-%d")
-            + " cancelled successfully. The poll is still accessible in the channel history.",
-        )
-        logger.debug("Cancelled event with msg id %s", pinned_poll.message_id)
-    else:
+    if pinned_poll is None:
         context.bot.send_message(
             update.effective_chat.id, "No event to cancel! Create a new event with /newevent first."
         )
         logger.debug("Tried to cancel without existing event")
+        logger.debug("EXIT: CancelEventCommandHandler::callback")
+        return
+
+    pinned_poll.unpin()
+    context.chat_data["pinned_poll_msg"] = None
+
+    context.bot.send_message(
+        update.effective_chat.id,
+        pinned_poll.poll.question
+        + " \nCancelled successfully. The poll is still accessible in the channel history.",
+    )
+    logger.debug("Cancelled event with msg id %s", pinned_poll.message_id)
+    logger.debug("EXIT: CancelEventCommandHandler::callback")
