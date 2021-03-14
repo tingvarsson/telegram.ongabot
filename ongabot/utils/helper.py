@@ -17,7 +17,8 @@ def create_help_text():
         "Commandments:\n"
         "/help - Get some aid in needing times\n"
         "/onga - This is the way, let me show you\n"
-        "/newevent - Create a new event corresponding to upcoming Wednesday\n"
+        "/newevent - Create a new event corresponding to upcoming Wednesday and pins it\n"
+        "/cancelevent - Cancels the latest default event, i.e. unpins it\n"
     )
 
     return text
