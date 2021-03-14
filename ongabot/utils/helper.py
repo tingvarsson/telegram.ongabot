@@ -1,6 +1,7 @@
 """This module contains helper functions."""
 from datetime import timedelta
 
+
 def create_help_text():
     """Print the help text for a /start or /help command"""
     text = (
