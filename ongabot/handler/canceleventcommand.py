@@ -1,9 +1,7 @@
 """This module contains the CancelEventCommandHandler class."""
 import logging
-from datetime import date
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
-import utils.helper as helper
 
 
 class CancelEventCommandHandler(CommandHandler):
@@ -20,7 +18,6 @@ def callback(update: Update, context: CallbackContext):
 
     # Retrieve currently pinned message
     pinned_poll = context.chat_data.get("pinned_poll_msg")
-    print("{}{}".format("pinnedpollmsg ", pinned_poll))
 
     if pinned_poll is None:
         context.bot.send_message(
