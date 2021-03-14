@@ -1,6 +1,6 @@
 import unittest
+from utils import helper
 from datetime import date
-from handler import neweventcommand
 
 
 class NewEventCommandTest(unittest.TestCase):
@@ -14,7 +14,7 @@ class NewEventCommandTest(unittest.TestCase):
 
     def test_getUpcomingWednesdayDate(self):
         for today, expected in self.upcomingTestDates:
-            result = neweventcommand.get_upcoming_wednesday_date(today)
+            result = helper.get_upcoming_wednesday_date(today)
             self.assertEqual(
                 result.weekday(),
                 2,
