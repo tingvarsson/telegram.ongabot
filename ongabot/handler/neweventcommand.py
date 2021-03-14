@@ -52,7 +52,7 @@ def callback(update: Update, context: CallbackContext):
 
     # Store the new poll in bot_data
     poll_data = {
-        "poll_message.poll.id": {
+        poll_message.poll.id: {
             "chat_id": update.effective_chat.id,
             "poll": poll_message.poll,
         }
