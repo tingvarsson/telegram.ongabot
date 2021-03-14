@@ -3,6 +3,8 @@ import logging
 from telegram import Update
 from telegram.ext import PollHandler, CallbackContext
 
+from utils.helper import log
+
 
 class EventPollHandler(PollHandler):
     """Handler for event poll updates"""
@@ -11,6 +13,7 @@ class EventPollHandler(PollHandler):
         PollHandler.__init__(self, callback=callback)
 
 
+@log
 def callback(update: Update, context: CallbackContext):
     """Handle an poll update"""
     logger = logging.getLogger()

@@ -5,6 +5,10 @@ from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
 import utils.helper as helper
+from utils.helper import log
+
+
+_logger = logging.getLogger(__name__)
 
 
 class NewEventCommandHandler(CommandHandler):
@@ -14,12 +18,10 @@ class NewEventCommandHandler(CommandHandler):
         CommandHandler.__init__(self, "newevent", callback)
 
 
+@log
 def callback(update: Update, context: CallbackContext):
     """Create a poll as result of command /newevent"""
-    logger = logging.getLogger()
-    logger.debug("ENTER: NewEventCommandHandler::callback")
-    logger.debug("update:")
-    logger.debug("%s", update)
+    _logger.debug("update:\n%s", update)
 
     # Retrieve prev pinned msg and unpin
     pinned_poll = context.chat_data.get("pinned_poll_msg")
@@ -33,48 +35,43 @@ def callback(update: Update, context: CallbackContext):
                 + next_wed
                 + "\nSend /cancelevent first if you wish to create a new event.",
             )
-            logger.debug("Attempted to create event for existing date.")
-            logger.debug("EXIT: NewEventCommandHandler::callback")
+            _logger.debug("Attempted to create event for existing date.")
             return
+
         pinned_poll.unpin()
         context.chat_data["pinned_poll_msg"] = None
 
-    message = context.bot.send_poll(
+    poll_message = context.bot.send_poll(
         update.effective_chat.id,
         create_poll_text(),
         options=create_poll_options(),
         is_anonymous=False,
         allows_multiple_answers=True,
     )
-
-    logger.debug("message:")
-    logger.debug("%s", message)
+    _logger.debug("poll_message:\n%s", poll_message)
 
     # Store the new poll in bot_data
     poll_data = {
-        message.poll.id: {
+        "poll_message.poll.id": {
             "chat_id": update.effective_chat.id,
-            "poll": message.poll,
+            "poll": poll_message.poll,
         }
     }
     context.bot_data.update(poll_data)
-    logger.debug("context.bot_data:")
-    logger.debug("%s", context.bot_data)
+    _logger.debug("context.bot_data:\n%s", context.bot_data)
 
-    # Pin new message and save to database for future removal
-    message.pin(disable_notification=True)
-    context.chat_data["pinned_poll_msg"] = message
-    logger.debug("pin msg: %d", message.poll.id)
-
-    logger.debug("EXIT: NewEventCommandHandler::callback")
+    # Pin new message and save to chat_data for future removal
+    poll_message.pin(disable_notification=True)
+    context.chat_data["pinned_poll_msg"] = poll_message
+    _logger.debug("pinned_poll_msg: %s", poll_message.poll.id)
 
 
 def create_poll_text():
     """Create text field for poll"""
     title = "Event: ONGA"
     when = f"When: {helper.get_upcoming_wednesday_date(date.today())}"
-    message = f"{title}\n{when}"
-    return message
+    text = f"{title}\n{when}"
+    return text
 
 
 def create_poll_options():

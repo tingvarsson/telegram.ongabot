@@ -3,6 +3,7 @@ from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
 import utils.helper as helper
+from utils.helper import log
 
 
 class HelpCommandHandler(CommandHandler):
@@ -12,6 +13,7 @@ class HelpCommandHandler(CommandHandler):
         CommandHandler.__init__(self, "help", callback)
 
 
+@log
 def callback(update: Update, _: CallbackContext):
     """Print the help text for a /start or /help command"""
     update.message.reply_text(helper.create_help_text())
