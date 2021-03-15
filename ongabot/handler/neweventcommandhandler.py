@@ -31,7 +31,7 @@ def callback(update: Update, context: CallbackContext) -> None:
     pinned_poll = context.chat_data.get("pinned_poll_msg")
 
     if pinned_poll is not None:
-        next_wed = helper.get_upcoming_wednesday_date(date.today()).strftime("%Y-%m-%d")
+        next_wed = helper.get_upcoming_date(date.today(), 'wednesday').strftime("%Y-%m-%d")
         if next_wed in pinned_poll.poll.question:
             context.bot.send_message(
                 update.effective_chat.id,
@@ -73,7 +73,7 @@ def callback(update: Update, context: CallbackContext) -> None:
 def create_poll_text() -> str:
     """Create text field for poll"""
     title = "Event: ONGA"
-    when = f"When: {helper.get_upcoming_wednesday_date(date.today())}"
+    when = f"When: {helper.get_upcoming_date(date.today(), 'wednesday')}"
     text = f"{title}\n{when}"
     return text
 

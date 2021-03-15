@@ -1,5 +1,5 @@
 """This module contains helper functions."""
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
 
 
 def create_help_text() -> str:
@@ -24,9 +24,22 @@ def create_help_text() -> str:
     return text
 
 
-def get_upcoming_wednesday_date(today: date) -> date:
-    """Get the date of the next upcoming wednesday"""
-    wednesday_day_of_week_index = 2  # 0-6, 0 is monday and 6 is sunday
-    next_wednesday_date = today + timedelta((wednesday_day_of_week_index - today.weekday()) % 7)
+def get_upcoming_date(today: datetime, upcoming_weekday: str) -> date:
+    """Get the date of the next upcoming day with name upcoming_weekday """
+    index = get_weekday_index_from_name(upcoming_weekday)
 
-    return next_wednesday_date
+    next_date = today + timedelta((index - today.weekday()) % 7)
+    return next_date
+
+
+def get_weekday_index_from_name(day_name: str) -> int:
+    """ Get the day index from week day name """
+    return {
+        'monday': 0,
+        'tuesday': 1,
+        'wednesday': 2,
+        'thursday': 3,
+        'friday': 4,
+        'saturday': 5,
+        'sunday': 6
+    }[day_name.lower()]
