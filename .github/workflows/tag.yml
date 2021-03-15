@@ -6,8 +6,7 @@ on:
       - master
 
 jobs:
-  build:
-    needs: test
+  tag:
 
     runs-on: ubuntu-latest
 
