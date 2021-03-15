@@ -15,11 +15,8 @@ on:
 
 env:
   IMAGE_NAME: ongabot
-  IMAGE_VERSION: latest
 
 jobs:
-  # Run tests.
-  # See also https://docs.docker.com/docker-hub/builds/automated-testing/
   test:
     runs-on: ubuntu-latest
 
@@ -31,10 +28,7 @@ jobs:
           docker build . --file Dockerfile
 
 
-  # Push image to GitHub Packages.
-  # See also https://docs.docker.com/docker-hub/builds/
   github-registry:
-    # Ensure test job passes before pushing image.
     needs: test
 
     runs-on: ubuntu-latest
@@ -73,7 +67,6 @@ jobs:
 
 
   dockerhub-registry:
-    # Ensure test job passes before pushing image.
     needs: test
 
     runs-on: ubuntu-latest
