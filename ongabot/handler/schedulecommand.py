@@ -63,13 +63,13 @@ def check_if_job_exists(name: str, context: CallbackContext) -> bool:
     return True
 
 
-def is_args_valid(day: str) -> bool:
+def is_args_valid(day) -> bool:
     """ Validates that the supplied arg is a valid day """
     if day.lower() not in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']:
         return False
     return True
 
 def create_poll(context: CallbackContext):
-    """ Calls the neweventcommand to create poll"""
-    _logger.debug(f"Poll creation is triggered by timer on {datetime.now()}")
+    logger = context.job.context["logger"]
+    logger.debug(f"Poll creation is triggered by timer on {datetime.now(tz=timezone.utc)}")
     create_new_poll(context.job.context["update"], context.job.context["context"])

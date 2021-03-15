@@ -8,6 +8,7 @@ from .canceleventcommandhandler import CancelEventCommandHandler
 from .ongacommandhandler import OngaCommandHandler
 from .startcommandhandler import StartCommandHandler
 from .schedulecommandhandler import ScheduleCommandHandler
+from .deschedulecommandhandler import DeScheduleCommandHandler
 
 __all__ = (
     "EventPollAnswerHandler",
@@ -17,5 +18,6 @@ __all__ = (
     "CancelEventCommandHandler",
     "OngaCommandHandler",
     "StartCommandHandler",
-    "ScheduleCommandHandler"
+    "ScheduleCommandHandler",
+    "DeScheduleCommandHandler"
 )
