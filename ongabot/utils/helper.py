@@ -1,10 +1,8 @@
 """This module contains helper functions."""
-from datetime import timedelta
-import functools
-import logging
+from datetime import date, timedelta
 
 
-def create_help_text():
+def create_help_text() -> str:
     """Print the help text for a /start or /help command"""
     text = (
         "Welcome traveler, my name is ONGAbot.\n"
@@ -26,23 +24,9 @@ def create_help_text():
     return text
 
 
-def get_upcoming_wednesday_date(today):
+def get_upcoming_wednesday_date(today: date) -> date:
     """Get the date of the next upcoming wednesday"""
     wednesday_day_of_week_index = 2  # 0-6, 0 is monday and 6 is sunday
     next_wednesday_date = today + timedelta((wednesday_day_of_week_index - today.weekday()) % 7)
+
     return next_wednesday_date
-
-
-def log(func):
-    """Log decorator to give ENTER/EXIT logs"""
-
-    @functools.wraps(func)
-    def decorator(*args, **kwargs):
-        logger = logging.getLogger(func.__module__)
-        logger.debug("ENTER: %s", func.__name__)
-        result = func(*args, **kwargs)
-        logger.debug(result)
-        logger.debug("EXIT: %s", func.__name__)
-        return result
-
-    return decorator

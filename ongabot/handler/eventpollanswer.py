@@ -1,9 +1,11 @@
 """This module contains the EventPollAnswerHandler class."""
 import logging
-from telegram import Update
+
+from telegram import PollAnswer, Update
 from telegram.ext import PollAnswerHandler, CallbackContext
 
-from utils.helper import log
+from utils.log import log
+
 
 _logger = logging.getLogger(__name__)
 
@@ -11,12 +13,12 @@ _logger = logging.getLogger(__name__)
 class EventPollAnswerHandler(PollAnswerHandler):
     """Handler for event poll answer updates"""
 
-    def __init__(self):
-        PollAnswerHandler.__init__(self, callback=callback)
+    def __init__(self) -> None:
+        super().__init__(callback)
 
 
 @log
-def callback(update: Update, context: CallbackContext):
+def callback(update: Update, context: CallbackContext) -> None:
     """Handle an poll update"""
     _logger.debug("update:\n%s", update)
 
@@ -39,7 +41,7 @@ def callback(update: Update, context: CallbackContext):
     _logger.debug("context.user_data:\n%s", context.user_data)
 
 
-def _get_poll_answer(user_data, poll_id):
+def _get_poll_answer(user_data: dict, poll_id: str) -> dict:
     if not user_data:
         return None
 
@@ -49,7 +51,7 @@ def _get_poll_answer(user_data, poll_id):
     return user_data.get("poll_answers").get(poll_id)
 
 
-def _set_poll_answer(user_data, poll_answer):
+def _set_poll_answer(user_data: dict, poll_answer: PollAnswer) -> None:
     if not user_data:
         new_user = {
             "user": poll_answer.user,

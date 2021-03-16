@@ -1,20 +1,21 @@
 """This module contains the EventPollHandler class."""
 import logging
-from telegram import Update
-from telegram.ext import PollHandler, CallbackContext
 
-from utils.helper import log
+from telegram import Update
+from telegram.ext import CallbackContext, PollHandler
+
+from utils.log import log
 
 
 class EventPollHandler(PollHandler):
     """Handler for event poll updates"""
 
-    def __init__(self):
-        PollHandler.__init__(self, callback=callback)
+    def __init__(self) -> None:
+        super().__init__(callback)
 
 
 @log
-def callback(update: Update, context: CallbackContext):
+def callback(update: Update, context: CallbackContext) -> None:
     """Handle an poll update"""
     logger = logging.getLogger()
     logger.debug("ENTER: EventPollHandler::callback")

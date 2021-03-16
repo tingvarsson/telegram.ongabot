@@ -4,7 +4,7 @@
 import logging
 import os
 
-from telegram.ext import PicklePersistence, Updater
+from telegram.ext import CallbackContext, PicklePersistence, Updater
 
 from handler import EventPollAnswerHandler
 from handler import EventPollHandler
@@ -22,12 +22,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def error(update, context):
+def error(update: object, context: CallbackContext) -> None:
     """Log Errors caused by Updates."""
     logger.warning('Update "%s" caused error "%s"', update, context.error)
 
 
-def main():
+def main() -> None:
     """Setup and run ONGAbot"""
     persistence = PicklePersistence(filename=os.getenv("DB_PATH", "ongabot.db"))
 

@@ -1,11 +1,12 @@
 """This module contains the NewEventCommandHandler class."""
 import logging
 from datetime import date
+
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
 import utils.helper as helper
-from utils.helper import log
+from utils.log import log
 
 
 _logger = logging.getLogger(__name__)
@@ -14,12 +15,12 @@ _logger = logging.getLogger(__name__)
 class NewEventCommandHandler(CommandHandler):
     """Handler for /newevent command"""
 
-    def __init__(self):
-        CommandHandler.__init__(self, "newevent", callback)
+    def __init__(self) -> None:
+        super().__init__("newevent", callback)
 
 
 @log
-def callback(update: Update, context: CallbackContext):
+def callback(update: Update, context: CallbackContext) -> None:
     """Create a poll as result of command /newevent"""
     _logger.debug("update:\n%s", update)
 
@@ -66,7 +67,7 @@ def callback(update: Update, context: CallbackContext):
     _logger.debug("pinned_poll_msg: %s", poll_message.poll.id)
 
 
-def create_poll_text():
+def create_poll_text() -> str:
     """Create text field for poll"""
     title = "Event: ONGA"
     when = f"When: {helper.get_upcoming_wednesday_date(date.today())}"
@@ -74,7 +75,7 @@ def create_poll_text():
     return text
 
 
-def create_poll_options():
+def create_poll_options() -> list[str]:
     """Create options for poll"""
     options = [
         "17.30",
