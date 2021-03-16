@@ -13,7 +13,7 @@ VENV_PATH=venv
 
 export PYTHONPATH=$PYTHONPATH:./ongabot
 
-.PHONY: venv install run lint pep8 mypy black black-check check clean docker-build docker-run
+.PHONY: venv install run lint pep8 mypy black-check check black test clean docker-build docker-run
 
 venv:
 	$(PYTHON) -m venv $(VENV_PATH)
@@ -35,16 +35,16 @@ pep8:
 mypy:
 	$(MYPY) -p ongabot
 
-black:
-	$(BLACK) .
-
 black-check:
 	$(BLACK) . --diff --check
 
+check: black-check lint pep8 mypy
+
+black:
+	$(BLACK) .
+
 test:
 	$(PYTEST) -v
-
-check: black-check lint pep8 mypy
 
 clean:
 	rm -rf $(VENV_PATH)
