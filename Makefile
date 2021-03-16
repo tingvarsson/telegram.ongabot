@@ -44,7 +44,7 @@ black-check:
 test:
 	$(PYTEST) -v
 
-check: black-check lint pep8 mypy test
+check: black-check lint pep8 mypy
 
 clean:
 	rm -rf $(VENV_PATH)

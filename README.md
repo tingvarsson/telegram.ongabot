@@ -21,6 +21,24 @@ All done! ✨ 🍰 ✨
 Run locally to check code with
 
 ```bash
+> make check
+black . --diff --check
+All done! ✨ 🍰 ✨
+16 files would be left unchanged.
+pylint ongabot
+
+--------------------------------------------------------------------
+Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)
+
+flake8 ongabot tests
+mypy -p ongabot
+Success: no issues found in 1 source file
+
+```
+
+Alternatively each checker individually with
+
+```bash
 > make black-check
 black . --diff --check
 All done! ✨ 🍰 ✨
@@ -34,6 +52,10 @@ pylint ongabot
 
 --------------------------------------------------------------------
 Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)
+
+> make mypy
+mypy -p ongabot
+Success: no issues found in 1 source file
 
 ```
 
