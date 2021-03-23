@@ -1,6 +1,6 @@
 """This module contains the ScheduleCommandHandler class."""
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 from utils.log import log
@@ -14,12 +14,12 @@ _logger = logging.getLogger(__name__)
 class ScheduleCommandHandler(CommandHandler):
     """ Handler for /schedule command """
 
-    def __init__(self):
+    def __init__(self) -> None:
         CommandHandler.__init__(self, "schedule", callback=callback)
 
 
 @log
-def callback(update: Update, context: CallbackContext):
+def callback(update: Update, context: CallbackContext) -> None:
     """ Schedule a poll creation job to run every week """
     job_name = "Weekly scheduled poll creation job"
     day_to_schedule = "sunday"
@@ -49,11 +49,19 @@ def callback(update: Update, context: CallbackContext):
 
     poll_creation_dto = {"context": context, "update": update}
 
-    upcoming_scheduled_date = helper.get_upcoming_date(datetime.now(), day_to_schedule)
+    upcoming_scheduled_date = helper.get_upcoming_date(date.today(), day_to_schedule)
+
     job = context.job_queue.run_repeating(
         create_poll,
         interval=timedelta(weeks=1),
-        first=upcoming_scheduled_date.replace(hour=20, minute=0, second=0),
+        first=datetime(
+            upcoming_scheduled_date.year,
+            upcoming_scheduled_date.month,
+            upcoming_scheduled_date.day,
+            20,
+            0,
+            0,
+        ),
         context=poll_creation_dto,
         name=job_name,
     )
@@ -71,7 +79,7 @@ def check_if_job_exists(name: str, context: CallbackContext) -> bool:
     return True
 
 
-def is_args_valid(day) -> bool:
+def is_args_valid(day: str) -> bool:
     """ Validates that the supplied arg is a valid day """
     if day.lower() not in [
         "monday",
@@ -86,7 +94,7 @@ def is_args_valid(day) -> bool:
     return True
 
 
-def create_poll(context: CallbackContext):
+def create_poll(context: CallbackContext) -> None:
     """ Creates a new poll by calling /neweventcommand """
     _logger.debug("Poll creation is triggered by timer on %s", datetime.now())
     create_new_poll(context.job.context["update"], context.job.context["context"])

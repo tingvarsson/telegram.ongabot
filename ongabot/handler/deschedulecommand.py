@@ -11,12 +11,12 @@ _logger = logging.getLogger(__name__)
 class DeScheduleCommandHandler(CommandHandler):
     """ Handler for /schedule command """
 
-    def __init__(self):
+    def __init__(self) -> None:
         CommandHandler.__init__(self, "deschedule", callback=callback)
 
 
 @log
-def callback(update: Update, context: CallbackContext):
+def callback(update: Update, context: CallbackContext) -> None:
     """ Cancels existing jobs """
     _logger.debug("update:\n%s", update)
 
