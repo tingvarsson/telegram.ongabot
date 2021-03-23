@@ -10,6 +10,7 @@ _logger = logging.getLogger(__name__)
 
 class DeScheduleCommandHandler(CommandHandler):
     """ Handler for /schedule command """
+
     def __init__(self):
         CommandHandler.__init__(self, "deschedule", callback=callback)
 
@@ -22,10 +23,12 @@ def callback(update: Update, context: CallbackContext):
     current_jobs = context.job_queue.get_jobs_by_name("Weekly scheduled poll creation job")
 
     if not current_jobs:
-        update.message.reply_text('No jobs to cancel')
+        update.message.reply_text("No jobs to cancel")
         return
 
     for job in current_jobs:
         job.schedule_removal()
 
-    update.message.reply_text('Job cancelled successfully. Polls will no longer be automatically created')
+    update.message.reply_text(
+        "Job cancelled successfully. Polls will no longer be automatically created"
+    )

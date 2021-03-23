@@ -19,5 +19,5 @@ __all__ = (
     "OngaCommandHandler",
     "StartCommandHandler",
     "ScheduleCommandHandler",
-    "DeScheduleCommandHandler"
+    "DeScheduleCommandHandler",
 )

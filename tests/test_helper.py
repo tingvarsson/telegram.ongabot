@@ -15,7 +15,7 @@ class HelperTest(unittest.TestCase):
         ]
     )
     def test_getUpcomingWednesdayDate(self, _, today, expected):
-        result = helper.get_upcoming_wednesday_date(today)
+        result = helper.get_upcoming_date(today, "wednesday")
         self.assertEqual(
             result.weekday(),
             2,
