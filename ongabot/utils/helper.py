@@ -19,6 +19,9 @@ def create_help_text() -> str:
         "/onga - This is the way, let me show you\n"
         "/newevent - Create a new event corresponding to upcoming Wednesday and pins it\n"
         "/cancelevent - Cancels the latest default event, i.e. unpins it\n"
+        "/schedule <day>[OPTIONAL] - Schedules a job to create a poll on every upcoming <day>. If no argument is supplied, job"
+        " is scheduled to run on sundays\n"
+        "/deschedule - Deschedules jobs"
     )
 
     return text
