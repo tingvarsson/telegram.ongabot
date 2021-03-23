@@ -88,5 +88,5 @@ def is_args_valid(day) -> bool:
 
 def create_poll(context: CallbackContext):
     logger = context.job.context["logger"]
-    logger.debug(f"Poll creation is triggered by timer on {datetime.now(tz=timezone.utc)}")
+    logger.debug(f"Poll creation is triggered by timer on {datetime.now()}")
     create_new_poll(context.job.context["update"], context.job.context["context"])
