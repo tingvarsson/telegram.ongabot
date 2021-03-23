@@ -1,12 +1,12 @@
 """This module contains the ScheduleCommandHandler class."""
 import logging
+from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
-from .neweventcommand import callback as create_new_poll
-from datetime import datetime, timedelta
-
-import utils.helper as helper
 from utils.log import log
+import utils.helper as helper
+from .neweventcommand import callback as create_new_poll
+
 
 _logger = logging.getLogger(__name__)
 
@@ -87,6 +87,6 @@ def is_args_valid(day) -> bool:
 
 
 def create_poll(context: CallbackContext):
-    logger = context.job.context["logger"]
-    logger.debug(f"Poll creation is triggered by timer on {datetime.now()}")
+    """ Creates a new poll by calling /neweventcommand """
+    _logger.debug("Poll creation is triggered by timer on %s", datetime.now())
     create_new_poll(context.job.context["update"], context.job.context["context"])
