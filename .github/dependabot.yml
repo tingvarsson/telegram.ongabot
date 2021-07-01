@@ -3,14 +3,18 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "monthly"
 
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "monthly"
+    ignore:
+      - dependency-name: "*"
+        # Ignore all minor or patch versions, only update on major version changes
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
