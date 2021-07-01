@@ -5,7 +5,7 @@ from datetime import date
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
-import utils.helper as helper
+from utils import helper
 from utils.log import log
 
 
