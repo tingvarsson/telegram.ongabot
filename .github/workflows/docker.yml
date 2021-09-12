@@ -18,7 +18,21 @@ on:
   pull_request:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Run tests
+        run: |
+          docker build . --file Dockerfile
+
   dockerhub-registry:
+    if: github.event_name == 'push'
+
+    needs: test
+
     runs-on: ubuntu-latest
 
     steps:
