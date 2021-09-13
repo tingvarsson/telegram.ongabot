@@ -1,12 +1,12 @@
-"""Handlers"""
+"""Handler"""
 
-from .eventpoll import EventPollHandler
-from .eventpollanswer import EventPollAnswerHandler
-from .helpcommand import HelpCommandHandler
-from .neweventcommand import NewEventCommandHandler
-from .canceleventcommand import CancelEventCommandHandler
-from .ongacommand import OngaCommandHandler
-from .startcommand import StartCommandHandler
+from .eventpollhandler import EventPollHandler
+from .eventpollanswerhandler import EventPollAnswerHandler
+from .helpcommandhandler import HelpCommandHandler
+from .neweventcommandhandler import NewEventCommandHandler
+from .canceleventcommandhandler import CancelEventCommandHandler
+from .ongacommandhandler import OngaCommandHandler
+from .startcommandhandler import StartCommandHandler
 
 __all__ = (
     "EventPollAnswerHandler",
