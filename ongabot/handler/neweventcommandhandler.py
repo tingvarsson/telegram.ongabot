@@ -5,6 +5,9 @@ from datetime import date
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
+import botdata
+from event import Event
+
 from utils import helper
 from utils.log import log
 
@@ -51,15 +54,10 @@ def callback(update: Update, context: CallbackContext) -> None:
     )
     _logger.debug("poll_message:\n%s", poll_message)
 
-    # Store the new poll in bot_data
-    poll_data = {
-        poll_message.poll.id: {
-            "chat_id": update.effective_chat.id,
-            "poll": poll_message.poll,
-        }
-    }
-    context.bot_data.update(poll_data)
-    _logger.debug("context.bot_data:\n%s", context.bot_data)
+    event = Event(update.effective_chat.id, poll_message.poll)
+    event.send_status_message(context.bot)
+
+    botdata.add_event(context.bot_data, key=event.poll_id, value=event)
 
     # Pin new message and save to chat_data for future removal
     poll_message.pin(disable_notification=True)

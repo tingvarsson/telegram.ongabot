@@ -2,8 +2,9 @@
 import logging
 
 from telegram import PollAnswer, Update
-from telegram.ext import PollAnswerHandler, CallbackContext
+from telegram.ext import CallbackContext, PollAnswerHandler
 
+import botdata
 from utils.log import log
 
 
@@ -19,8 +20,12 @@ class EventPollAnswerHandler(PollAnswerHandler):
 
 @log
 def callback(update: Update, context: CallbackContext) -> None:
-    """Handle an poll update"""
+    """Handle a poll answer update of an event"""
     _logger.debug("update:\n%s", update)
+
+    event = botdata.get_event(context.bot_data, key=update.poll_answer.poll_id)
+    event.update_answer(update.poll_answer)
+    event.update_status_message(context.bot)
 
     # Empty option_ids means the user retracted his vote, ignore those for now
     if update.poll_answer.option_ids:
@@ -33,7 +38,7 @@ def callback(update: Update, context: CallbackContext) -> None:
             response = f"Wow {user_name}, what a great job answering that poll!"
 
         context.bot.send_message(
-            context.bot_data[update.poll_answer.poll_id]["chat_id"],
+            event.chat_id,
             response,
         )
 
