@@ -77,4 +77,3 @@ tests/test_neweventcommand.py::NewEventCommandTest::test_getUpcomingWednesdayDat
 ===================================================== 1 passed in 0.13s =====================================================
 
 ```
-
