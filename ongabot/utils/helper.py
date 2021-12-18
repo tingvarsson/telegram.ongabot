@@ -36,6 +36,21 @@ def get_upcoming_date(today: date, upcoming_weekday: str) -> date:
     return next_date
 
 
+def is_valid_weekday(day: str) -> bool:
+    """Validates that the supplied arg is a valid day"""
+    if day.lower() not in [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ]:
+        return False
+    return True
+
+
 def get_weekday_index_from_name(day_name: str) -> int:
     """Get the day index from week day name"""
     return {

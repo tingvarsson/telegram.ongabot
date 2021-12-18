@@ -1,15 +1,13 @@
 """This module contains the ScheduleCommandHandler class."""
 import logging
-import typing
 from datetime import date, datetime, timedelta
-from typing import Any
 
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
+from event import create_event
 from utils import helper
 from utils.log import log
-from .neweventcommandhandler import callback as create_new_poll
 
 
 _logger = logging.getLogger(__name__)
@@ -25,10 +23,9 @@ class ScheduleCommandHandler(CommandHandler):
 @log
 def callback(update: Update, context: CallbackContext) -> None:
     """Schedule a poll creation job to run every week"""
-    job_name = "Weekly scheduled poll creation job"
-    day_to_schedule = "sunday"
     _logger.debug("update:\n%s", update)
 
+    job_name = "Weekly scheduled poll creation job"
     if check_if_job_exists(job_name, context):
         update.message.reply_text(
             "Scheduled job already exists. "
@@ -45,28 +42,28 @@ def callback(update: Update, context: CallbackContext) -> None:
         )
         return
 
+    day_to_schedule = "sunday"
     if len(context.args) == 1:
-        if not is_args_valid(context.args[0]):
+        if not helper.is_valid_weekday(context.args[0]):
             update.message.reply_text("Please provide a day that I understand. Bitch.")
             return
         day_to_schedule = context.args[0]
 
-    poll_creation_dto = {"context": context, "update": update}
-
-    upcoming_scheduled_date = helper.get_upcoming_date(date.today(), day_to_schedule)
+    # upcoming_scheduled_date = helper.get_upcoming_date(date.today(), day_to_schedule)
 
     job = context.job_queue.run_repeating(
         create_poll,
         interval=timedelta(weeks=1),
-        first=datetime(
-            upcoming_scheduled_date.year,
-            upcoming_scheduled_date.month,
-            upcoming_scheduled_date.day,
-            20,
-            0,
-            0,
-        ),
-        context=poll_creation_dto,
+        first=1,
+        #        first=datetime(
+        #            upcoming_scheduled_date.year,
+        #            upcoming_scheduled_date.month,
+        #            upcoming_scheduled_date.day,
+        #            20,
+        #            0,
+        #            0,
+        #        ),
+        context=update.effective_chat.id,
         name=job_name,
     )
     update.message.reply_text(
@@ -83,25 +80,7 @@ def check_if_job_exists(name: str, context: CallbackContext) -> bool:
     return True
 
 
-def is_args_valid(day: str) -> bool:
-    """Validates that the supplied arg is a valid day"""
-    if day.lower() not in [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday",
-    ]:
-        return False
-    return True
-
-
 def create_poll(context: CallbackContext) -> None:
     """Creates a new poll by calling /neweventcommand"""
     _logger.debug("Poll creation is triggered by timer on %s", datetime.now())
-    create_new_poll(
-        typing.cast(typing.Dict[str, Any], context.job.context)["update"],
-        typing.cast(typing.Dict[str, Any], context.job.context)["context"],
-    )
+    create_event(context, context.job.context)
