@@ -14,11 +14,10 @@ from utils import log
 _logger = logging.getLogger(__name__)
 
 
-def create_event(context: CallbackContext, chat_id: str) -> None:
-    """abc"""
-
+def create_event(context: CallbackContext, chat_id: int) -> None:
+    """Create an event"""
     # Retrieve previous pinned poll message and try to unpin if applicable
-    pinned_poll = context.chat_data.get("pinned_poll_msg")
+    pinned_poll = botdata.get_pinned_event_poll_message(context.bot_data, chat_id)
 
     if pinned_poll is not None:
         next_wed = helper.get_upcoming_date(date.today(), "wednesday").strftime("%Y-%m-%d")
@@ -38,12 +37,12 @@ def create_event(context: CallbackContext, chat_id: str) -> None:
             _logger.warning(
                 "Failed trying to unpin message (message_id=%i).", pinned_poll.message_id
             )
-        context.chat_data["pinned_poll_msg"] = None
+        botdata.remove_pinned_event_poll_message(context.bot_data, chat_id)
 
     poll_message = context.bot.send_poll(
         chat_id,
-        create_poll_text(),
-        options=create_poll_options(),
+        _create_poll_text(),
+        options=_create_poll_options(),
         is_anonymous=False,
         allows_multiple_answers=True,
     )
@@ -56,11 +55,10 @@ def create_event(context: CallbackContext, chat_id: str) -> None:
 
     # Pin new message and save to chat_data for future removal
     poll_message.pin(disable_notification=True)
-    context.chat_data["pinned_poll_msg"] = poll_message
-    _logger.debug("pinned_poll_msg: %s", poll_message.poll.id)
+    botdata.add_pinned_event_poll_message(context.bot_data, key=chat_id, value=poll_message)
 
 
-def create_poll_text() -> str:
+def _create_poll_text() -> str:
     """Create text field for poll"""
     title = "Event: ONGA"
     when = f"When: {helper.get_upcoming_date(date.today(), 'wednesday')}"
@@ -68,7 +66,7 @@ def create_poll_text() -> str:
     return text
 
 
-def create_poll_options() -> list[str]:
+def _create_poll_options() -> list[str]:
     """Create options for poll"""
     options = [
         "18.00",

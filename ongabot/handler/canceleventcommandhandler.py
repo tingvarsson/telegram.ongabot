@@ -4,6 +4,7 @@ import logging
 from telegram import TelegramError, Update
 from telegram.ext import CommandHandler, CallbackContext
 
+import botdata
 from utils.log import log
 
 
@@ -21,7 +22,7 @@ class CancelEventCommandHandler(CommandHandler):
 def callback(update: Update, context: CallbackContext) -> None:
     """Cancel active event as result of command /cancelevent"""
     # Retrieve currently pinned message
-    pinned_poll = context.chat_data.get("pinned_poll_msg")
+    pinned_poll = botdata.get_pinned_event_poll_message(context.bot_data, update.effective_chat.id)
 
     if pinned_poll is None:
         context.bot.send_message(
@@ -36,7 +37,7 @@ def callback(update: Update, context: CallbackContext) -> None:
     except TelegramError:
         _logger.warning("Failed trying to unpin message (message_id=%i).", pinned_poll.message_id)
 
-    context.chat_data["pinned_poll_msg"] = None
+    botdata.remove_pinned_event_poll_message(context.bot_data, update.effective_chat.id)
 
     context.bot.send_message(
         update.effective_chat.id,

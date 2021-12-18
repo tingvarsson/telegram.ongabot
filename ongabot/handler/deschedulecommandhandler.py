@@ -20,15 +20,16 @@ def callback(update: Update, context: CallbackContext) -> None:
     """Cancels existing jobs"""
     _logger.debug("update:\n%s", update)
 
-    current_jobs = context.job_queue.get_jobs_by_name("Weekly scheduled poll creation job")
+    job_name = f"weeky_event_{update.effective_chat.id}"
+    current_jobs = context.job_queue.get_jobs_by_name(job_name)
 
     if not current_jobs:
-        update.message.reply_text("No jobs to cancel")
+        update.message.reply_text("No jobs to cancel.")
         return
 
     for job in current_jobs:
         job.schedule_removal()
 
     update.message.reply_text(
-        "Job cancelled successfully. Polls will no longer be automatically created"
+        "Job cancelled successfully. Polls will no longer be automatically created."
     )
