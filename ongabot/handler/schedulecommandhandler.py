@@ -6,16 +6,17 @@ from typing import Any
 
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
+
+from utils import helper
 from utils.log import log
-import utils.helper as helper
-from .neweventcommand import callback as create_new_poll
+from .neweventcommandhandler import callback as create_new_poll
 
 
 _logger = logging.getLogger(__name__)
 
 
 class ScheduleCommandHandler(CommandHandler):
-    """ Handler for /schedule command """
+    """Handler for /schedule command"""
 
     def __init__(self) -> None:
         CommandHandler.__init__(self, "schedule", callback=callback)
@@ -23,7 +24,7 @@ class ScheduleCommandHandler(CommandHandler):
 
 @log
 def callback(update: Update, context: CallbackContext) -> None:
-    """ Schedule a poll creation job to run every week """
+    """Schedule a poll creation job to run every week"""
     job_name = "Weekly scheduled poll creation job"
     day_to_schedule = "sunday"
     _logger.debug("update:\n%s", update)
@@ -75,7 +76,7 @@ def callback(update: Update, context: CallbackContext) -> None:
 
 
 def check_if_job_exists(name: str, context: CallbackContext) -> bool:
-    """ Returns true of false whether job already exists."""
+    """Returns true of false whether job already exists."""
     current_jobs = context.job_queue.get_jobs_by_name(name)
     if not current_jobs:
         return False
@@ -83,7 +84,7 @@ def check_if_job_exists(name: str, context: CallbackContext) -> bool:
 
 
 def is_args_valid(day: str) -> bool:
-    """ Validates that the supplied arg is a valid day """
+    """Validates that the supplied arg is a valid day"""
     if day.lower() not in [
         "monday",
         "tuesday",
@@ -98,7 +99,7 @@ def is_args_valid(day: str) -> bool:
 
 
 def create_poll(context: CallbackContext) -> None:
-    """ Creates a new poll by calling /neweventcommand """
+    """Creates a new poll by calling /neweventcommand"""
     _logger.debug("Poll creation is triggered by timer on %s", datetime.now())
     create_new_poll(
         typing.cast(typing.Dict[str, Any], context.job.context)["update"],

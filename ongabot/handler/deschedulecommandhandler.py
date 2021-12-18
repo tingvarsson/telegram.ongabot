@@ -9,7 +9,7 @@ _logger = logging.getLogger(__name__)
 
 
 class DeScheduleCommandHandler(CommandHandler):
-    """ Handler for /schedule command """
+    """Handler for /schedule command"""
 
     def __init__(self) -> None:
         CommandHandler.__init__(self, "deschedule", callback=callback)
@@ -17,7 +17,7 @@ class DeScheduleCommandHandler(CommandHandler):
 
 @log
 def callback(update: Update, context: CallbackContext) -> None:
-    """ Cancels existing jobs """
+    """Cancels existing jobs"""
     _logger.debug("update:\n%s", update)
 
     current_jobs = context.job_queue.get_jobs_by_name("Weekly scheduled poll creation job")

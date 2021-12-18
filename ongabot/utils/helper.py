@@ -29,7 +29,7 @@ def create_help_text() -> str:
 
 
 def get_upcoming_date(today: date, upcoming_weekday: str) -> date:
-    """Get the date of the next upcoming day with name upcoming_weekday """
+    """Get the date of the next upcoming day with name upcoming_weekday"""
     index = get_weekday_index_from_name(upcoming_weekday)
 
     next_date = today + timedelta((index - today.weekday()) % 7)
@@ -37,7 +37,7 @@ def get_upcoming_date(today: date, upcoming_weekday: str) -> date:
 
 
 def get_weekday_index_from_name(day_name: str) -> int:
-    """ Get the day index from week day name """
+    """Get the day index from week day name"""
     return {
         "monday": 0,
         "tuesday": 1,
