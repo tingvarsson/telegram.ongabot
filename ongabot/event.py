@@ -34,6 +34,7 @@ class Event:
         self.poll_id = poll.id
 
         self.poll_answers: Dict[User, PollAnswer] = {}
+        self.first_answer: User = None
         self.status_message_id = 0
 
     def __repr__(self) -> str:
@@ -69,8 +70,12 @@ class Event:
 
         message = f"*__Currently {no_vote_count} non\\-voting infidels\\!__*\n"
 
+        if self.first_answer:
+            message += "\n*Honerable mention, first newb to the poll box:* "
+            message += f"{self.first_answer.mention_markdown_v2()}\n"
+
         for i, option in enumerate(self.poll.options):
-            message += f"\n{escape_markdown(option.text, version=2)} \\({option.voter_count}\\)"
+            message += f"\n*{escape_markdown(option.text, version=2)} \\({option.voter_count}\\)*"
             for user, answer in self.poll_answers.items():
                 if i in answer.option_ids:
                     message += f"\n  • {user.mention_markdown_v2()}"
@@ -87,5 +92,8 @@ class Event:
     @log.method
     def update_answer(self, poll_answer: PollAnswer) -> None:
         """Update, or add, an answer for a specific user"""
+        if self.first_answer is None:
+            self.first_answer = poll_answer.user
+
         self.poll_answers[poll_answer.user] = poll_answer
         _logger.debug("%s", self)
