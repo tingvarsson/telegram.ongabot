@@ -2,7 +2,7 @@
 import logging
 from datetime import date
 
-from telegram import Update
+from telegram import TelegramError, Update
 from telegram.ext import CommandHandler, CallbackContext
 
 import botdata
@@ -27,7 +27,7 @@ def callback(update: Update, context: CallbackContext) -> None:
     """Create a poll as result of command /newevent"""
     _logger.debug("update:\n%s", update)
 
-    # Retrieve prev pinned msg and unpin
+    # Retrieve previous pinned poll message and try to unpin if applicable
     pinned_poll = context.chat_data.get("pinned_poll_msg")
 
     if pinned_poll is not None:
@@ -39,10 +39,15 @@ def callback(update: Update, context: CallbackContext) -> None:
                 + next_wed
                 + "\nSend /cancelevent first if you wish to create a new event.",
             )
-            _logger.debug("Attempted to create event for existing date.")
+            _logger.debug("Event already exist for next Wednesday (%s).", next_wed)
             return
 
-        pinned_poll.unpin()
+        try:
+            pinned_poll.unpin()
+        except TelegramError:
+            _logger.warning(
+                "Failed trying to unpin message (message_id=%i).", pinned_poll.message_id
+            )
         context.chat_data["pinned_poll_msg"] = None
 
     poll_message = context.bot.send_poll(
