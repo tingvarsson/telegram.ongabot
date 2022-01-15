@@ -86,7 +86,7 @@ def create_poll_options() -> list[str]:
         "20.00",
         "21.00",
         "No-op",
-        "Maybe Baby <3",
+        "Maybe Baby </3",
     ]
 
     return options
