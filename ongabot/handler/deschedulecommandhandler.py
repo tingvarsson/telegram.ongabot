@@ -3,6 +3,7 @@ import logging
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
+import botdata
 from utils.log import log
 
 _logger = logging.getLogger(__name__)
@@ -22,6 +23,8 @@ def callback(update: Update, context: CallbackContext) -> None:
 
     job_name = f"weeky_event_{update.effective_chat.id}"
     current_jobs = context.job_queue.get_jobs_by_name(job_name)
+
+    botdata.remove_event_job(context.bot_data, update.effective_chat.id, job_name)
 
     if not current_jobs:
         update.message.reply_text("No jobs to cancel.")

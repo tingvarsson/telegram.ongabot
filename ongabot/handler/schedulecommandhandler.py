@@ -1,12 +1,11 @@
 """This module contains the ScheduleCommandHandler class."""
 import logging
-import typing
-from datetime import date, datetime, timedelta
 
 from telegram import ParseMode, Update
 from telegram.ext import CommandHandler, CallbackContext
 
-from event import create_event
+import botdata
+import eventjob
 from utils import helper
 from utils.log import log
 
@@ -59,23 +58,10 @@ def callback(update: Update, context: CallbackContext) -> None:
             return
         day_to_schedule = context.args[0]
 
-    # upcoming_scheduled_date = helper.get_upcoming_date(date.today(), day_to_schedule)
+    job = eventjob.schedule(context.job_queue, update.effective_chat.id, job_name, day_to_schedule)
 
-    job = context.job_queue.run_repeating(
-        create_event_callback,
-        interval=timedelta(weeks=1),
-        first=1,
-        #        first=datetime(
-        #            upcoming_scheduled_date.year,
-        #            upcoming_scheduled_date.month,
-        #            upcoming_scheduled_date.day,
-        #            20,
-        #            0,
-        #            0,
-        #        ),
-        context=update.effective_chat.id,
-        name=job_name,
-    )
+    botdata.add_event_job(context.bot_data, update.effective_chat.id, job_name, day_to_schedule)
+
     update.message.reply_text(
         f"Poll creation is now scheduled to run every {day_to_schedule} "
         f"starting on {job.next_t:%Y-%m-%d %H:%M} ({job.next_t.tzinfo})"
@@ -88,10 +74,3 @@ def check_if_job_exists(name: str, context: CallbackContext) -> bool:
     if not current_jobs:
         return False
     return True
-
-
-def create_event_callback(context: CallbackContext) -> None:
-    """Create the event on callback"""
-    _logger.debug("Poll creation is triggered by timer on %s", datetime.now())
-    chat_id = typing.cast(int, context.job.context)
-    create_event(context, chat_id)

@@ -6,6 +6,7 @@ import os
 
 from telegram.ext import CallbackContext, PicklePersistence, Updater
 
+import eventjob
 from handler import EventPollAnswerHandler
 from handler import EventPollHandler
 from handler import HelpCommandHandler
@@ -47,6 +48,8 @@ def main() -> None:
     dispatcher.add_handler(ScheduleCommandHandler())
     dispatcher.add_handler(DeScheduleCommandHandler())
     dispatcher.add_error_handler(error)
+
+    eventjob.schedule_all(updater.job_queue, persistence.bot_data)
 
     # Start the bot
     updater.start_polling()

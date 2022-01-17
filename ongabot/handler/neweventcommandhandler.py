@@ -1,18 +1,10 @@
 """This module contains the NewEventCommandHandler class."""
 import logging
-from datetime import date
 
-from telegram import TelegramError, Update
+from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
-<<<<<<< HEAD
-import botdata
-from event import Event
-
-from utils import helper
-=======
-from event import create_event
->>>>>>> 5942646 ([ongabot] Move pinned_poll to bot_chat and some formatting)
+from eventjob import create_event
 from utils.log import log
 
 
