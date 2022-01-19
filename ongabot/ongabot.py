@@ -4,9 +4,10 @@
 import logging
 import os
 
-from telegram.ext import CallbackContext, PicklePersistence, Updater
+from telegram.ext import CallbackContext, ContextTypes, PicklePersistence, Updater
 
-import eventjob
+from botdata import BotData
+from eventcreator import create_event_callback
 from handler import EventPollAnswerHandler
 from handler import EventPollHandler
 from handler import HelpCommandHandler
@@ -32,9 +33,18 @@ def error(update: object, context: CallbackContext) -> None:
 
 def main() -> None:
     """Setup and run ONGAbot"""
-    persistence = PicklePersistence(filename=os.getenv("DB_PATH", "ongabot.db"))
+    context_types = ContextTypes(bot_data=BotData)
 
-    updater = Updater(os.getenv("API_TOKEN"), persistence=persistence, use_context=True)
+    persistence = PicklePersistence(
+        filename=os.getenv("DB_PATH", "ongabot.db"), context_types=context_types
+    )
+
+    updater = Updater(
+        os.getenv("API_TOKEN"),
+        persistence=persistence,
+        use_context=True,
+        context_types=context_types,
+    )
 
     # Register handlers
     dispatcher = updater.dispatcher
@@ -49,7 +59,8 @@ def main() -> None:
     dispatcher.add_handler(DeScheduleCommandHandler())
     dispatcher.add_error_handler(error)
 
-    eventjob.schedule_all(updater.job_queue, persistence.bot_data)
+    bot_data: BotData = persistence.bot_data
+    bot_data.schedule_all_event_jobs(updater.job_queue, create_event_callback)
 
     # Start the bot
     updater.start_polling()

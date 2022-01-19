@@ -4,7 +4,6 @@ import logging
 from telegram import Update
 from telegram.ext import CallbackContext, PollHandler
 
-import botdata
 from utils.log import log
 
 
@@ -23,6 +22,6 @@ def callback(update: Update, context: CallbackContext) -> None:
     """Handle a poll update of an event"""
     _logger.debug("update:\n%s", update)
 
-    event = botdata.get_event(context.bot_data, update.poll.id)
+    event = context.bot_data.get_event(update.poll.id)
     event.update_poll(update.poll)
     event.update_status_message(context.bot)

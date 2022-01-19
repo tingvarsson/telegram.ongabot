@@ -4,8 +4,9 @@ import logging
 from telegram import ParseMode, Update
 from telegram.ext import CommandHandler, CallbackContext
 
-import botdata
-import eventjob
+from chat import Chat
+from eventcreator import create_event_callback
+from eventjob import EventJob
 from utils import helper
 from utils.log import log
 
@@ -58,9 +59,11 @@ def callback(update: Update, context: CallbackContext) -> None:
             return
         day_to_schedule = context.args[0]
 
-    job = eventjob.schedule(context.job_queue, update.effective_chat.id, job_name, day_to_schedule)
+    event_job = EventJob(job_name, day_to_schedule)
+    job = event_job.schedule(context.job_queue, update.effective_chat.id, create_event_callback)
 
-    botdata.add_event_job(context.bot_data, update.effective_chat.id, job_name, day_to_schedule)
+    chat: Chat = context.bot_data.get_chat(update.effective_chat.id)
+    chat.add_event_job(event_job)
 
     update.message.reply_text(
         f"Poll creation is now scheduled to run every {day_to_schedule} "

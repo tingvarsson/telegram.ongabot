@@ -4,7 +4,7 @@ import logging
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
-from eventjob import create_event
+from eventcreator import create_event
 from utils.log import log
 
 

@@ -1,143 +1,88 @@
-"""This module contains functions to handle bot_data."""
+"""This module contains the BotData class."""
 import logging
-from typing import Dict
+from typing import Callable, Dict
 
-from telegram import Message
+from telegram.ext import JobQueue
 
+from chat import Chat
 from event import Event
-from utils.log import log
+from utils import log
 
 
 _logger = logging.getLogger(__name__)
 
 
-@log
-def add_event(bot_data: Dict, poll_id: str, event: Event) -> bool:
-    """Add an item to bot_data"""
-    if bot_data.get(poll_id):
-        _logger.error("poll_id=%s already exist in bot_data!", poll_id)
-        return False
+class BotData:
+    """
+    The BotData object represent all persistent data stored for the bot
 
-    bot_data.update({poll_id: event})
-    _logger.debug("bot_data:\n%s", bot_data)
-    return True
+    Args:
 
+    Attributes:
+        chats: dictionary of Chat objects index on chat_id
+        events: dictionary of Event objects index on poll_id
+    """
 
-@log
-def get_event(bot_data: Dict, poll_id: str) -> Event:
-    """Get an item from bot_data"""
-    if not bot_data:
-        return None
+    def __init__(self) -> None:
+        self.chats: Dict[int, Chat] = {}
+        self.events: Dict[str, Event] = {}
 
-    if not bot_data.get(poll_id):
-        _logger.error("poll_id=%s doesn't exist in bot_data!", poll_id)
-        return None
+    def __repr__(self) -> str:
+        return str(self.__class__) + ": " + str(self.__dict__)
 
-    return bot_data.get(poll_id)
+    @log.method
+    def add_chat(self, chat: Chat) -> bool:
+        """Add a Chat to BotData"""
+        if self.chats.get(chat.chat_id):
+            _logger.error("Chat with chat_id=%s already exist in BotData!", chat.chat_id)
+            return False
 
+        self.chats.update({chat.chat_id: chat})
+        return True
 
-@log
-def add_pinned_event_poll_message(bot_data: Dict, chat_id: int, message: Message) -> bool:
-    """Add a pinned event poll message for a specific chat"""
-    if not bot_data.get("chats"):
-        bot_data.update({"chats": {}})
+    @log.method
+    def get_chat(self, chat_id: int) -> Chat:
+        """Get a Chat from BotData"""
+        # Create a Chat object for chat_id if not found
+        if not self.chats.get(chat_id):
+            self.chats.update({chat_id: Chat(chat_id)})
 
-    chats = bot_data.get("chats")
-    if not chats.get(chat_id):
-        chats.update({chat_id: {}})
+        return self.chats.get(chat_id)
 
-    chat_data = chats.get(chat_id)
-    if chat_data.get("poll_message"):
-        _logger.error("poll_message already exist in chats[chat_id=%s]!", chat_id)
-        return False
+    @log.method
+    def remove_chat(self, chat_id: int) -> None:
+        """Remove a Chat from BotData"""
+        if self.chats.get(chat_id):
+            self.chats.pop(chat_id)
 
-    chat_data.update({"poll_message": message})
-    _logger.debug("chats[chat_id=%s]:\n%s", chat_id, chat_data)
-    return True
+    @log.method
+    def add_event(self, event: Event) -> bool:
+        """Add an Event to BotData"""
+        if self.events.get(event.poll_id):
+            _logger.error("Event with poll_id=%s already exist in BotData!", event.poll_id)
+            return False
 
+        self.events.update({event.poll_id: event})
+        return True
 
-@log
-def get_pinned_event_poll_message(bot_data: Dict, chat_id: int) -> Message:
-    """Get a pinned event poll message for a specific chat"""
-    if not bot_data:
-        return None
+    @log.method
+    def get_event(self, poll_id: str) -> Event:
+        """Get an event from BotData"""
 
-    chats = bot_data.get("chats")
-    if not chats:
-        return None
+        if not self.events.get(poll_id):
+            _logger.error("Event with poll_id=%s doesn't exist in BotData!", poll_id)
+            return None
 
-    chat_data = chats.get(chat_id)
-    if not chat_data:
-        return None
+        return self.events.get(poll_id)
 
-    return chat_data.get("poll_message")
+    @log.method
+    def remove_event(self, poll_id: str) -> None:
+        """Remove an event from BotData"""
+        if self.events.get(poll_id):
+            self.events.pop(poll_id)
 
-
-@log
-def remove_pinned_event_poll_message(bot_data: Dict, chat_id: int) -> None:
-    """Remove a pinned event poll message for a specific chat"""
-    if not bot_data:
-        return
-
-    chats = bot_data.get("chats")
-    if not chats:
-        return
-
-    chat_data = chats.get(chat_id)
-    if not chat_data:
-        return
-
-    if chat_data.get("poll_message"):
-        chat_data.pop("poll_message")
-
-    _logger.debug("chats[chat_id=%s]:\n%s", chat_id, chat_data)
-
-
-@log
-def add_event_job(bot_data: Dict, chat_id: int, job_name: str, day_to_schedule: str) -> bool:
-    """abc"""
-    if not bot_data.get("chats"):
-        bot_data.update({"chats": {}})
-
-    chats = bot_data.get("chats")
-    if not chats.get(chat_id):
-        chats.update({chat_id: {}})
-
-    chat_data = chats.get(chat_id)
-    if not chat_data.get("jobs"):
-        chat_data.update({"jobs": {}})
-
-    jobs = chat_data.get("jobs")
-    if jobs.get(job_name):
-        _logger.error("job_name=%s already exist in chats[chat_id=%s]!", job_name, chat_id)
-        return False
-
-    jobs.update({job_name: {"day_to_schedule": day_to_schedule}})
-    _logger.debug("jobs[job_name=%s]:\n%s", job_name, jobs[job_name])
-    _logger.debug("chats[chat_id=%s]:\n%s", chat_id, chat_data)
-    return True
-
-
-@log
-def remove_event_job(bot_data: Dict, chat_id: int, job_name: str) -> None:
-    """abc"""
-    if not bot_data:
-        return
-
-    chats = bot_data.get("chats")
-    if not chats:
-        return
-
-    chat_data = chats.get(chat_id)
-    if not chat_data:
-        return
-
-    jobs = chat_data.get("jobs")
-    if not jobs:
-        return
-
-    if jobs.get(job_name):
-        jobs.pop(job_name)
-
-    _logger.debug("jobs:\n%s", jobs)
-    _logger.debug("chats[chat_id=%s]:\n%s", chat_id, chat_data)
+    @log.method
+    def schedule_all_event_jobs(self, job_queue: JobQueue, callback: Callable) -> None:
+        """Schedule all event jobs, in all chats"""
+        for chat in self.chats.values():
+            chat.schedule_all_event_jobs(job_queue, callback)
