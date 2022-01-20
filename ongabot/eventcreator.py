@@ -3,7 +3,6 @@ import logging
 import typing
 from datetime import date, datetime
 
-from telegram import TelegramError
 from telegram.ext import CallbackContext
 
 from chat import Chat
@@ -41,13 +40,6 @@ def create_event(context: CallbackContext, chat_id: int) -> None:
             )
             _logger.debug("Event already exist for next Wednesday (%s).", next_wed)
             return
-
-        try:
-            pinned_poll.unpin()
-        except TelegramError:
-            _logger.warning(
-                "Failed trying to unpin message (message_id=%i).", pinned_poll.message_id
-            )
 
         chat.remove_pinned_poll()
 
