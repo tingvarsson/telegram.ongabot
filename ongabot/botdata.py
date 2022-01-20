@@ -19,7 +19,7 @@ class BotData:
     Args:
 
     Attributes:
-        chats: dictionary of Chat objects index on chat_id
+        chats: Dict of Chat objects indexed by chat_id
     """
 
     def __init__(self) -> None:
@@ -29,16 +29,6 @@ class BotData:
         return str(self.__class__) + ": " + str(self.__dict__)
 
     @log.method
-    def add_chat(self, chat: Chat) -> bool:
-        """Add a Chat to BotData"""
-        if self.chats.get(chat.chat_id):
-            _logger.error("Chat with chat_id=%s already exist in BotData!", chat.chat_id)
-            return False
-
-        self.chats.update({chat.chat_id: chat})
-        return True
-
-    @log.method
     def get_chat(self, chat_id: int) -> Chat:
         """Get a Chat from BotData"""
         # Create a Chat object for chat_id if not found
@@ -46,12 +36,6 @@ class BotData:
             self.chats.update({chat_id: Chat(chat_id)})
 
         return self.chats.get(chat_id)
-
-    @log.method
-    def remove_chat(self, chat_id: int) -> None:
-        """Remove a Chat from BotData"""
-        if self.chats.get(chat_id):
-            self.chats.pop(chat_id)
 
     @log.method
     def get_event(self, poll_id: str) -> Event:

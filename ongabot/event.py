@@ -46,7 +46,7 @@ class Event:
         chat_member_count = bot.get_chat_member_count(self.chat_id)
         status_message = bot.send_message(
             chat_id=self.chat_id,
-            text=self._create_status_message(chat_member_count),
+            text=self._create_status_message_text(chat_member_count),
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         self.status_message_id = status_message.message_id
@@ -56,15 +56,15 @@ class Event:
         """Update status message for the event poll"""
         chat_member_count = bot.get_chat_member_count(self.chat_id)
         bot.edit_message_text(
-            text=self._create_status_message(chat_member_count),
+            text=self._create_status_message_text(chat_member_count),
             chat_id=self.chat_id,
             message_id=self.status_message_id,
             parse_mode=ParseMode.MARKDOWN_V2,
         )
 
     @log.method
-    def _create_status_message(self, chat_member_count: int) -> str:
-        """Create formatted status message for the event poll"""
+    def _create_status_message_text(self, chat_member_count: int) -> str:
+        """Create formatted status message text for the event poll"""
         # total minus (voters + 'me, the bot')
         no_vote_count = chat_member_count - (self.poll.total_voter_count + 1)
 

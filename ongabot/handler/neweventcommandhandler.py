@@ -21,6 +21,4 @@ class NewEventCommandHandler(CommandHandler):
 @log
 def callback(update: Update, context: CallbackContext) -> None:
     """Create a poll as result of command /newevent"""
-    _logger.debug("update:\n%s", update)
-
     create_event(context, update.effective_chat.id)

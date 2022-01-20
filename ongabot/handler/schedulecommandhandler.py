@@ -24,8 +24,6 @@ class ScheduleCommandHandler(CommandHandler):
 @log
 def callback(update: Update, context: CallbackContext) -> None:
     """Schedule a event creation job to run every week"""
-    _logger.debug("update:\n%s", update)
-
     if len(context.args) > 1:
         update.message.reply_text(
             "Only one argument supported `/schedule <day>[OPTIONAL]`"
@@ -62,7 +60,7 @@ def callback(update: Update, context: CallbackContext) -> None:
     job = event_job.schedule(context.job_queue, create_event_callback)
 
     chat: Chat = context.bot_data.get_chat(update.effective_chat.id)
-    chat.add_event_job(event_job)
+    chat.set_event_job(event_job)
 
     update.message.reply_text(
         f"Poll creation is now scheduled to run every {day_to_schedule} "

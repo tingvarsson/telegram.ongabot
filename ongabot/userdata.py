@@ -34,7 +34,7 @@ class UserData:
         self.user = user
 
     @log.method
-    def get_poll_answer(self, poll_id: str) -> List[int] | None:
+    def get_poll_answer(self, poll_id: str) -> List[int]:
         """Get a PollAnswer for a given poll_id"""
         return self.poll_answer.get(poll_id)
 

@@ -58,14 +58,8 @@ class Chat:
         return self.events.get(poll_id)
 
     @log.method
-    def remove_event(self, poll_id: str) -> None:
-        """Remove an event from BotData"""
-        if self.events.get(poll_id):
-            self.events.pop(poll_id)
-
-    @log.method
-    def add_pinned_poll(self, message: Message) -> bool:
-        """Add a pinned event poll message"""
+    def set_pinned_poll(self, message: Message) -> bool:
+        """Set a pinned event poll message for the chat"""
         if self.pinned_poll:
             _logger.error("pinned_poll=%s already exist when adding=%s", self.pinned_poll, message)
             return False
@@ -75,19 +69,19 @@ class Chat:
 
     @log.method
     def get_pinned_poll(self) -> Message:
-        """Get a pinned event poll message"""
+        """Get the pinned event poll message"""
         return self.pinned_poll
 
     @log.method
     def remove_pinned_poll(self) -> None:
-        """Remove a pinned event poll message"""
+        """Remove the pinned event poll message"""
         if not self.pinned_poll:
             _logger.debug("Trying to remove pinned_poll=None")
         self.pinned_poll = None
 
     @log.method
-    def add_event_job(self, event_job: EventJob) -> bool:
-        """Add an event job"""
+    def set_event_job(self, event_job: EventJob) -> bool:
+        """Set an event job for the chat"""
         if self.event_job:
             _logger.error(
                 "job_name=%s already exist Chat with chat_id=%s!", event_job.job_name, self.chat_id
@@ -99,7 +93,7 @@ class Chat:
 
     @log.method
     def remove_event_job(self, job_queue: JobQueue) -> bool:
-        """Remove an event job"""
+        """Remove the event job"""
         if not self.event_job:
             _logger.debug("Trying to remove event_job=None")
             return False
@@ -110,6 +104,6 @@ class Chat:
 
     @log.method
     def schedule_event_job(self, job_queue: JobQueue, callback: Callable) -> None:
-        """Schedule event job if it exist"""
+        """Schedule the event job if it exist"""
         if self.event_job:
             self.event_job.schedule(job_queue, callback)

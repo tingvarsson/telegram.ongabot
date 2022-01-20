@@ -21,8 +21,6 @@ class EventPollAnswerHandler(PollAnswerHandler):
 @log
 def callback(update: Update, context: CallbackContext) -> None:
     """Handle a poll answer update of an event"""
-    _logger.debug("update:\n%s", update)
-
     event = context.bot_data.get_event(update.poll_answer.poll_id)
     event.update_answer(update.poll_answer)
     event.update_status_message(context.bot)
@@ -35,10 +33,10 @@ def callback(update: Update, context: CallbackContext) -> None:
         user_name = update.poll_answer.user.name
 
         # Existing poll_answer for that poll_id means the user has changed their vote
-        if user_data.get_poll_answer(update.poll_answer.poll_id):
-            response = f"Hmm suspicious, looks like {user_name} changed their vote..."
-        else:
+        if user_data.get_poll_answer(update.poll_answer.poll_id) is None:
             response = f"Wow {user_name}, what a great job answering that poll!"
+        else:
+            response = f"Hmm suspicious, looks like {user_name} changed their vote..."
 
         context.bot.send_message(
             event.chat_id,

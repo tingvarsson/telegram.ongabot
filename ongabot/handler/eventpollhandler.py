@@ -20,8 +20,6 @@ class EventPollHandler(PollHandler):
 @log
 def callback(update: Update, context: CallbackContext) -> None:
     """Handle a poll update of an event"""
-    _logger.debug("update:\n%s", update)
-
     event = context.bot_data.get_event(update.poll.id)
     event.update_poll(update.poll)
     event.update_status_message(context.bot)

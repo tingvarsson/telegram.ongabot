@@ -19,8 +19,6 @@ class DeScheduleCommandHandler(CommandHandler):
 @log
 def callback(update: Update, context: CallbackContext) -> None:
     """Cancel existing event job in chat"""
-    _logger.debug("update:\n%s", update)
-
     chat: Chat = context.bot_data.get_chat(update.effective_chat.id)
     if not chat.remove_event_job(context.job_queue):
         update.message.reply_text("No jobs to cancel.")

@@ -67,7 +67,7 @@ def create_event(context: CallbackContext, chat_id: int) -> None:
 
     # Pin new message and save to chat_data for future removal
     poll_message.pin(disable_notification=True)
-    chat.add_pinned_poll(poll_message)
+    chat.set_pinned_poll(poll_message)
 
 
 def _create_poll_text() -> str:
