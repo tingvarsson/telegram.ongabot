@@ -34,6 +34,9 @@ class Chat:
         self.event_job: EventJob = None
         self.pinned_poll: Message = None
 
+    def __repr__(self) -> str:
+        return str(self.__class__) + ": " + str(self.__dict__)
+
     @log.method
     def add_event(self, event: Event) -> bool:
         """Add an Event to BotData"""

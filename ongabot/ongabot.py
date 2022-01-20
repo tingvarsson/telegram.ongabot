@@ -17,6 +17,7 @@ from handler import OngaCommandHandler
 from handler import StartCommandHandler
 from handler import ScheduleCommandHandler
 from handler import DeScheduleCommandHandler
+from userdata import UserData
 
 
 logging.basicConfig(
@@ -33,7 +34,7 @@ def error(update: object, context: CallbackContext) -> None:
 
 def main() -> None:
     """Setup and run ONGAbot"""
-    context_types = ContextTypes(bot_data=BotData)
+    context_types = ContextTypes(bot_data=BotData, user_data=UserData)
 
     persistence = PicklePersistence(
         filename=os.getenv("DB_PATH", "ongabot.db"), context_types=context_types
