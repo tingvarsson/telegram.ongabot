@@ -7,6 +7,7 @@ from telegram.ext import Job, JobQueue
 
 from utils import helper, log
 
+
 _logger = logging.getLogger(__name__)
 
 
@@ -15,20 +16,23 @@ class EventJob:
     The EventJob object represents a event job that can be scheduled in a job queue
 
     Args:
-        job_name: name of the job
+        chat_id: id of the chat the event belongs to
         day_to_schedule: weekday to schedule the job on
 
     Attributes:
-        job_name: name of the job
+        chat_id: id of the chat the event belongs to
         day_to_schedule: weekday to schedule the job on
+        job_name: name of the job as used in JobQueue
     """
 
-    def __init__(self, job_name: str, day_to_schedule: str) -> None:
-        self.job_name = job_name
+    def __init__(self, chat_id: int, day_to_schedule: str) -> None:
+        self.chat_id = chat_id
         self.day_to_schedule = day_to_schedule
 
+        self.job_name = f"weeky_event_{chat_id}"
+
     @log.method
-    def schedule(self, job_queue: JobQueue, chat_id: int, callback: Callable) -> Job:
+    def schedule(self, job_queue: JobQueue, callback: Callable) -> Job:
         """Schedule this event job in the provided job_queue"""
         upcoming_date = helper.get_upcoming_date(date.today(), self.day_to_schedule)
 
@@ -43,7 +47,7 @@ class EventJob:
                 0,
                 0,
             ),
-            context=chat_id,
+            context=self.chat_id,
             name=self.job_name,
         )
 
@@ -56,4 +60,12 @@ class EventJob:
 
         for job in current_jobs:
             job.schedule_removal()
+        return True
+
+    @log.method
+    def check_if_job_exists(self, job_queue: JobQueue) -> bool:
+        """Return true or false whether job already exists in job_queue"""
+        current_jobs = job_queue.get_jobs_by_name(self.job_name)
+        if not current_jobs:
+            return False
         return True

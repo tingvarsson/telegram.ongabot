@@ -26,16 +26,6 @@ def callback(update: Update, context: CallbackContext) -> None:
     """Schedule a event creation job to run every week"""
     _logger.debug("update:\n%s", update)
 
-    job_name = f"weeky_event_{update.effective_chat.id}"
-    if check_if_job_exists(job_name, context):
-        update.message.reply_text(
-            r"Scheduled job already exists\. Deschedule first "
-            r"if you wish to re\-create the scheduled job\."
-            "\n`/deschedule`",
-            parse_mode=ParseMode.MARKDOWN_V2,
-        )
-        return
-
     if len(context.args) > 1:
         update.message.reply_text(
             "Only one argument supported `/schedule <day>[OPTIONAL]`"
@@ -59,8 +49,17 @@ def callback(update: Update, context: CallbackContext) -> None:
             return
         day_to_schedule = context.args[0]
 
-    event_job = EventJob(job_name, day_to_schedule)
-    job = event_job.schedule(context.job_queue, update.effective_chat.id, create_event_callback)
+    event_job = EventJob(update.effective_chat.id, day_to_schedule)
+    if event_job.check_if_job_exists(context.job_queue):
+        update.message.reply_text(
+            r"Scheduled job already exists\. Deschedule first "
+            r"if you wish to re\-create the scheduled job\."
+            "\n`/deschedule`",
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+        return
+
+    job = event_job.schedule(context.job_queue, create_event_callback)
 
     chat: Chat = context.bot_data.get_chat(update.effective_chat.id)
     chat.add_event_job(event_job)
@@ -69,11 +68,3 @@ def callback(update: Update, context: CallbackContext) -> None:
         f"Poll creation is now scheduled to run every {day_to_schedule} "
         f"starting on {job.next_t:%Y-%m-%d %H:%M} ({job.next_t.tzinfo})"
     )
-
-
-def check_if_job_exists(name: str, context: CallbackContext) -> bool:
-    """Return true or false whether job already exists."""
-    current_jobs = context.job_queue.get_jobs_by_name(name)
-    if not current_jobs:
-        return False
-    return True

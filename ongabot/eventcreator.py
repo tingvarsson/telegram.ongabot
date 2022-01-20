@@ -6,11 +6,11 @@ from datetime import date, datetime
 from telegram import TelegramError
 from telegram.ext import CallbackContext
 
-from botdata import BotData
 from chat import Chat
 from event import Event
 from utils import helper
 from utils.log import log
+
 
 _logger = logging.getLogger(__name__)
 
@@ -27,8 +27,7 @@ def create_event_callback(context: CallbackContext) -> None:
 def create_event(context: CallbackContext, chat_id: int) -> None:
     """Create an event"""
     # Retrieve previous pinned poll message and try to unpin if applicable
-    bot_data: BotData = context.bot_data
-    chat: Chat = bot_data.get_chat(chat_id)
+    chat: Chat = context.bot_data.get_chat(chat_id)
     pinned_poll = chat.get_pinned_poll()
 
     if pinned_poll is not None:
@@ -64,7 +63,7 @@ def create_event(context: CallbackContext, chat_id: int) -> None:
     event = Event(chat_id, poll_message.poll)
     event.send_status_message(context.bot)
 
-    bot_data.add_event(event)
+    chat.add_event(event)
 
     # Pin new message and save to chat_data for future removal
     poll_message.pin(disable_notification=True)
