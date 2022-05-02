@@ -1,4 +1,4 @@
-FROM python:3.9-alpine
+FROM python:3.10-alpine
 LABEL maintainer Thomas Ingvarsson <ingvarsson.thomas@gmail.com>
 
 COPY requirements.txt .
