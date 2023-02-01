@@ -1,6 +1,6 @@
 black==22.3.0
 flake8==6.0.0
-mypy==0.950
+mypy==0.991
 pylint==2.13.8
 pytest==7.1.2
 parameterized==0.8.1
