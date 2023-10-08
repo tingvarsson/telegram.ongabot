@@ -30,15 +30,15 @@ def create_event(context: CallbackContext, chat_id: int) -> None:
     pinned_poll = chat.get_pinned_poll()
 
     if pinned_poll is not None:
-        next_wed = helper.get_upcoming_date(date.today(), "wednesday").strftime("%Y-%m-%d")
-        if next_wed in pinned_poll.poll.question:
+        next_thur = helper.get_upcoming_date(date.today(), "thursday").strftime("%Y-%m-%d")
+        if next_thur in pinned_poll.poll.question:
             context.bot.send_message(
                 chat_id,
                 "Event already exists for: "
-                + next_wed
+                + next_thur
                 + "\nSend /cancelevent first if you wish to create a new event.",
             )
-            _logger.debug("Event already exist for next Wednesday (%s).", next_wed)
+            _logger.debug("Event already exist for next Thursday (%s).", next_thur)
             return
 
         chat.remove_pinned_poll()
@@ -64,8 +64,8 @@ def create_event(context: CallbackContext, chat_id: int) -> None:
 
 def _create_poll_text() -> str:
     """Create text field for poll"""
-    title = "Event: ONGA"
-    when = f"When: {helper.get_upcoming_date(date.today(), 'wednesday')}"
+    title = "Event: TOGA"
+    when = f"When: {helper.get_upcoming_date(date.today(), 'thursday')}"
     text = f"{title}\n{when}"
     return text
 
@@ -73,10 +73,10 @@ def _create_poll_text() -> str:
 def _create_poll_options() -> list[str]:
     """Create options for poll"""
     options = [
-        "18.00",
-        "19.00",
-        "20.00",
-        "21.00",
+        "18.30",
+        "19.30",
+        "20.30",
+        "21.30",
         "No-op",
         "Maybe Baby </3",
     ]

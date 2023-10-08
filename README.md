@@ -1,6 +1,6 @@
-# ONGAbot
+# togabot
 
-The one and only ON/GA Telegram bot, available on Docker Hub ([tingvarsson/telegram.ongabot](https://hub.docker.com/r/tingvarsson/telegram.ongabot/))
+The one and only TO/GA Telegram bot, available on Docker Hub ([tingvarsson/telegram.togabot](https://hub.docker.com/r/tingvarsson/telegram.togabot/))
 
 Built on [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot)
 
@@ -25,13 +25,13 @@ Run locally to check code with
 black . --diff --check
 All done! ✨ 🍰 ✨
 16 files would be left unchanged.
-pylint ongabot
+pylint togabot
 
 --------------------------------------------------------------------
 Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)
 
-flake8 ongabot tests
-mypy -p ongabot
+flake8 togabot tests
+mypy -p togabot
 Success: no issues found in 1 source file
 
 ```
@@ -45,16 +45,16 @@ All done! ✨ 🍰 ✨
 13 files would be left unchanged.
 
 > make pep8
-flake8 ongabot tests
+flake8 togabot tests
 
 > make lint
-pylint ongabot
+pylint togabot
 
 --------------------------------------------------------------------
 Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)
 
 > make mypy
-mypy -p ongabot
+mypy -p togabot
 Success: no issues found in 1 source file
 
 ```
@@ -67,12 +67,12 @@ Tests are located under `tests`. Run tests locally with
 > make test
 pytest -v
 ==================================================== test session starts ====================================================
-platform linux -- Python 3.9.2, pytest-6.2.2, py-1.10.0, pluggy-0.13.1 -- /home/silly/git/tingvarsson/telegram.ongabot/venv/bin/python3
+platform linux -- Python 3.9.2, pytest-6.2.2, py-1.10.0, pluggy-0.13.1 -- /home/silly/git/tingvarsson/telegram.togabot/venv/bin/python3
 cachedir: .pytest_cache
-rootdir: /home/silly/git/tingvarsson/telegram.ongabot
+rootdir: /home/silly/git/tingvarsson/telegram.togabot
 collected 1 item
 
-tests/test_neweventcommand.py::NewEventCommandTest::test_getUpcomingWednesdayDate PASSED                              [100%]
+tests/test_neweventcommand.py::NewEventCommandTest::test_getUpcomingThursdayDate PASSED                              [100%]
 
 ===================================================== 1 passed in 0.13s =====================================================
 

@@ -8,10 +8,10 @@ PYTEST:=pytest
 MYPY:=mypy
 
 API_TOKEN=OVERRIDE_ME
-DOCKER_IMAGE=tingvarsson/telegram.ongabot:latest
+DOCKER_IMAGE=tingvarsson/telegram.togabot:latest
 VENV_PATH=venv
 
-export PYTHONPATH=$PYTHONPATH:./ongabot
+export PYTHONPATH=$PYTHONPATH:./togabot
 
 .PHONY: venv install run lint pep8 mypy black-check check black test clean docker-build docker-run
 
@@ -24,16 +24,16 @@ install:
 	$(PIP) install -r requirements-dev.txt
 
 run:
-	cd ongabot && API_TOKEN=$(API_TOKEN) $(PYTHON) ongabot.py
+	cd togabot && API_TOKEN=$(API_TOKEN) $(PYTHON) togabot.py
 
 lint:
-	$(PYLINT) ongabot
+	$(PYLINT) togabot
 
 pep8:
-	$(PEP8) ongabot tests
+	$(PEP8) togabot tests
 
 mypy:
-	$(MYPY) -p ongabot
+	$(MYPY) -p togabot
 
 black-check:
 	$(BLACK) . --diff --check

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""An application that runs a telegram bot called ONGAbot"""
+"""An application that runs a telegram bot called TOGAbot"""
 
 import logging
 import os
@@ -13,7 +13,7 @@ from handler import EventPollHandler
 from handler import HelpCommandHandler
 from handler import NewEventCommandHandler
 from handler import CancelEventCommandHandler
-from handler import OngaCommandHandler
+from handler import TogaCommandHandler
 from handler import StartCommandHandler
 from handler import ScheduleCommandHandler
 from handler import DeScheduleCommandHandler
@@ -33,11 +33,11 @@ def error(update: object, context: CallbackContext) -> None:
 
 
 def main() -> None:
-    """Setup and run ONGAbot"""
+    """Setup and run TOGAbot"""
     context_types = ContextTypes(bot_data=BotData, user_data=UserData)
 
     persistence = PicklePersistence(
-        filename=os.getenv("DB_PATH", "ongabot.db"), context_types=context_types
+        filename=os.getenv("DB_PATH", "togabot.db"), context_types=context_types
     )
 
     updater = Updater(
@@ -51,7 +51,7 @@ def main() -> None:
     dispatcher = updater.dispatcher
     dispatcher.add_handler(StartCommandHandler())
     dispatcher.add_handler(HelpCommandHandler())
-    dispatcher.add_handler(OngaCommandHandler())
+    dispatcher.add_handler(TogaCommandHandler())
     dispatcher.add_handler(NewEventCommandHandler())
     dispatcher.add_handler(CancelEventCommandHandler())
     dispatcher.add_handler(EventPollHandler())

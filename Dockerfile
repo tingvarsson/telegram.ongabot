@@ -4,10 +4,10 @@ LABEL maintainer Thomas Ingvarsson <ingvarsson.thomas@gmail.com>
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY ongabot /ongabot
+COPY togabot /togabot
 
 ENV API_TOKEN=''
 
-WORKDIR /ongabot
+WORKDIR /togabot
 
-CMD ["./ongabot.py"]
+CMD ["./togabot.py"]
