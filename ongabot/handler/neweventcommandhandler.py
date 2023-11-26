@@ -2,7 +2,7 @@
 import logging
 
 from telegram import Update
-from telegram.ext import CommandHandler, CallbackContext
+from telegram.ext import CallbackContext, CommandHandler
 
 from eventcreator import create_event
 from utils.log import log
@@ -19,6 +19,6 @@ class NewEventCommandHandler(CommandHandler):
 
 
 @log
-def callback(update: Update, context: CallbackContext) -> None:
+async def callback(update: Update, context: CallbackContext) -> None:
     """Create a poll as result of command /newevent"""
-    create_event(context, update.effective_chat.id)
+    await create_event(context, update.effective_chat.id)

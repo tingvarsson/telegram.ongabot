@@ -1,6 +1,6 @@
 """This module contains the UserData class."""
 import logging
-from typing import Dict, List
+from typing import Dict, Tuple
 
 from telegram import User
 
@@ -22,7 +22,7 @@ class UserData:
     """
 
     def __init__(self) -> None:
-        self.poll_answer: Dict[str, List[int]] = {}
+        self.poll_answer: Dict[str, Tuple[int, ...]] = {}
         self.user: User = None
 
     def __repr__(self) -> str:
@@ -34,12 +34,12 @@ class UserData:
         self.user = user
 
     @log.method
-    def get_poll_answer(self, poll_id: str) -> List[int]:
+    def get_poll_answer(self, poll_id: str) -> Tuple[int, ...]:
         """Get a PollAnswer for a given poll_id"""
         return self.poll_answer.get(poll_id)
 
     @log.method
-    def set_poll_answer(self, poll_id: str, poll_answer: List[int]) -> None:
+    def set_poll_answer(self, poll_id: str, poll_answer: Tuple[int, ...]) -> None:
         """Set a PollAnswer for a given poll_id"""
         self.poll_answer.update({poll_id: poll_answer})
         _logger.debug("user_data:\n%s", self)

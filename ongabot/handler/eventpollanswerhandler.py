@@ -19,7 +19,7 @@ class EventPollAnswerHandler(PollAnswerHandler):
 
 
 @log
-def callback(update: Update, context: CallbackContext) -> None:
+async def callback(update: Update, context: CallbackContext) -> None:
     """Handle a poll answer update of an event"""
     event = context.bot_data.get_event(update.poll_answer.poll_id)
     event.update_answer(update.poll_answer)
@@ -38,7 +38,7 @@ def callback(update: Update, context: CallbackContext) -> None:
         else:
             response = f"Hmm suspicious, looks like {user_name} changed their vote..."
 
-        context.bot.send_message(
+        await context.bot.send_message(
             event.chat_id,
             response,
         )
