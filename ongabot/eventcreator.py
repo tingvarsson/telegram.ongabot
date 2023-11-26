@@ -30,15 +30,15 @@ def create_event(context: CallbackContext, chat_id: int) -> None:
     pinned_poll = chat.get_pinned_poll()
 
     if pinned_poll is not None:
-        next_wed = helper.get_upcoming_date(date.today(), "wednesday").strftime("%Y-%m-%d")
-        if next_wed in pinned_poll.poll.question:
+        next_thu = helper.get_upcoming_date(date.today(), "thursday").strftime("%Y-%m-%d")
+        if next_thu in pinned_poll.poll.question:
             context.bot.send_message(
                 chat_id,
                 "Event already exists for: "
-                + next_wed
+                + next_thu
                 + "\nSend /cancelevent first if you wish to create a new event.",
             )
-            _logger.debug("Event already exist for next Wednesday (%s).", next_wed)
+            _logger.debug("Event already exist for next Thursday (%s).", next_thu)
             return
 
         chat.remove_pinned_poll()
