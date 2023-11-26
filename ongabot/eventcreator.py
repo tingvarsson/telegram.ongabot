@@ -64,8 +64,8 @@ def create_event(context: CallbackContext, chat_id: int) -> None:
 
 def _create_poll_text() -> str:
     """Create text field for poll"""
-    title = "Event: ONGA"
-    when = f"When: {helper.get_upcoming_date(date.today(), 'wednesday')}"
+    title = "Event: TOGA (with ONGA)"
+    when = f"When: {helper.get_upcoming_date(date.today(), 'thursday')}"
     text = f"{title}\n{when}"
     return text
 
@@ -73,10 +73,11 @@ def _create_poll_text() -> str:
 def _create_poll_options() -> list[str]:
     """Create options for poll"""
     options = [
-        "18.00",
-        "19.00",
-        "20.00",
-        "21.00",
+        "18.30",
+        "19.10",
+        "19.50",
+        "20.40",
+        "21.20",
         "No-op",
         "Maybe Baby </3",
     ]
