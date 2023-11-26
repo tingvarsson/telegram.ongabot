@@ -1,6 +1,5 @@
 """This module contains the helper functions for creating an event."""
 import logging
-import typing
 from datetime import date, datetime
 
 from telegram.ext import CallbackContext
