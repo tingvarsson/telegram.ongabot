@@ -1,4 +1,5 @@
 """This module contains the DeScheduleCommandHandler class."""
+
 import logging
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler

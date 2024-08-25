@@ -1,4 +1,5 @@
 """This module contains the Event class."""
+
 import logging
 from typing import Dict
 

@@ -1,4 +1,5 @@
 """This module contains the OngaCommandHandler class."""
+
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 

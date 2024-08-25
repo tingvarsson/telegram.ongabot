@@ -1,4 +1,5 @@
 """This module contains the HelpCommandHandler class."""
+
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 

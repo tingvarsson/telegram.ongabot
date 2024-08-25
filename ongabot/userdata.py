@@ -1,4 +1,5 @@
 """This module contains the UserData class."""
+
 import logging
 from typing import Dict, Tuple
 
