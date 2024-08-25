@@ -1,4 +1,5 @@
 """This module contains log decorator."""
+
 import functools
 import logging
 from typing import Any, Callable, TypeVar, cast

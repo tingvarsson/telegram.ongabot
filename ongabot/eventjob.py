@@ -1,4 +1,5 @@
 """This module contains the EventJob class."""
+
 import logging
 from datetime import date, datetime, timedelta
 from typing import Callable
