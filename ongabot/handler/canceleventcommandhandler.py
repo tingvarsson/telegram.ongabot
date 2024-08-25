@@ -1,4 +1,5 @@
 """This module contains the CancelEventCommandHandler class."""
+
 import logging
 
 from telegram import Update

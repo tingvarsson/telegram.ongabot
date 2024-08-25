@@ -1,4 +1,5 @@
 """This module contains the BotData class."""
+
 import logging
 from typing import Callable, Dict
 
