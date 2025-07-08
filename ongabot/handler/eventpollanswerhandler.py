@@ -28,7 +28,6 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     user_data: UserData = context.user_data
     user_data.init_or_update(update.poll_answer.user)
-    user_data.set_poll_answer(update.poll_answer.poll_id, update.poll_answer.option_ids)
 
     # Empty option_ids means the user retracted his vote, ignore those for now
     if update.poll_answer.option_ids:
@@ -44,3 +43,5 @@ async def callback(update: Update, context: CallbackContext) -> None:
             event.chat_id,
             response,
         )
+
+    user_data.set_poll_answer(update.poll_answer.poll_id, update.poll_answer.option_ids)
