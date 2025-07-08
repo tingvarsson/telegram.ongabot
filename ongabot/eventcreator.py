@@ -1,4 +1,5 @@
 """This module contains the helper functions for creating an event."""
+
 import logging
 from datetime import date, datetime
 
