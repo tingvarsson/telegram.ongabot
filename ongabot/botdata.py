@@ -31,9 +31,9 @@ class BotData:
 
     @log.method
     def get_chat(self, chat_id: int) -> Chat:
-        """Get a Chat from BotData"""
-        # Create a Chat object for chat_id if not found
+        """Get a Chat from BotData, and if it doesnt exist create it"""
         if not self.chats.get(chat_id):
+            # Create a Chat object for chat_id if not found
             self.chats.update({chat_id: Chat(chat_id)})
 
         return self.chats.get(chat_id)

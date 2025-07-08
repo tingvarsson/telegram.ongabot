@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """An application that runs a telegram bot called ONGAbot"""
 
+import asyncio
 import logging
 import os
 
-from telegram.ext import CallbackContext, ContextTypes, PicklePersistence, Updater
+from telegram.ext import Application, CallbackContext, ContextTypes, PicklePersistence
 
 from botdata import BotData
 from eventcreator import create_event_callback
@@ -37,39 +38,35 @@ def main() -> None:
     context_types = ContextTypes(bot_data=BotData, user_data=UserData)
 
     persistence = PicklePersistence(
-        filename=os.getenv("DB_PATH", "ongabot.db"), context_types=context_types
+        filepath=os.getenv("DB_PATH", "ongabot.db"), context_types=context_types
     )
 
-    updater = Updater(
-        os.getenv("API_TOKEN"),
-        persistence=persistence,
-        use_context=True,
-        context_types=context_types,
+    application = (
+        Application.builder()
+        .token(os.getenv("API_TOKEN"))
+        .persistence(persistence)
+        .context_types(context_types)
+        .build()
     )
 
     # Register handlers
-    dispatcher = updater.dispatcher
-    dispatcher.add_handler(StartCommandHandler())
-    dispatcher.add_handler(HelpCommandHandler())
-    dispatcher.add_handler(OngaCommandHandler())
-    dispatcher.add_handler(NewEventCommandHandler())
-    dispatcher.add_handler(CancelEventCommandHandler())
-    dispatcher.add_handler(EventPollHandler())
-    dispatcher.add_handler(EventPollAnswerHandler())
-    dispatcher.add_handler(ScheduleCommandHandler())
-    dispatcher.add_handler(DeScheduleCommandHandler())
-    dispatcher.add_error_handler(error)
+    application.add_handler(StartCommandHandler())
+    application.add_handler(HelpCommandHandler())
+    application.add_handler(OngaCommandHandler())
+    application.add_handler(NewEventCommandHandler())
+    application.add_handler(CancelEventCommandHandler())
+    application.add_handler(EventPollHandler())
+    application.add_handler(EventPollAnswerHandler())
+    application.add_handler(ScheduleCommandHandler())
+    application.add_handler(DeScheduleCommandHandler())
+    application.add_error_handler(error)
 
-    bot_data: BotData = persistence.bot_data
-    bot_data.schedule_all_event_jobs(updater.job_queue, create_event_callback)
+    bot_data: BotData = asyncio.new_event_loop().run_until_complete(persistence.get_bot_data())
+    if bot_data:
+        bot_data.schedule_all_event_jobs(application.job_queue, create_event_callback)
 
     # Start the bot
-    updater.start_polling()
-
-    # Block until you press Ctrl-C or the process receives SIGINT, SIGTERM or
-    # SIGABRT. This should be used most of the time, since start_polling() is
-    # non-blocking and will stop the bot gracefully.
-    updater.idle()
+    application.run_polling()
 
 
 if __name__ == "__main__":

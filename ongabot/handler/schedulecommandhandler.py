@@ -2,8 +2,9 @@
 
 import logging
 
-from telegram import ParseMode, Update
-from telegram.ext import CommandHandler, CallbackContext
+from telegram import Update
+from telegram.constants import ParseMode
+from telegram.ext import CallbackContext, CommandHandler
 
 from chat import Chat
 from eventcreator import create_event_callback
@@ -23,10 +24,10 @@ class ScheduleCommandHandler(CommandHandler):
 
 
 @log
-def callback(update: Update, context: CallbackContext) -> None:
+async def callback(update: Update, context: CallbackContext) -> None:
     """Schedule a event creation job to run every week"""
     if len(context.args) > 1:
-        update.message.reply_text(
+        await update.message.reply_text(
             "Only one argument supported `/schedule <day>[OPTIONAL]`"
             "\n\nExample:"
             "\n`/schedule` default to schedule job on sundays"
@@ -38,7 +39,7 @@ def callback(update: Update, context: CallbackContext) -> None:
     day_to_schedule = "sunday"
     if len(context.args) == 1:
         if not helper.is_valid_weekday(context.args[0]):
-            update.message.reply_text(
+            await update.message.reply_text(
                 r"Please provide a day that I understand\. "
                 rf"What even is *__{context.args[0]}__*\?\!"
                 "\n"
@@ -50,7 +51,7 @@ def callback(update: Update, context: CallbackContext) -> None:
 
     event_job = EventJob(update.effective_chat.id, day_to_schedule)
     if event_job.check_if_job_exists(context.job_queue):
-        update.message.reply_text(
+        await update.message.reply_text(
             r"Scheduled job already exists\. Deschedule first "
             r"if you wish to re\-create the scheduled job\."
             "\n`/deschedule`",
@@ -63,7 +64,7 @@ def callback(update: Update, context: CallbackContext) -> None:
     chat: Chat = context.bot_data.get_chat(update.effective_chat.id)
     chat.set_event_job(event_job)
 
-    update.message.reply_text(
+    await update.message.reply_text(
         f"Poll creation is now scheduled to run every {day_to_schedule} "
         f"starting on {job.next_t:%Y-%m-%d %H:%M} ({job.next_t.tzinfo})"
     )

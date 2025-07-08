@@ -1,7 +1,6 @@
 """This module contains the helper functions for creating an event."""
 
 import logging
-import typing
 from datetime import date, datetime
 
 from telegram.ext import CallbackContext
@@ -16,35 +15,34 @@ _logger = logging.getLogger(__name__)
 
 
 @log
-def create_event_callback(context: CallbackContext) -> None:
+async def create_event_callback(context: CallbackContext) -> None:
     """Create the event on callback, after extracting chat_id from job.context"""
     _logger.debug("Poll creation is triggered by timer on %s", datetime.now())
-    chat_id = typing.cast(int, context.job.context)
-    create_event(context, chat_id)
+    await create_event(context, context.job.chat_id)
 
 
 @log
-def create_event(context: CallbackContext, chat_id: int) -> None:
+async def create_event(context: CallbackContext, chat_id: int) -> None:
     """Create an event"""
     # Retrieve previous pinned poll message and try to unpin if applicable
     chat: Chat = context.bot_data.get_chat(chat_id)
     pinned_poll = chat.get_pinned_poll()
 
     if pinned_poll is not None:
-        next_wed = helper.get_upcoming_date(date.today(), "wednesday").strftime("%Y-%m-%d")
-        if next_wed in pinned_poll.poll.question:
-            context.bot.send_message(
+        next_thu = helper.get_upcoming_date(date.today(), "thursday").strftime("%Y-%m-%d")
+        if next_thu in pinned_poll.poll.question:
+            await context.bot.send_message(
                 chat_id,
                 "Event already exists for: "
-                + next_wed
+                + next_thu
                 + "\nSend /cancelevent first if you wish to create a new event.",
             )
-            _logger.debug("Event already exist for next Wednesday (%s).", next_wed)
+            _logger.debug("Event already exist for next Thursday (%s).", next_thu)
             return
 
-        chat.remove_pinned_poll()
+        await chat.remove_pinned_poll()
 
-    poll_message = context.bot.send_poll(
+    poll_message = await context.bot.send_poll(
         chat_id,
         _create_poll_text(),
         options=_create_poll_options(),
@@ -54,19 +52,19 @@ def create_event(context: CallbackContext, chat_id: int) -> None:
     _logger.debug("poll_message:\n%s", poll_message)
 
     event = Event(chat_id, poll_message.poll)
-    event.send_status_message(context.bot)
+    await event.send_status_message(context.bot)
 
     chat.add_event(event)
 
     # Pin new message and save to chat_data for future removal
-    poll_message.pin(disable_notification=True)
+    await poll_message.pin(disable_notification=True)
     chat.set_pinned_poll(poll_message)
 
 
 def _create_poll_text() -> str:
     """Create text field for poll"""
-    title = "Event: ONGA"
-    when = f"When: {helper.get_upcoming_date(date.today(), 'wednesday')}"
+    title = "Event: TOGA (with ONGA)"
+    when = f"When: {helper.get_upcoming_date(date.today(), 'thursday')}"
     text = f"{title}\n{when}"
     return text
 
