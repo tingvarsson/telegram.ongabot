@@ -48,7 +48,7 @@ class EventJob:
                 0,
                 0,
             ),
-            context=self.chat_id,
+            chat_id=self.chat_id,
             name=self.job_name,
         )
 

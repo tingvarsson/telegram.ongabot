@@ -3,7 +3,8 @@
 import logging
 from typing import Callable, Dict
 
-from telegram import Message, TelegramError
+from telegram import Message
+from telegram.error import TelegramError
 from telegram.ext import JobQueue
 
 from event import Event
@@ -74,14 +75,14 @@ class Chat:
         return self.pinned_poll
 
     @log.method
-    def remove_pinned_poll(self) -> None:
+    async def remove_pinned_poll(self) -> None:
         """Remove the pinned event poll message"""
         if not self.pinned_poll:
             _logger.warning("Trying to remove pinned_poll=None")
             return
 
         try:
-            self.pinned_poll.unpin()
+            await self.pinned_poll.unpin()
         except TelegramError:
             _logger.warning(
                 "Failed trying to unpin message (message_id=%i).", self.pinned_poll.message_id

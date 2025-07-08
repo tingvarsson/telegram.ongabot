@@ -3,8 +3,10 @@
 import logging
 from typing import Dict
 
-from telegram import Bot, ParseMode, Poll, PollAnswer, User
-from telegram.utils.helpers import escape_markdown
+
+from telegram import Bot, Poll, PollAnswer, User
+from telegram.constants import ParseMode
+from telegram.helpers import escape_markdown
 
 from utils import log
 
@@ -42,10 +44,10 @@ class Event:
         return str(self.__class__) + ": " + str(self.__dict__)
 
     @log.method
-    def send_status_message(self, bot: Bot) -> None:
+    async def send_status_message(self, bot: Bot) -> None:
         """Send status message for the event poll"""
-        chat_member_count = bot.get_chat_member_count(self.chat_id)
-        status_message = bot.send_message(
+        chat_member_count = await bot.get_chat_member_count(self.chat_id)
+        status_message = await bot.send_message(
             chat_id=self.chat_id,
             text=self._create_status_message_text(chat_member_count),
             parse_mode=ParseMode.MARKDOWN_V2,
@@ -53,10 +55,10 @@ class Event:
         self.status_message_id = status_message.message_id
 
     @log.method
-    def update_status_message(self, bot: Bot) -> None:
+    async def update_status_message(self, bot: Bot) -> None:
         """Update status message for the event poll"""
-        chat_member_count = bot.get_chat_member_count(self.chat_id)
-        bot.edit_message_text(
+        chat_member_count = await bot.get_chat_member_count(self.chat_id)
+        await bot.edit_message_text(
             text=self._create_status_message_text(chat_member_count),
             chat_id=self.chat_id,
             message_id=self.status_message_id,
