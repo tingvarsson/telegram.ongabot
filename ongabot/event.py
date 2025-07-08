@@ -59,9 +59,9 @@ class Event:
         """Update status message for the event poll"""
         chat_member_count = await bot.get_chat_member_count(self.chat_id)
         await bot.edit_message_text(
-            text=self._create_status_message_text(chat_member_count),
             chat_id=self.chat_id,
             message_id=self.status_message_id,
+            text=self._create_status_message_text(chat_member_count),
             parse_mode=ParseMode.MARKDOWN_V2,
         )
 
