@@ -12,7 +12,6 @@ from eventjob import EventJob
 from utils import helper
 from utils.log import log
 
-
 _logger = logging.getLogger(__name__)
 
 
