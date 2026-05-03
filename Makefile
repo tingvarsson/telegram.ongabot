@@ -7,7 +7,7 @@ BLACK:=black
 PYTEST:=pytest
 MYPY:=mypy
 
-API_TOKEN=OVERRIDE_ME
+-include .env
 DOCKER_IMAGE=tingvarsson/telegram.ongabot:latest
 VENV_PATH=venv
 
