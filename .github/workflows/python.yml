@@ -13,35 +13,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-    - name: Set up Python 3.13
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.13'
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-    - name: Lint with black
-      run: |
-        make black-check
+      - name: Lint with black
+        run: |
+          make black-check
 
-    - name: Lint with flake8
-      run: |
-        make pep8
+      - name: Lint with flake8
+        run: |
+          make pep8
 
-    - name: Lint with pylint
-      run: |
-        make lint
+      - name: Lint with pylint
+        run: |
+          make lint
 
-    - name: Type check with mypy
-      run: |
-        make mypy
+      - name: Type check with mypy
+        run: |
+          make mypy
 
-    - name: Test with pytest
-      run: |
-        make test
+      - name: Test with pytest
+        run: |
+          make test

@@ -68,7 +68,9 @@ def main() -> None:
     application.add_handler(DeScheduleCommandHandler())
     application.add_error_handler(error)
 
-    bot_data: BotData = asyncio.new_event_loop().run_until_complete(persistence.get_bot_data())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    bot_data: BotData = loop.run_until_complete(persistence.get_bot_data())
     if bot_data:
         bot_data.schedule_all_event_jobs(application.job_queue, create_event_callback)
         # Seed authorized chats from env var (idempotent; safe to keep in .env)
