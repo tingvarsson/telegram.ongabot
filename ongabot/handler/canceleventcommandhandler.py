@@ -8,7 +8,6 @@ from telegram.ext import CallbackContext, CommandHandler
 from chat import Chat
 from utils.log import log
 
-
 _logger = logging.getLogger(__name__)
 
 

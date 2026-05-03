@@ -9,7 +9,6 @@ from chat import Chat
 from event import Event
 from utils import log
 
-
 _logger = logging.getLogger(__name__)
 
 

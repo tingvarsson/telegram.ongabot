@@ -8,7 +8,6 @@ from telegram.ext import Job, JobQueue
 
 from utils import helper, log
 
-
 _logger = logging.getLogger(__name__)
 
 

@@ -4,7 +4,6 @@ import functools
 import logging
 from typing import Any, Callable, TypeVar, cast
 
-
 F = TypeVar("F", bound=Callable[..., Any])  # pylint: disable=invalid-name
 
 

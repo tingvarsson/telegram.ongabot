@@ -7,7 +7,6 @@ from telegram import User
 
 from utils import log
 
-
 _logger = logging.getLogger(__name__)
 
 

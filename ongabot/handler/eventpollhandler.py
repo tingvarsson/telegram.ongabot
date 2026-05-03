@@ -7,7 +7,6 @@ from telegram.ext import CallbackContext, PollHandler
 
 from utils.log import log
 
-
 _logger = logging.getLogger(__name__)
 
 

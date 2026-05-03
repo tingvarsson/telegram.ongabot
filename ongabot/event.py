@@ -10,7 +10,6 @@ from telegram.helpers import escape_markdown
 
 from utils import log
 
-
 _logger = logging.getLogger(__name__)
 
 

@@ -23,7 +23,6 @@ from handler import ScheduleCommandHandler
 from handler import DeScheduleCommandHandler
 from userdata import UserData
 
-
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
