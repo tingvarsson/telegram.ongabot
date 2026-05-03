@@ -1,8 +1,8 @@
-FROM python:3.13
-LABEL maintainer Thomas Ingvarsson <ingvarsson.thomas@gmail.com>
+FROM python:3.14-slim
+LABEL maintainer="Thomas Ingvarsson <ingvarsson.thomas@gmail.com>"
 
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ongabot /ongabot
 

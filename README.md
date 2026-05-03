@@ -15,7 +15,7 @@ cp .env.example .env
 
 ### Local Python environment
 
-Requires Python 3.12+.
+Recommended Python 3.14.
 
 ```bash
 make venv
