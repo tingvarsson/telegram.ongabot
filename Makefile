@@ -54,5 +54,9 @@ clean:
 docker-build:
 	$(DOCKER) build . -f Dockerfile -t $(DOCKER_IMAGE)
 
-docker-run:
-	$(DOCKER) run --rm --env API_TOKEN=$(API_TOKEN) -it $(DOCKER_IMAGE)
+.env:
+	@echo "Error: .env not found. Copy .env.example and fill in your values: cp .env.example .env"
+	@exit 1
+
+docker-run: .env
+	$(DOCKER) run --rm --env-file .env -it $(DOCKER_IMAGE)
