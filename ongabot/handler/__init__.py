@@ -1,5 +1,8 @@
 """Handler"""
 
+from .authorizationhandler import AuthorizationHandler
+from .authorizecommandhandler import AuthorizeCommandHandler
+from .deauthorizecommandhandler import DeAuthorizeCommandHandler
 from .eventpollhandler import EventPollHandler
 from .eventpollanswerhandler import EventPollAnswerHandler
 from .helpcommandhandler import HelpCommandHandler
@@ -11,6 +14,9 @@ from .schedulecommandhandler import ScheduleCommandHandler
 from .deschedulecommandhandler import DeScheduleCommandHandler
 
 __all__ = (
+    "AuthorizationHandler",
+    "AuthorizeCommandHandler",
+    "DeAuthorizeCommandHandler",
     "EventPollAnswerHandler",
     "EventPollHandler",
     "HelpCommandHandler",

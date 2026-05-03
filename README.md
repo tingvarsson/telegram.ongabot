@@ -4,6 +4,39 @@ The one and only ON/GA Telegram bot, available on Docker Hub ([tingvarsson/teleg
 
 Built on [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot)
 
+## Setup
+
+Copy `.env.example` to `.env` and fill in your Telegram bot token to avoid having to provide env var on the command line:
+
+```bash
+cp .env.example .env
+# edit .env and set API_TOKEN=your_token
+```
+
+### Local Python environment
+
+Requires Python 3.12+.
+
+```bash
+make venv
+source venv/bin/activate
+make install
+make run
+```
+
+### Docker
+
+```bash
+make docker-build
+make docker-run
+```
+
+The image is also published on [Docker Hub](https://hub.docker.com/r/tingvarsson/telegram.ongabot/) and can be run directly:
+
+```bash
+docker run --rm --env API_TOKEN=your_token tingvarsson/telegram.ongabot:latest
+```
+
 ## Code cleaners
 
 For code formatting `black` is used, together with `flake8` and `pylint` for linting.

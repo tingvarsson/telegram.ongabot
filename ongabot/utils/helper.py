@@ -23,7 +23,9 @@ def create_help_text() -> str:
         "/schedule <day>[OPTIONAL] - Schedules a job to create a poll on "
         "every upcoming <day>. If no argument is supplied, job"
         " is scheduled to run on sundays\n"
-        "/deschedule - Deschedules jobs"
+        "/deschedule - Deschedules jobs\n"
+        "/authorize - Authorize this chat to use ONGAbot (bot admins only)\n"
+        "/deauthorize - Deauthorize this chat from using ONGAbot (bot admins only)"
     )
 
     return text

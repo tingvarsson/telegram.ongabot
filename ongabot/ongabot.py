@@ -9,6 +9,9 @@ from telegram.ext import Application, CallbackContext, ContextTypes, PicklePersi
 
 from botdata import BotData
 from eventcreator import create_event_callback
+from handler import AuthorizationHandler
+from handler import AuthorizeCommandHandler
+from handler import DeAuthorizeCommandHandler
 from handler import EventPollAnswerHandler
 from handler import EventPollHandler
 from handler import HelpCommandHandler
@@ -49,7 +52,12 @@ def main() -> None:
         .build()
     )
 
+    # Authorization gate — runs before all other handlers (group -1)
+    application.add_handler(AuthorizationHandler(), group=-1)
+
     # Register handlers
+    application.add_handler(AuthorizeCommandHandler())
+    application.add_handler(DeAuthorizeCommandHandler())
     application.add_handler(StartCommandHandler())
     application.add_handler(HelpCommandHandler())
     application.add_handler(OngaCommandHandler())
@@ -64,6 +72,10 @@ def main() -> None:
     bot_data: BotData = asyncio.new_event_loop().run_until_complete(persistence.get_bot_data())
     if bot_data:
         bot_data.schedule_all_event_jobs(application.job_queue, create_event_callback)
+        # Seed authorized chats from env var (idempotent; safe to keep in .env)
+        for raw_id in os.getenv("AUTHORIZED_CHAT_IDS", "").split(","):
+            if raw_id.strip().lstrip("-").isdigit():
+                bot_data.authorize_chat(int(raw_id.strip()))
 
     # Start the bot
     application.run_polling()
