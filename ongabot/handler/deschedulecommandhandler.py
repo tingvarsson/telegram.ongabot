@@ -14,16 +14,18 @@ class DeScheduleCommandHandler(CommandHandler):
     """Handler for /schedule command"""
 
     def __init__(self) -> None:
-        CommandHandler.__init__(self, "deschedule", callback=callback)
+        super().__init__("deschedule", callback=callback)
 
 
 @log
 async def callback(update: Update, context: CallbackContext) -> None:
     """Cancel existing event job in chat"""
+    if update.message is None or update.effective_chat is None or context.job_queue is None:
+        _logger.error("Received /deschedule command without message or effective chat")
+        return
+
     chat: Chat = context.bot_data.get_chat(update.effective_chat.id)
     if not chat.remove_event_job(context.job_queue):
         await update.message.reply_text("No jobs to cancel.")
     else:
-        await update.message.reply_text(
-            "Job cancelled successfully. Polls will no longer be automatically created."
-        )
+        await update.message.reply_text("Job cancelled successfully. Polls will no longer be automatically created.")

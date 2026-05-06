@@ -1,13 +1,13 @@
 """This module contains the helper functions for creating an event."""
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 
 from telegram.ext import CallbackContext
 
 from chat import Chat
 from event import Event
-from utils import helper
+from eventdata import EventData
 from utils.log import log
 
 _logger = logging.getLogger(__name__)
@@ -17,67 +17,84 @@ _logger = logging.getLogger(__name__)
 async def create_event_callback(context: CallbackContext) -> None:
     """Create the event on callback, after extracting chat_id from job.context"""
     _logger.debug("Poll creation is triggered by timer on %s", datetime.now())
-    await create_event(context, context.job.chat_id)
+    if context.job is None or context.job.chat_id is None:
+        _logger.error("Received event creation callback without job or chat_id in context")
+        return
+
+    chat: Chat = context.bot_data.get_chat(context.job.chat_id)
+    if chat.event_job is None:
+        _logger.error("No event job found for chat_id %s in create_event_callback", context.job.chat_id)
+        return
+
+    await create_event(context, context.job.chat_id, chat.event_job.to_event_data())
 
 
 @log
-async def create_event(context: CallbackContext, chat_id: int) -> None:
+async def create_event(
+    context: CallbackContext,
+    chat_id: int,
+    event_data: EventData,
+) -> None:
     """Create an event"""
-    # Retrieve previous pinned poll message and try to unpin if applicable
     chat: Chat = context.bot_data.get_chat(chat_id)
-    pinned_poll = chat.get_pinned_poll()
 
-    if pinned_poll is not None:
-        next_thu = helper.get_upcoming_date(date.today(), "thursday").strftime("%Y-%m-%d")
-        if next_thu in pinned_poll.poll.question:
+    # Check for an existing active (non-completed) event on the same date
+    for existing in chat.active_events:
+        if existing.event_date == event_data.event_date:
             await context.bot.send_message(
                 chat_id,
-                "Event already exists for: "
-                + next_thu
-                + "\nSend /cancelevent first if you wish to create a new event.",
+                f"Event already exists for: {event_data.event_date}"
+                "\nSend /cancelevent first if you wish to cancel it.",
             )
-            _logger.debug("Event already exist for next Thursday (%s).", next_thu)
+            _logger.debug("Event already exists for date %s.", event_data.event_date)
             return
-
-        await chat.remove_pinned_poll()
 
     poll_message = await context.bot.send_poll(
         chat_id,
-        _create_poll_text(),
-        options=_create_poll_options(),
+        _create_poll_text(event_data.event_date, event_data.start_time),
+        options=_create_poll_options(event_data.start_time, event_data.num_slots),
         is_anonymous=False,
         allows_multiple_answers=True,
     )
     _logger.debug("poll_message:\n%s", poll_message)
 
-    event = Event(chat_id, poll_message.poll)
+    event = Event(chat_id, poll_message.poll, event_data)
     await event.send_status_message(context.bot)
 
     chat.add_event(event)
 
-    # Pin new message and save to chat_data for future removal
+    # Pin new message and save to chat data for future removal
     await poll_message.pin(disable_notification=True)
-    chat.set_pinned_poll(poll_message)
+    chat.set_pinned_poll(poll_message.poll.id, poll_message)
 
 
-def _create_poll_text() -> str:
+_EVENT_NAME_BY_WEEKDAY = {
+    0: "MÅGA",
+    1: "TIGA",
+    2: "ONGA",
+    3: "TOGA",
+    4: "FREGA",
+    5: "LÖGA",
+    6: "SÖGA",
+}
+
+
+def _create_poll_text(event_date: date, start_time: time) -> str:
     """Create text field for poll"""
-    title = "Event: TOGA (with ONGA)"
-    when = f"When: {helper.get_upcoming_date(date.today(), 'thursday')}"
-    text = f"{title}\n{when}"
-    return text
+    name = _EVENT_NAME_BY_WEEKDAY[event_date.weekday()]
+    if event_date.weekday() != 2:  # Onsdag is the home day, no suffix
+        name += " (with ONGA)"
+    title = f"Event: {name}"
+    when = f"When: {event_date} {start_time.strftime('%H:%M')}"
+    return f"{title}\n{when}"
 
 
-def _create_poll_options() -> list[str]:
-    """Create options for poll"""
-    options = [
-        "18.30",
-        "19.10",
-        "19.50",
-        "20.40",
-        "21.20",
-        "No-op",
-        "Maybe Baby </3",
-    ]
-
+def _create_poll_options(start_time: time, num_slots: int) -> list[str]:
+    """Create poll options: num_slots time options at 40-min intervals, then No-op and Maybe Baby"""
+    dt = datetime.combine(date.today(), start_time)
+    options = []
+    for _ in range(num_slots):
+        options.append(dt.strftime("%H.%M"))
+        dt += timedelta(minutes=40)
+    options += ["No-op", "Maybe Baby </3"]
     return options

@@ -21,9 +21,17 @@ class EventPollAnswerHandler(PollAnswerHandler):
 @log
 async def callback(update: Update, context: CallbackContext) -> None:
     """Handle a poll answer update of an event"""
+    if update.poll_answer is None or update.poll_answer.user is None:
+        _logger.error("Received poll answer update without poll answer")
+        return
+
     event = context.bot_data.get_event(update.poll_answer.poll_id)
     event.update_answer(update.poll_answer)
     await event.update_status_message(context.bot)
+
+    if context.user_data is None:
+        _logger.error("Received poll answer update without user data in context")
+        return
 
     user_data: UserData = context.user_data
     user_data.init_or_update(update.poll_answer.user)
