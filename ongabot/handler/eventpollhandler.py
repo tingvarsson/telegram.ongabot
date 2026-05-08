@@ -20,6 +20,10 @@ class EventPollHandler(PollHandler):
 @log
 async def callback(update: Update, context: CallbackContext) -> None:
     """Handle a poll update of an event"""
+    if update.poll is None:
+        _logger.error("Received poll update without poll")
+        return
+
     event = context.bot_data.get_event(update.poll.id)
     event.update_poll(update.poll)
-    event.update_status_message(context.bot)
+    await event.update_status_message(context.bot)

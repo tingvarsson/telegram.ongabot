@@ -1,7 +1,7 @@
 """This module contains the UserData class."""
 
 import logging
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 from telegram import User
 
@@ -23,7 +23,7 @@ class UserData:
 
     def __init__(self) -> None:
         self.poll_answer: Dict[str, Tuple[int, ...]] = {}
-        self.user: User = None
+        self.user: Optional[User] = None
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -34,7 +34,7 @@ class UserData:
         self.user = user
 
     @log.method
-    def get_poll_answer(self, poll_id: str) -> Tuple[int, ...]:
+    def get_poll_answer(self, poll_id: str) -> Optional[Tuple[int, ...]]:
         """Get a PollAnswer for a given poll_id"""
         return self.poll_answer.get(poll_id)
 

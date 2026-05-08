@@ -35,7 +35,5 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     if not context.bot_data.is_authorized(chat.id):
         if msg:
-            await msg.reply_text(
-                "This bot is not enabled for this chat. Contact the bot administrator."
-            )
+            await msg.reply_text("This bot is not enabled for this chat. Contact the bot administrator.")
         raise ApplicationHandlerStop()

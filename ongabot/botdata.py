@@ -1,7 +1,7 @@
 """This module contains the BotData class."""
 
 import logging
-from typing import Callable, Dict, Set
+from typing import Callable, Dict, Optional, Set
 
 from telegram.ext import JobQueue
 
@@ -29,7 +29,10 @@ class BotData:
 
     def __setstate__(self, state: Dict) -> None:
         self.__dict__.update(state)
+        # Set default values for any missing attributes (for backward compatibility with older persisted data)
         if not hasattr(self, "authorized_chats"):
+            # Old chats are not authorized by default, to avoid accidentally authorizing all existing chats
+            # when deploying the bot with persistence for the first time
             self.authorized_chats = set()
 
     def __repr__(self) -> str:
@@ -38,14 +41,16 @@ class BotData:
     @log.method
     def get_chat(self, chat_id: int) -> Chat:
         """Get a Chat from BotData, and if it doesnt exist create it"""
-        if not self.chats.get(chat_id):
+        chat = self.chats.get(chat_id)
+        if not chat:
             # Create a Chat object for chat_id if not found
-            self.chats.update({chat_id: Chat(chat_id)})
+            chat = Chat(chat_id)
+            self.chats.update({chat_id: chat})
 
-        return self.chats.get(chat_id)
+        return chat
 
     @log.method
-    def get_event(self, poll_id: str) -> Event:
+    def get_event(self, poll_id: str) -> Optional[Event]:
         """Get an event from BotData"""
         for chat in self.chats.values():
             event = chat.get_event(poll_id)

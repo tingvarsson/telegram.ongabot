@@ -1,7 +1,8 @@
 """This module contains the Chat class."""
 
 import logging
-from typing import Callable, Dict
+from datetime import date
+from typing import Callable, Dict, Optional
 
 from telegram import Message
 from telegram.error import TelegramError
@@ -25,76 +26,100 @@ class Chat:
         chat_id: id of the chat the data belongs to
         events: dictionary of Event objects indexed on poll_id
         event_job: EventJob if there is one scheduled for the chat, otherwise None
-        pinned_poll: telegram.Message of a pinned event poll message if any, otherwise None
+        pinned_polls: dict of pinned event poll messages indexed on poll_id
     """
 
     def __init__(self, chat_id: int) -> None:
         self.chat_id = chat_id
 
         self.events: Dict[str, Event] = {}
-        self.event_job: EventJob = None
-        self.pinned_poll: Message = None
+        self.event_job: Optional[EventJob] = None
+        self.pinned_polls: Dict[str, Message] = {}
+
+    def __setstate__(self, state: dict) -> None:
+        self.__dict__.update(state)
+        # Set default values for any missing attributes (for backward compatibility with older persisted data)
+        if not hasattr(self, "pinned_polls"):
+            old = self.__dict__.pop("pinned_poll", None)
+            self.pinned_polls = {}
+            if old is not None:
+                try:
+                    self.pinned_polls[old.poll.id] = old
+                except AttributeError:
+                    pass  # old message had no .poll; discard silently
+
+        # Remove old pinned_poll attribute if it exists, to avoid confusion and save memory
+        self.__dict__.pop("pinned_poll", None)
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
 
+    @property
+    def active_events(self) -> list[Event]:
+        """Return a list of active (not completed) events."""
+        return [e for e in self.events.values() if not e.completed]
+
+    def find_active_event(self, target_date: date) -> list[Event]:
+        """Return active events matching target_date."""
+        return [e for e in self.active_events if e.event_date == target_date]
+
     @log.method
     def add_event(self, event: Event) -> bool:
-        """Add an Event to BotData"""
+        """Add an Event"""
         if self.events.get(event.poll_id):
-            _logger.error("Event with poll_id=%s already exist in BotData!", event.poll_id)
+            _logger.error("Event with poll_id=%s already exist!", event.poll_id)
             return False
 
         self.events.update({event.poll_id: event})
         return True
 
     @log.method
-    def get_event(self, poll_id: str) -> Event:
-        """Get an event from BotData"""
+    def get_event(self, poll_id: str) -> Optional[Event]:
+        """Get an event"""
 
         if not self.events.get(poll_id):
-            _logger.error("Event with poll_id=%s doesn't exist in BotData!", poll_id)
+            _logger.error("Event with poll_id=%s doesn't exist!", poll_id)
             return None
 
         return self.events.get(poll_id)
 
     @log.method
-    def set_pinned_poll(self, message: Message) -> bool:
-        """Set a pinned event poll message for the chat"""
-        if self.pinned_poll:
-            _logger.error("pinned_poll=%s already exist when adding=%s", self.pinned_poll, message)
+    def set_pinned_poll(self, poll_id: str, message: Message) -> bool:
+        """Register a pinned poll message for a given poll_id"""
+        if poll_id in self.pinned_polls:
+            _logger.error(
+                "pinned_poll for poll_id=%s already exists when adding message_id=%s",
+                poll_id,
+                message.message_id,
+            )
             return False
 
-        self.pinned_poll = message
+        self.pinned_polls[poll_id] = message
         return True
 
     @log.method
-    def get_pinned_poll(self) -> Message:
-        """Get the pinned event poll message"""
-        return self.pinned_poll
-
-    @log.method
-    async def remove_pinned_poll(self) -> None:
-        """Remove the pinned event poll message"""
-        if not self.pinned_poll:
-            _logger.warning("Trying to remove pinned_poll=None")
+    async def remove_pinned_poll(self, poll_id: str) -> None:
+        """Unpin and remove the pinned event poll message for a given poll_id"""
+        message = self.pinned_polls.get(poll_id)
+        if message is None:
+            _logger.warning("Trying to remove pinned_poll for unknown poll_id=%s", poll_id)
             return
 
         try:
-            await self.pinned_poll.unpin()
+            await message.unpin()
         except TelegramError:
             _logger.warning(
-                "Failed trying to unpin message (message_id=%i).", self.pinned_poll.message_id
+                "Failed trying to unpin message_id=%i for poll_id=%s",
+                message.message_id,
+                poll_id,
             )
-        self.pinned_poll = None
+        del self.pinned_polls[poll_id]
 
     @log.method
     def set_event_job(self, event_job: EventJob) -> bool:
         """Set an event job for the chat"""
         if self.event_job:
-            _logger.error(
-                "job_name=%s already exist Chat with chat_id=%s!", event_job.job_name, self.chat_id
-            )
+            _logger.error("job_name=%s already exist Chat with chat_id=%s!", event_job.job_name, self.chat_id)
             return False
 
         self.event_job = event_job
