@@ -8,6 +8,9 @@ on:
 jobs:
   tag:
     runs-on: ubuntu-latest
+    outputs:
+      is_new_version: ${{ steps.tag.outputs.is_new_version }}
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - uses: actions/checkout@v6
@@ -25,28 +28,27 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Tag new version
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const version = '${{ steps.version.outputs.version }}';
-            const tag = `v${version}`;
+        id: tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v$VERSION"
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "refs/tags/$TAG$"; then
+            echo "Tag $TAG already exists, skipping release build"
+            echo "is_new_version=false" >> "$GITHUB_OUTPUT"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "Created tag $TAG"
+            echo "is_new_version=true" >> "$GITHUB_OUTPUT"
+          fi
 
-            try {
-              await github.rest.git.getRef({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                ref: `tags/${tag}`,
-              });
-              console.log(`Tag ${tag} already exists, skipping`);
-              return;
-            } catch (e) {
-              if (e.status !== 404) throw e;
-            }
-
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/tags/${tag}`,
-              sha: context.sha,
-            });
-            console.log(`Created tag ${tag} at ${context.sha}`);
+  release:
+    name: Build release image
+    needs: tag
+    if: needs.tag.outputs.is_new_version == 'true'
+    uses: ./.github/workflows/_docker-build.yml
+    with:
+      tags: |
+        ${{ github.repository }}:${{ needs.tag.outputs.version }}
+        ${{ github.repository }}:latest
+    secrets: inherit
