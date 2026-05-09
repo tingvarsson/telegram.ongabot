@@ -14,4 +14,8 @@ class EventPollCallbackNoneEventTest(unittest.IsolatedAsyncioTestCase):
         await callback(update, context)
 
         context.bot_data.get_event.assert_called_once_with("unknown_poll_id")
-        update.poll.id  # confirms poll was accessed before the guard, not silently skipped
+        context.bot.send_message.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()
