@@ -25,5 +25,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
         return
 
     event = context.bot_data.get_event(update.poll.id)
+    if event is None:
+        return
     event.update_poll(update.poll)
     await event.update_status_message(context.bot)
