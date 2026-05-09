@@ -92,6 +92,23 @@ Success: no issues found in 1 source file
 
 ```
 
+## Releasing
+
+Releases are created with `bump-my-version`. The `release` target runs all checks and tests before bumping, then pushes the version commit and git tag together:
+
+```bash
+make release PART=patch   # 0.2.0 → 0.2.1
+make release PART=minor   # 0.2.0 → 0.3.0
+make release PART=major   # 0.2.0 → 1.0.0
+```
+
+This will:
+
+1. Run `make check` and `make test` (aborts if either fails)
+2. Update the version in `ongabot/_version.py`
+3. Commit the change and create a `vX.Y.Z` git tag
+4. Push the commit and tag — the CI Docker workflow then publishes the versioned image and updates `latest` on Docker Hub
+
 ## Tests
 
 Tests are located under `tests`. Run tests locally with
