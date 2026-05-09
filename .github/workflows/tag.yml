@@ -1,0 +1,52 @@
+name: Tag
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(python -c "
+          import re, sys
+          m = re.search(r'__version__ = \"([^\"]+)\"', open('ongabot/_version.py').read())
+          if not m:
+              sys.exit('Could not find __version__ in ongabot/_version.py')
+          print(m.group(1))
+          ")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Tag new version
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.version.outputs.version }}';
+            const tag = `v${version}`;
+
+            try {
+              await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tag}`,
+              });
+              console.log(`Tag ${tag} already exists, skipping`);
+              return;
+            } catch (e) {
+              if (e.status !== 404) throw e;
+            }
+
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/tags/${tag}`,
+              sha: context.sha,
+            });
+            console.log(`Created tag ${tag} at ${context.sha}`);

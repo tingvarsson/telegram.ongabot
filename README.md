@@ -106,16 +106,9 @@ This will:
 
 1. Run `make check` and `make test` (aborts if either fails)
 2. Update the version in `ongabot/_version.py` and commit
-3. Create a local `vX.Y.Z` git tag
-4. Push the commit to a `release/vX.Y.Z` branch and open a PR
+3. Push the commit to a `release/vX.Y.Z` branch and open a PR
 
-After the PR is merged, push the release tag to trigger the Docker build:
-
-```bash
-git push origin vX.Y.Z
-```
-
-The CI Docker workflow then publishes the versioned image and updates `latest` on Docker Hub.
+After the PR is merged, CI automatically creates the `vX.Y.Z` git tag and the Docker workflow publishes the versioned image and updates `latest` on Docker Hub.
 
 ## Tests
 

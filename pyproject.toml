@@ -16,7 +16,7 @@ ignore-imports=true
 [tool.bumpversion]
 current_version = "1.0.0"
 commit = true
-tag = true
+tag = false
 tag_name = "v{new_version}"
 message = "chore: bump version to {new_version}"
 

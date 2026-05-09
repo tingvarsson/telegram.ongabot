@@ -67,6 +67,4 @@ release: check test
 	NEW_VERSION=$$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' ongabot/_version.py) && \
 	BRANCH="release/v$$NEW_VERSION" && \
 	git push origin HEAD:refs/heads/$$BRANCH && \
-	gh pr create --title "chore: bump version to $$NEW_VERSION" --body "Release v$$NEW_VERSION" --base master --head $$BRANCH && \
-	echo "" && \
-	echo "After the PR is merged, push the release tag: git push origin v$$NEW_VERSION"
+	gh pr create --title "chore: bump version to $$NEW_VERSION" --body "Release v$$NEW_VERSION" --base master --head $$BRANCH
