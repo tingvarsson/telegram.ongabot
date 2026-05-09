@@ -26,6 +26,9 @@ async def callback(update: Update, context: CallbackContext) -> None:
         return
 
     event = context.bot_data.get_event(update.poll_answer.poll_id)
+    if event is None:
+        _logger.error("Received poll answer update for unknown poll_id=%s", update.poll_answer.poll_id)
+        return
     event.update_answer(update.poll_answer)
     await event.update_status_message(context.bot)
 
