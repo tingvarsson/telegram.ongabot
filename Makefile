@@ -13,7 +13,7 @@ VENV_PATH=venv
 
 export PYTHONPATH=$PYTHONPATH:./ongabot
 
-.PHONY: venv install run lint pep8 mypy black-check check black test clean docker-build docker-run
+.PHONY: venv install run lint pep8 mypy black-check check black test clean docker-build docker-run release
 
 .env:
 	@echo "Error: .env not found. Copy .env.example and fill in your values: cp .env.example .env"
@@ -61,3 +61,7 @@ docker-build:
 docker-run: .env
 	touch ongabot.db
 	$(DOCKER) run --rm --env-file .env -v $(CURDIR)/ongabot.db:/ongabot/ongabot.db -it $(DOCKER_IMAGE)
+
+release: check test
+	bump-my-version bump $(PART)
+	git push --follow-tags
