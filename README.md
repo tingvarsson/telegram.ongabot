@@ -94,7 +94,7 @@ Success: no issues found in 1 source file
 
 ## Releasing
 
-Releases are created with `bump-my-version`. The `release` target runs all checks and tests before bumping, then pushes the version commit and git tag together:
+Releases are created with `bump-my-version`. The `release` target runs all checks and tests before bumping, then opens a PR for the version commit:
 
 ```bash
 make release PART=patch   # 0.2.0 → 0.2.1
@@ -105,9 +105,10 @@ make release PART=major   # 0.2.0 → 1.0.0
 This will:
 
 1. Run `make check` and `make test` (aborts if either fails)
-2. Update the version in `ongabot/_version.py`
-3. Commit the change and create a `vX.Y.Z` git tag
-4. Push the commit and tag — the CI Docker workflow then publishes the versioned image and updates `latest` on Docker Hub
+2. Update the version in `ongabot/_version.py` and commit
+3. Push the commit to a `release/vX.Y.Z` branch and open a PR
+
+After the PR is merged, CI automatically creates the `vX.Y.Z` git tag and the Docker workflow publishes the versioned image and updates `latest` on Docker Hub.
 
 ## Tests
 

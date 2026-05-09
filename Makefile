@@ -63,5 +63,8 @@ docker-run: .env
 	$(DOCKER) run --rm --env-file .env -v $(CURDIR)/ongabot.db:/ongabot/ongabot.db -it $(DOCKER_IMAGE)
 
 release: check test
-	bump-my-version bump $(PART)
-	git push --follow-tags
+	bump-my-version bump $(PART) && \
+	NEW_VERSION=$$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' ongabot/_version.py) && \
+	BRANCH="release/v$$NEW_VERSION" && \
+	git push origin HEAD:refs/heads/$$BRANCH && \
+	gh pr create --title "chore: bump version to $$NEW_VERSION" --body "Release v$$NEW_VERSION" --base master --head $$BRANCH
