@@ -1,3 +1,3 @@
 """The module defines the version(s) of ONGAbot."""
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
