@@ -3,6 +3,7 @@
 import logging
 from datetime import date, datetime, time, timedelta
 
+from telegram.error import TelegramError
 from telegram.ext import CallbackContext
 
 from chat import Chat
@@ -49,23 +50,35 @@ async def create_event(
             _logger.debug("Event already exists for date %s.", event_data.event_date)
             return
 
-    poll_message = await context.bot.send_poll(
-        chat_id,
-        _create_poll_text(event_data.event_date, event_data.start_time),
-        options=_create_poll_options(event_data.start_time, event_data.num_slots),
-        is_anonymous=False,
-        allows_multiple_answers=True,
-    )
+    try:
+        poll_message = await context.bot.send_poll(
+            chat_id,
+            _create_poll_text(event_data.event_date, event_data.start_time),
+            options=_create_poll_options(event_data.start_time, event_data.num_slots),
+            is_anonymous=False,
+            allows_multiple_answers=True,
+        )
+    except TelegramError as exc:
+        _logger.error("Failed to send poll for chat_id=%s: %s", chat_id, exc)
+        return
+
     _logger.debug("poll_message:\n%s", poll_message)
 
     event = Event(chat_id, poll_message.poll, event_data)
-    await event.send_status_message(context.bot)
+
+    try:
+        await event.send_status_message(context.bot)
+    except TelegramError as exc:
+        _logger.error("Failed to send status message for poll_id=%s: %s", event.poll_id, exc)
 
     chat.add_event(event)
 
     # Pin new message and save to chat data for future removal
-    await poll_message.pin(disable_notification=True)
-    chat.set_pinned_poll(poll_message.poll.id, poll_message)
+    try:
+        await poll_message.pin(disable_notification=True)
+        chat.set_pinned_poll(poll_message.poll.id, poll_message)
+    except TelegramError as exc:
+        _logger.error("Failed to pin poll message for poll_id=%s: %s", event.poll_id, exc)
 
 
 _EVENT_NAME_BY_WEEKDAY = {
