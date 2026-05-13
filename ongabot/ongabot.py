@@ -47,21 +47,21 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
                 event.mark_complete()
                 try:
                     await event.update_status_message(context.bot)
-                except TelegramError as exc:
+                except TelegramError as e:
                     logger.error(
                         "Failed to update status message for chat_id=%s poll_id=%s: %s",
                         chat.chat_id,
                         event.poll_id,
-                        exc,
+                        e,
                     )
                 try:
                     await chat.remove_pinned_poll(event.poll_id)
-                except TelegramError as exc:
+                except TelegramError as e:
                     logger.error(
                         "Failed to remove pinned poll for chat_id=%s poll_id=%s: %s",
                         chat.chat_id,
                         event.poll_id,
-                        exc,
+                        e,
                     )
                 logger.info(
                     "Auto-completed past event poll_id=%s (date=%s) in chat_id=%s",
@@ -86,10 +86,10 @@ async def post_init(application: Application) -> None:
 
     try:
         bot_data.schedule_all_event_jobs(application.job_queue, eventcreator.create_event_callback)
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
         logger.error(
             "Failed to restore event jobs from persisted data — recurring polls will not fire: %s",
-            exc,
+            e,
         )
 
     # Schedule daily cleanup of past events
