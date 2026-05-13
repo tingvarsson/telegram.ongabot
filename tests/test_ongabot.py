@@ -32,6 +32,30 @@ class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
 
         event1.mark_complete.assert_called_once()
         event2.mark_complete.assert_called_once()
+        # Both events should be unpinned regardless of the status message failure
+        self.assertEqual(chat.remove_pinned_poll.call_count, 2)
+
+
+class CompletePastEventsHappyPathTest(unittest.IsolatedAsyncioTestCase):
+    async def test_events_completed_and_unpinned_on_success(self):
+        event = MagicMock()
+        event.completed = False
+        event.event_date = date(2020, 1, 1)
+        event.poll_id = "poll1"
+        event.update_status_message = AsyncMock()
+
+        chat = MagicMock()
+        chat.events = {"poll1": event}
+        chat.remove_pinned_poll = AsyncMock()
+
+        context = MagicMock()
+        context.bot_data.chats = {"chat1": chat}
+
+        await ongabot.complete_past_events_callback(context)
+
+        event.mark_complete.assert_called_once()
+        event.update_status_message.assert_called_once_with(context.bot)
+        chat.remove_pinned_poll.assert_called_once_with("poll1")
 
 
 if __name__ == "__main__":

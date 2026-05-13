@@ -49,11 +49,20 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
                     await event.update_status_message(context.bot)
                 except TelegramError as exc:
                     logger.error(
-                        "Failed to update status message for poll_id=%s: %s",
+                        "Failed to update status message for chat_id=%s poll_id=%s: %s",
+                        chat.chat_id,
                         event.poll_id,
                         exc,
                     )
-                await chat.remove_pinned_poll(event.poll_id)
+                try:
+                    await chat.remove_pinned_poll(event.poll_id)
+                except TelegramError as exc:
+                    logger.error(
+                        "Failed to remove pinned poll for chat_id=%s poll_id=%s: %s",
+                        chat.chat_id,
+                        event.poll_id,
+                        exc,
+                    )
                 logger.info(
                     "Auto-completed past event poll_id=%s (date=%s) in chat_id=%s",
                     event.poll_id,
