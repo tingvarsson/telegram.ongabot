@@ -6,6 +6,7 @@ import logging
 import os
 
 from telegram.ext import Application, CallbackContext, ContextTypes, PicklePersistence
+from telegram.error import TelegramError
 
 import eventcreator
 from botdata import BotData
@@ -44,7 +45,14 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
         for event in list(chat.events.values()):
             if not event.completed and event.event_date < today:
                 event.mark_complete()
-                await event.update_status_message(context.bot)
+                try:
+                    await event.update_status_message(context.bot)
+                except TelegramError as exc:
+                    logger.error(
+                        "Failed to update status message for poll_id=%s: %s",
+                        event.poll_id,
+                        exc,
+                    )
                 await chat.remove_pinned_poll(event.poll_id)
                 logger.info(
                     "Auto-completed past event poll_id=%s (date=%s) in chat_id=%s",
