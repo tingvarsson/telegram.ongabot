@@ -1,6 +1,7 @@
 """This module contains the UserData class."""
 
 import logging
+from datetime import date
 from typing import Dict, Optional, Tuple
 
 from telegram import User
@@ -43,3 +44,15 @@ class UserData:
         """Set a PollAnswer for a given poll_id"""
         self.poll_answer.update({poll_id: poll_answer})
         _logger.debug("user_data:\n%s", self)
+
+    @log.method
+    def calculate_streak(self, poll_id_to_date: Dict[str, date]) -> int:
+        """Return the number of consecutive most-recent events this user voted in."""
+        events_by_date = sorted(poll_id_to_date.items(), key=lambda x: x[1], reverse=True)
+        streak = 0
+        for poll_id, _ in events_by_date:
+            if poll_id in self.poll_answer and self.poll_answer[poll_id]:
+                streak += 1
+            else:
+                break
+        return streak

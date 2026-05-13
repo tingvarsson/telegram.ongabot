@@ -29,8 +29,6 @@ async def callback(update: Update, context: CallbackContext) -> None:
     if event is None:
         _logger.error("Received poll answer update for unknown poll_id=%s", update.poll_answer.poll_id)
         return
-    event.update_answer(update.poll_answer)
-    await event.update_status_message(context.bot)
 
     if context.user_data is None:
         _logger.error("Received poll answer update without user data in context")
@@ -38,20 +36,26 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     user_data: UserData = context.user_data
     user_data.init_or_update(update.poll_answer.user)
+    event.update_answer(update.poll_answer)
 
+    # Build response before set_poll_answer changes state (first-vote vs changed-vote check)
+    response = None
     # Empty option_ids means the user retracted his vote, ignore those for now
     if update.poll_answer.option_ids:
         user_name = update.poll_answer.user.name
-
-        # Existing poll_answer for that poll_id means the user has changed their vote
         if user_data.get_poll_answer(update.poll_answer.poll_id) is None:
             response = f"Wow {user_name}, what a great job answering that poll!"
         else:
             response = f"Hmm suspicious, looks like {user_name} changed their vote..."
 
-        await context.bot.send_message(
-            event.chat_id,
-            response,
-        )
-
     user_data.set_poll_answer(update.poll_answer.poll_id, update.poll_answer.option_ids)
+
+    if update.poll_answer.option_ids:
+        chat = context.bot_data.get_chat(event.chat_id)
+        poll_id_to_date = {pid: e.event_date for pid, e in chat.events.items()}
+        event.user_streaks[update.poll_answer.user.id] = user_data.calculate_streak(poll_id_to_date)
+
+    await event.update_status_message(context.bot)
+
+    if response:
+        await context.bot.send_message(event.chat_id, response)
