@@ -6,6 +6,7 @@ import logging
 import os
 
 from telegram.ext import Application, CallbackContext, ContextTypes, PicklePersistence
+from telegram.error import TelegramError
 
 import eventcreator
 from botdata import BotData
@@ -44,8 +45,24 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
         for event in list(chat.events.values()):
             if not event.completed and event.event_date < today:
                 event.mark_complete()
-                await event.update_status_message(context.bot)
-                await chat.remove_pinned_poll(event.poll_id)
+                try:
+                    await event.update_status_message(context.bot)
+                except TelegramError as e:
+                    logger.error(
+                        "Failed to update status message for chat_id=%s poll_id=%s: %s",
+                        chat.chat_id,
+                        event.poll_id,
+                        e,
+                    )
+                try:
+                    await chat.remove_pinned_poll(event.poll_id)
+                except TelegramError as e:
+                    logger.error(
+                        "Failed to remove pinned poll for chat_id=%s poll_id=%s: %s",
+                        chat.chat_id,
+                        event.poll_id,
+                        e,
+                    )
                 logger.info(
                     "Auto-completed past event poll_id=%s (date=%s) in chat_id=%s",
                     event.poll_id,
@@ -67,7 +84,13 @@ async def post_init(application: Application) -> None:
         logger.error("Job queue is not available in post_init. Event cleanup jobs will not be scheduled.")
         return
 
-    bot_data.schedule_all_event_jobs(application.job_queue, eventcreator.create_event_callback)
+    try:
+        bot_data.schedule_all_event_jobs(application.job_queue, eventcreator.create_event_callback)
+    except Exception as e:  # pylint: disable=broad-except
+        logger.error(
+            "Failed to restore event jobs from persisted data — recurring polls will not fire: %s",
+            e,
+        )
 
     # Schedule daily cleanup of past events
     application.job_queue.run_once(complete_past_events_callback, when=5, name="complete_past_events_startup")
