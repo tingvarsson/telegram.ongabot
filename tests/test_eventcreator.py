@@ -19,6 +19,7 @@ class CreateEventSendPollFailsTest(unittest.IsolatedAsyncioTestCase):
 
         await eventcreator.create_event(context, 123, event_data)
 
+        context.bot.send_poll.assert_called_once()
         chat.add_event.assert_not_called()
 
 
@@ -63,6 +64,29 @@ class CreateEventPinFailsTest(unittest.IsolatedAsyncioTestCase):
 
         chat.add_event.assert_called_once_with(mock_event)
         chat.set_pinned_poll.assert_not_called()
+
+
+class CreateEventHappyPathTest(unittest.IsolatedAsyncioTestCase):
+    async def test_event_added_and_pinned_on_success(self):
+        poll_message = MagicMock()
+        poll_message.pin = AsyncMock()
+        context = MagicMock()
+        context.bot.send_poll = AsyncMock(return_value=poll_message)
+        chat = MagicMock()
+        chat.active_events = []
+        context.bot_data.get_chat.return_value = chat
+        event_data = EventData(date(2026, 6, 3), time(18, 30), 5)
+
+        with patch("ongabot.eventcreator.Event") as MockEvent:
+            mock_event = MagicMock()
+            mock_event.send_status_message = AsyncMock()
+            MockEvent.return_value = mock_event
+
+            await eventcreator.create_event(context, 123, event_data)
+
+        chat.add_event.assert_called_once_with(mock_event)
+        poll_message.pin.assert_called_once_with(disable_notification=True)
+        chat.set_pinned_poll.assert_called_once()
 
 
 if __name__ == "__main__":

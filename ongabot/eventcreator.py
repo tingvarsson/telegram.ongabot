@@ -69,7 +69,7 @@ async def create_event(
     try:
         await event.send_status_message(context.bot)
     except TelegramError as exc:
-        _logger.error("Failed to send status message for poll_id=%s: %s", event.poll_id, exc)
+        _logger.error("Failed to send status message for chat_id=%s poll_id=%s: %s", chat_id, event.poll_id, exc)
 
     chat.add_event(event)
 
@@ -78,7 +78,7 @@ async def create_event(
         await poll_message.pin(disable_notification=True)
         chat.set_pinned_poll(poll_message.poll.id, poll_message)
     except TelegramError as exc:
-        _logger.error("Failed to pin poll message for poll_id=%s: %s", event.poll_id, exc)
+        _logger.error("Failed to pin poll message for chat_id=%s poll_id=%s: %s", chat_id, event.poll_id, exc)
 
 
 _EVENT_NAME_BY_WEEKDAY = {
