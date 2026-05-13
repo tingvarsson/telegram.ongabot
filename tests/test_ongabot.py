@@ -36,6 +36,31 @@ class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
         # Both events should be unpinned regardless of the status message failure
         self.assertEqual(chat.remove_pinned_poll.call_count, 2)
 
+    async def test_second_event_processed_when_first_remove_pinned_poll_raises(self):
+        event1 = MagicMock()
+        event1.completed = False
+        event1.event_date = date(2020, 1, 1)
+        event1.poll_id = "poll1"
+        event1.update_status_message = AsyncMock()
+
+        event2 = MagicMock()
+        event2.completed = False
+        event2.event_date = date(2020, 1, 2)
+        event2.poll_id = "poll2"
+        event2.update_status_message = AsyncMock()
+
+        chat = MagicMock()
+        chat.events = {"poll1": event1, "poll2": event2}
+        chat.remove_pinned_poll = AsyncMock(side_effect=[TelegramError("forbidden"), None])
+
+        context = MagicMock()
+        context.bot_data.chats = {"chat1": chat}
+
+        await ongabot.complete_past_events_callback(context)
+
+        event1.mark_complete.assert_called_once()
+        event2.mark_complete.assert_called_once()
+
 
 class CompletePastEventsHappyPathTest(unittest.IsolatedAsyncioTestCase):
     async def test_events_completed_and_unpinned_on_success(self):
