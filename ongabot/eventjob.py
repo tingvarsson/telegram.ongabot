@@ -69,7 +69,7 @@ class EventJob:
     @log.method
     def schedule(self, job_queue: JobQueue, callback: Callable) -> Job:
         """Schedule this event job in the provided job_queue"""
-        upcoming_date = helper.get_upcoming_date(date.today(), self.event_day)
+        upcoming_date = helper.get_upcoming_date(date.today(), self.trigger_on)
 
         _logger.info(
             "Scheduling event job for chat_id=%s on %s (upcoming date: %s) "
