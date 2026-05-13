@@ -84,7 +84,13 @@ async def post_init(application: Application) -> None:
         logger.error("Job queue is not available in post_init. Event cleanup jobs will not be scheduled.")
         return
 
-    bot_data.schedule_all_event_jobs(application.job_queue, eventcreator.create_event_callback)
+    try:
+        bot_data.schedule_all_event_jobs(application.job_queue, eventcreator.create_event_callback)
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error(
+            "Failed to restore event jobs from persisted data — recurring polls will not fire: %s",
+            exc,
+        )
 
     # Schedule daily cleanup of past events
     application.job_queue.run_once(complete_past_events_callback, when=5, name="complete_past_events_startup")

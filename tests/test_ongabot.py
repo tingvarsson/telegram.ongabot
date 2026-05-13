@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from telegram.error import TelegramError
 
 from ongabot import ongabot
+from ongabot.ongabot import post_init
 
 
 class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
@@ -56,6 +57,19 @@ class CompletePastEventsHappyPathTest(unittest.IsolatedAsyncioTestCase):
         event.mark_complete.assert_called_once()
         event.update_status_message.assert_called_once_with(context.bot)
         chat.remove_pinned_poll.assert_called_once_with("poll1")
+
+
+class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
+    async def test_no_exception_propagates_when_schedule_all_event_jobs_raises(self):
+        application = MagicMock()
+        application.bot_data.schedule_all_event_jobs.side_effect = Exception("corrupt data")
+        application.job_queue = MagicMock()
+
+        # Should not raise
+        await post_init(application)
+
+        application.job_queue.run_once.assert_called_once()
+        application.job_queue.run_daily.assert_called_once()
 
 
 if __name__ == "__main__":
