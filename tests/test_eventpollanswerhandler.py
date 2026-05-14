@@ -33,6 +33,11 @@ def _make_context(user_data, event, chat_events=None):
     chat.events = chat_events or {}
     context.bot_data.get_chat.return_value = chat
 
+    # Ensure MagicMock chat events are not treated as cancelled by the filter
+    for e in chat.events.values():
+        if not hasattr(e, "cancelled") or isinstance(e.cancelled, MagicMock):
+            e.cancelled = False
+
     return context
 
 
@@ -114,6 +119,34 @@ class EventPollAnswerStreakTest(unittest.IsolatedAsyncioTestCase):
         await callback(update, context)
 
         self.assertIn(5, streaks_at_call_time)
+
+    async def test_streak_unaffected_by_cancelled_event_in_chat(self):
+        # User voted in p_prev and p_cur; p_cancelled sits between them but is cancelled.
+        # Streak should be 2, not 0.
+        user_data = UserData()
+        user_data.set_poll_answer("p_prev", (0,))
+
+        event = self._make_event()
+
+        prev_event = MagicMock()
+        prev_event.event_date = date(2026, 1, 1)
+        prev_event.cancelled = False
+
+        cancelled_event = MagicMock()
+        cancelled_event.event_date = date(2026, 1, 8)
+        cancelled_event.cancelled = True
+
+        cur_event = MagicMock()
+        cur_event.event_date = date(2026, 1, 15)
+        cur_event.cancelled = False
+
+        chat_events = {"p_prev": prev_event, "p_cancelled": cancelled_event, "poll1": cur_event}
+        context = _make_context(user_data, event, chat_events)
+
+        update = self._make_update("poll1", user_id=42)
+        await callback(update, context)
+
+        self.assertEqual(event.user_streaks[42], 2)
 
 
 if __name__ == "__main__":

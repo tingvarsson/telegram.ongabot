@@ -81,6 +81,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
     target_event = candidates[0]
 
     question = target_event.poll.question.splitlines()[0]
+    target_event.cancelled = True
     target_event.mark_complete()
     await chat.remove_pinned_poll(target_event.poll_id)
 

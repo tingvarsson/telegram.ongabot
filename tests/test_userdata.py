@@ -66,6 +66,14 @@ class UserDataCalculateStreakTest(unittest.TestCase):
         poll_id_to_date = {"p3": date(2026, 1, 15), "p1": date(2026, 1, 1), "p2": date(2026, 1, 8)}
         self.assertEqual(self.ud.calculate_streak(poll_id_to_date), 2)
 
+    def test_absent_poll_id_does_not_break_streak(self):
+        # Simulates a cancelled event being excluded from poll_id_to_date at the call site.
+        # p2 (cancelled) is absent; streak across p1 and p3 should be 2.
+        self.ud.set_poll_answer("p1", (0,))
+        self.ud.set_poll_answer("p3", (0,))
+        poll_id_to_date = {"p1": date(2026, 1, 1), "p3": date(2026, 1, 15)}
+        self.assertEqual(self.ud.calculate_streak(poll_id_to_date), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

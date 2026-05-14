@@ -43,6 +43,7 @@ class Event:
         self.status_message_id = 0
         self.data: EventData = data
         self.completed: bool = False
+        self.cancelled: bool = False
         self.user_streaks: Dict[int, int] = {}
 
     @property
@@ -71,6 +72,8 @@ class Event:
             # Assume old events are completed, aligned with date.min, to avoid showing them as active events after
             # a bot update
             self.completed = True
+        if not hasattr(self, "cancelled"):
+            self.cancelled = False
         if not hasattr(self, "user_streaks"):
             self.user_streaks = {}
 
