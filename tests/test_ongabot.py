@@ -23,7 +23,7 @@ class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
         event2.update_status_message = AsyncMock()
 
         chat = MagicMock()
-        chat.events = {"poll1": event1, "poll2": event2}
+        chat.events = {date(2020, 1, 1): event1, date(2020, 1, 2): event2}
         chat.remove_pinned_poll = AsyncMock()
 
         context = MagicMock()
@@ -50,7 +50,7 @@ class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
         event2.update_status_message = AsyncMock()
 
         chat = MagicMock()
-        chat.events = {"poll1": event1, "poll2": event2}
+        chat.events = {date(2020, 1, 1): event1, date(2020, 1, 2): event2}
         chat.remove_pinned_poll = AsyncMock(side_effect=[TelegramError("forbidden"), None])
 
         context = MagicMock()
@@ -71,7 +71,7 @@ class CompletePastEventsHappyPathTest(unittest.IsolatedAsyncioTestCase):
         event.update_status_message = AsyncMock()
 
         chat = MagicMock()
-        chat.events = {"poll1": event}
+        chat.events = {date(2020, 1, 1): event}
         chat.remove_pinned_poll = AsyncMock()
 
         context = MagicMock()
