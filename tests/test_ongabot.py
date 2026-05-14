@@ -111,6 +111,18 @@ class PostInitMetadataWiringTest(unittest.IsolatedAsyncioTestCase):
         application.bot.set_my_description.assert_called_once()
         application.bot.set_my_short_description.assert_called_once()
 
+    async def test_post_init_registers_bot_metadata_when_job_queue_unavailable(self):
+        application = MagicMock()
+        application.bot_data.schedule_all_event_jobs.return_value = None
+        application.job_queue = None
+        application.bot = AsyncMock()
+
+        await post_init(application)
+
+        application.bot.set_my_commands.assert_called_once()
+        application.bot.set_my_description.assert_called_once()
+        application.bot.set_my_short_description.assert_called_once()
+
 
 class SetupBotMetadataTest(unittest.IsolatedAsyncioTestCase):
     async def test_calls_all_three_api_methods_on_success(self):

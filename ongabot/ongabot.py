@@ -102,6 +102,8 @@ async def post_init(application: Application) -> None:
         if raw_id.strip().lstrip("-").isdigit():
             bot_data.authorize_chat(int(raw_id.strip()))
 
+    await setup_bot_metadata(application.bot)
+
     if application.job_queue is None:
         logger.error("Job queue is not available in post_init. Event cleanup jobs will not be scheduled.")
         return
@@ -119,8 +121,6 @@ async def post_init(application: Application) -> None:
     application.job_queue.run_daily(
         complete_past_events_callback, time=datetime.time(0, 0, 0), name="complete_past_events"
     )
-
-    await setup_bot_metadata(application.bot)
 
 
 async def error(update: object, context: CallbackContext) -> None:
