@@ -43,6 +43,8 @@ class Event:
         self.status_message_id = 0
         self.data: EventData = data
         self.completed: bool = False
+        self.cancelled: bool = False
+        self.user_streaks: Dict[int, int] = {}
 
     @property
     def event_date(self) -> date:
@@ -70,6 +72,10 @@ class Event:
             # Assume old events are completed, aligned with date.min, to avoid showing them as active events after
             # a bot update
             self.completed = True
+        if not hasattr(self, "cancelled"):
+            self.cancelled = False
+        if not hasattr(self, "user_streaks"):
+            self.user_streaks = {}
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -119,7 +125,9 @@ class Event:
             message += f"\n*{escape_markdown(option.text, version=2)} \\({option.voter_count}\\)*"
             for user, answer in self.poll_answers.items():
                 if i in answer.option_ids:
-                    message += f"\n  • {user.mention_markdown_v2()}"
+                    streak = self.user_streaks.get(user.id, 0)
+                    streak_suffix = f" ★{streak}" if streak > 1 else ""
+                    message += f"\n  • {user.mention_markdown_v2()}{streak_suffix}"
             message += "\n"
 
         return message
