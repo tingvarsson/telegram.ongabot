@@ -47,7 +47,7 @@ NEWEVENT = CommandInfo(
         "  /newevent day=friday\n"
         "  /newevent day=friday time=19:00 slots=3"
     ),
-    menu_description="Create event poll [day] [time] [slots]",
+    menu_description="Create event poll [day=..] [time=..] [slots=..]",
 )
 
 CANCELEVENT = CommandInfo(
@@ -62,7 +62,7 @@ CANCELEVENT = CommandInfo(
         "  /cancelevent target_date=wednesday\n"
         "  /cancelevent target_date=2026-05-10"
     ),
-    menu_description="Cancel active event [target_date]",
+    menu_description="Cancel active event [target_date=..]",
 )
 
 UPDATEEVENT = CommandInfo(
@@ -82,7 +82,7 @@ UPDATEEVENT = CommandInfo(
         "  /updateevent target_date=2026-05-07 day=2026-05-14\n"
         "  /updateevent target_date=2026-05-07 time=20:00 slots=4"
     ),
-    menu_description="Update active event [target_date] [day] [time] [slots]",
+    menu_description="Update active event [target_date=..] [day=..] [time=..] [slots=..]",
 )
 
 SCHEDULE = CommandInfo(
@@ -100,7 +100,7 @@ SCHEDULE = CommandInfo(
         "  /schedule trigger_on=sunday day=wednesday\n"
         "  /schedule trigger_on=sunday day=wednesday time=19:00 slots=4"
     ),
-    menu_description="Schedule weekly polls [trigger_on] [day] [time] [slots]",
+    menu_description="Schedule weekly polls [trigger_on=..] [day=..] [time=..] [slots=..]",
 )
 
 RESCHEDULE = CommandInfo(
@@ -117,7 +117,7 @@ RESCHEDULE = CommandInfo(
         "  /reschedule time=20:00\n"
         "  /reschedule trigger_on=monday day=thursday"
     ),
-    menu_description="Update weekly schedule [trigger_on] [day] [time] [slots]",
+    menu_description="Update weekly schedule [trigger_on=..] [day=..] [time=..] [slots=..]",
 )
 
 DESCHEDULE = CommandInfo(
