@@ -5,6 +5,7 @@ import datetime
 import logging
 import os
 
+from telegram import Bot, BotCommand
 from telegram.ext import Application, CallbackContext, ContextTypes, PicklePersistence
 from telegram.error import TelegramError
 
@@ -26,6 +27,7 @@ from handler import StartCommandHandler
 from handler import UpdateEventCommandHandler
 from userdata import UserData
 from utils import log
+from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -71,6 +73,26 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
                 )
 
 
+async def setup_bot_metadata(bot: Bot) -> None:
+    """Register command menu, description, and short description with Telegram."""
+    commands = [BotCommand(cmd.command, cmd.menu_description) for cmd in ALL_COMMANDS]
+    try:
+        await bot.set_my_commands(commands)
+        logger.info("Bot commands registered (%d commands)", len(commands))
+    except TelegramError as e:
+        logger.error("Failed to set bot commands: %s", e)
+    try:
+        await bot.set_my_description(BOT_DESCRIPTION)
+        logger.info("Bot description registered")
+    except TelegramError as e:
+        logger.error("Failed to set bot description: %s", e)
+    try:
+        await bot.set_my_short_description(BOT_SHORT_DESCRIPTION)
+        logger.info("Bot short description registered")
+    except TelegramError as e:
+        logger.error("Failed to set bot short description: %s", e)
+
+
 async def post_init(application: Application) -> None:
     """Called after the application initializes with persistence loaded."""
     bot_data: BotData = application.bot_data
@@ -79,6 +101,8 @@ async def post_init(application: Application) -> None:
     for raw_id in os.getenv("AUTHORIZED_CHAT_IDS", "").split(","):
         if raw_id.strip().lstrip("-").isdigit():
             bot_data.authorize_chat(int(raw_id.strip()))
+
+    await setup_bot_metadata(application.bot)
 
     if application.job_queue is None:
         logger.error("Job queue is not available in post_init. Event cleanup jobs will not be scheduled.")
