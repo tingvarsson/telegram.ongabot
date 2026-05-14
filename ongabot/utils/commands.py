@@ -141,7 +141,7 @@ DEAUTHORIZE = CommandInfo(
     menu_description="Deauthorize this chat (admins only)",
 )
 
-BOT_SHORT_DESCRIPTION = "Recurring event polls for group chats"
+BOT_SHORT_DESCRIPTION = "ONGAbot - the only bot you'll ever need"
 
 BOT_DESCRIPTION = (
     "ONGAbot helps group chats organize recurring events with Telegram polls. "
