@@ -87,6 +87,7 @@ class CompletePastEventsHappyPathTest(unittest.IsolatedAsyncioTestCase):
 class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
     async def test_no_exception_propagates_when_schedule_all_event_jobs_raises(self):
         application = MagicMock()
+        application.bot = AsyncMock()
         application.bot_data.schedule_all_event_jobs.side_effect = Exception("corrupt data")
         application.job_queue = MagicMock()
 
@@ -95,6 +96,20 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
 
         application.job_queue.run_once.assert_called_once()
         application.job_queue.run_daily.assert_called_once()
+
+
+class PostInitMetadataWiringTest(unittest.IsolatedAsyncioTestCase):
+    async def test_post_init_registers_bot_metadata(self):
+        application = MagicMock()
+        application.bot_data.schedule_all_event_jobs.return_value = None
+        application.job_queue = MagicMock()
+        application.bot = AsyncMock()
+
+        await post_init(application)
+
+        application.bot.set_my_commands.assert_called_once()
+        application.bot.set_my_description.assert_called_once()
+        application.bot.set_my_short_description.assert_called_once()
 
 
 class SetupBotMetadataTest(unittest.IsolatedAsyncioTestCase):

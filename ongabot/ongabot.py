@@ -120,6 +120,8 @@ async def post_init(application: Application) -> None:
         complete_past_events_callback, time=datetime.time(0, 0, 0), name="complete_past_events"
     )
 
+    await setup_bot_metadata(application.bot)
+
 
 async def error(update: object, context: CallbackContext) -> None:
     """Log Errors caused by Updates."""
