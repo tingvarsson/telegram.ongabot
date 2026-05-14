@@ -16,18 +16,21 @@ class CommandInfo:
     command: str
     brief: str  # one-liner shown in /help
     usage: str  # multi-line shown on bad input
+    menu_description: str  # short phrase shown in Telegram command menu
 
 
 HELP = CommandInfo(
     command="help",
     brief="/help - Get some aid in needing times",
     usage="/help",
+    menu_description="Get some aid in needing times",
 )
 
 ONGA = CommandInfo(
     command="onga",
     brief="/onga - This is the way, let me show you",
     usage="/onga",
+    menu_description="This is the way, let me show you",
 )
 
 NEWEVENT = CommandInfo(
@@ -44,6 +47,7 @@ NEWEVENT = CommandInfo(
         "  /newevent day=friday\n"
         "  /newevent day=friday time=19:00 slots=3"
     ),
+    menu_description="Create event poll [day] [time] [slots]",
 )
 
 CANCELEVENT = CommandInfo(
@@ -58,6 +62,7 @@ CANCELEVENT = CommandInfo(
         "  /cancelevent target_date=wednesday\n"
         "  /cancelevent target_date=2026-05-10"
     ),
+    menu_description="Cancel active event [target_date]",
 )
 
 UPDATEEVENT = CommandInfo(
@@ -77,6 +82,7 @@ UPDATEEVENT = CommandInfo(
         "  /updateevent target_date=2026-05-07 day=2026-05-14\n"
         "  /updateevent target_date=2026-05-07 time=20:00 slots=4"
     ),
+    menu_description="Update active event [target_date] [day] [time] [slots]",
 )
 
 SCHEDULE = CommandInfo(
@@ -94,6 +100,7 @@ SCHEDULE = CommandInfo(
         "  /schedule trigger_on=sunday day=wednesday\n"
         "  /schedule trigger_on=sunday day=wednesday time=19:00 slots=4"
     ),
+    menu_description="Schedule weekly polls [trigger_on] [day] [time] [slots]",
 )
 
 RESCHEDULE = CommandInfo(
@@ -110,24 +117,36 @@ RESCHEDULE = CommandInfo(
         "  /reschedule time=20:00\n"
         "  /reschedule trigger_on=monday day=thursday"
     ),
+    menu_description="Update weekly schedule [trigger_on] [day] [time] [slots]",
 )
 
 DESCHEDULE = CommandInfo(
     command="deschedule",
     brief="/deschedule - Remove the weekly schedule",
     usage="/deschedule",
+    menu_description="Remove the weekly schedule",
 )
 
 AUTHORIZE = CommandInfo(
     command="authorize",
     brief="/authorize - Authorize this chat to use ONGAbot (bot admins only)",
     usage="/authorize",
+    menu_description="Authorize this chat (admins only)",
 )
 
 DEAUTHORIZE = CommandInfo(
     command="deauthorize",
     brief="/deauthorize - Deauthorize this chat from using ONGAbot (bot admins only)",
     usage="/deauthorize",
+    menu_description="Deauthorize this chat (admins only)",
+)
+
+BOT_SHORT_DESCRIPTION = "Recurring event polls for group chats"
+
+BOT_DESCRIPTION = (
+    "ONGAbot helps group chats organize recurring events with Telegram polls. "
+    "Create event polls, manage weekly schedules, and track participation — "
+    "all without leaving your chat."
 )
 
 # Ordered for help text assembly
