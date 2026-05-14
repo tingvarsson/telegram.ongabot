@@ -20,8 +20,20 @@ class EventPollAnswerCallbackNoneEventTest(unittest.IsolatedAsyncioTestCase):
         context.bot.send_message.assert_not_called()
 
 
+def _make_event_mock(poll_id: str, event_date: date):
+    """Build an event mock with poll_id and event_date set explicitly."""
+    e = MagicMock()
+    e.poll_id = poll_id
+    e.event_date = event_date
+    e.cancelled = False
+    return e
+
+
 def _make_context(user_data, event, chat_events=None):
-    """Build a minimal context mock for streak-related callback tests."""
+    """Build a minimal context mock for streak-related callback tests.
+
+    chat_events: Dict[date, event_mock] — matches the new date-keyed structure.
+    """
     context = MagicMock()
     context.user_data = user_data
     context.bot.send_message = AsyncMock()
@@ -32,11 +44,6 @@ def _make_context(user_data, event, chat_events=None):
     chat = MagicMock()
     chat.events = chat_events or {}
     context.bot_data.get_chat.return_value = chat
-
-    # Ensure MagicMock chat events are not treated as cancelled by the filter
-    for e in chat.events.values():
-        if not hasattr(e, "cancelled") or isinstance(e.cancelled, MagicMock):
-            e.cancelled = False
 
     return context
 
@@ -60,12 +67,10 @@ class EventPollAnswerStreakTest(unittest.IsolatedAsyncioTestCase):
         user_data = UserData()
         event = self._make_event()
 
-        prev_event = MagicMock()
-        prev_event.event_date = date(2026, 1, 1)
-        cur_event = MagicMock()
-        cur_event.event_date = date(2026, 1, 8)
+        prev_event = _make_event_mock("prev", date(2026, 1, 1))
+        cur_event = _make_event_mock("poll1", date(2026, 1, 8))
 
-        chat_events = {"prev": prev_event, "poll1": cur_event}
+        chat_events = {date(2026, 1, 1): prev_event, date(2026, 1, 8): cur_event}
         context = _make_context(user_data, event, chat_events)
 
         # Pre-seed a previous vote so streak should be 2
@@ -79,9 +84,8 @@ class EventPollAnswerStreakTest(unittest.IsolatedAsyncioTestCase):
     async def test_streak_not_updated_on_retraction(self):
         user_data = UserData()
         event = self._make_event()
-        cur_event = MagicMock()
-        cur_event.event_date = date(2026, 1, 8)
-        context = _make_context(user_data, event, {"poll1": cur_event})
+        cur_event = _make_event_mock("poll1", date(2026, 1, 8))
+        context = _make_context(user_data, event, {date(2026, 1, 8): cur_event})
 
         update = self._make_update("poll1", user_id=42, option_ids=())
         await callback(update, context)
@@ -91,9 +95,8 @@ class EventPollAnswerStreakTest(unittest.IsolatedAsyncioTestCase):
     async def test_first_event_vote_gives_streak_one(self):
         user_data = UserData()
         event = self._make_event()
-        cur_event = MagicMock()
-        cur_event.event_date = date(2026, 1, 8)
-        context = _make_context(user_data, event, {"poll1": cur_event})
+        cur_event = _make_event_mock("poll1", date(2026, 1, 8))
+        context = _make_context(user_data, event, {date(2026, 1, 8): cur_event})
 
         update = self._make_update("poll1", user_id=7)
         await callback(update, context)
@@ -104,9 +107,8 @@ class EventPollAnswerStreakTest(unittest.IsolatedAsyncioTestCase):
         """update_status_message is called after user_streaks is populated."""
         user_data = UserData()
         event = self._make_event()
-        cur_event = MagicMock()
-        cur_event.event_date = date(2026, 1, 8)
-        context = _make_context(user_data, event, {"poll1": cur_event})
+        cur_event = _make_event_mock("poll1", date(2026, 1, 8))
+        context = _make_context(user_data, event, {date(2026, 1, 8): cur_event})
 
         streaks_at_call_time = {}
 
@@ -122,25 +124,26 @@ class EventPollAnswerStreakTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_streak_unaffected_by_cancelled_event_in_chat(self):
         # User voted in p_prev and p_cur; p_cancelled sits between them but is cancelled.
-        # Streak should be 2, not 0.
+        # Cancelled events are excluded from poll_id_to_date, so streak should be 2, not 0.
         user_data = UserData()
         user_data.set_poll_answer("p_prev", (0,))
 
         event = self._make_event()
 
-        prev_event = MagicMock()
-        prev_event.event_date = date(2026, 1, 1)
+        prev_event = _make_event_mock("p_prev", date(2026, 1, 1))
         prev_event.cancelled = False
 
-        cancelled_event = MagicMock()
-        cancelled_event.event_date = date(2026, 1, 8)
+        cancelled_event = _make_event_mock("p_cancelled", date(2026, 1, 8))
         cancelled_event.cancelled = True
 
-        cur_event = MagicMock()
-        cur_event.event_date = date(2026, 1, 15)
+        cur_event = _make_event_mock("poll1", date(2026, 1, 15))
         cur_event.cancelled = False
 
-        chat_events = {"p_prev": prev_event, "p_cancelled": cancelled_event, "poll1": cur_event}
+        chat_events = {
+            date(2026, 1, 1): prev_event,
+            date(2026, 1, 8): cancelled_event,
+            date(2026, 1, 15): cur_event,
+        }
         context = _make_context(user_data, event, chat_events)
 
         update = self._make_update("poll1", user_id=42)

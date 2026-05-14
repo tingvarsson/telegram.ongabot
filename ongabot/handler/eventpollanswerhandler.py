@@ -52,7 +52,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     if update.poll_answer.option_ids:
         chat = context.bot_data.get_chat(event.chat_id)
-        poll_id_to_date = {pid: e.event_date for pid, e in chat.events.items() if not e.cancelled}
+        poll_id_to_date = {e.poll_id: e.event_date for e in chat.events.values() if not e.cancelled}
         event.user_streaks[update.poll_answer.user.id] = user_data.calculate_streak(poll_id_to_date)
 
     await event.update_status_message(context.bot)

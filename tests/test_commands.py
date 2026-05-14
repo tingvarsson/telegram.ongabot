@@ -1,6 +1,11 @@
 import unittest
 
-from ongabot.utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
+from ongabot.utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION, NEWEVENT
+
+
+class NeweventMenuDescriptionTest(unittest.TestCase):
+    def test_menu_description_includes_force_arg(self):
+        self.assertIn("force", NEWEVENT.menu_description)
 
 
 class CommandInfoMenuDescriptionTest(unittest.TestCase):

@@ -35,19 +35,28 @@ async def create_event(
     context: CallbackContext,
     chat_id: int,
     event_data: EventData,
+    force: bool = False,
 ) -> None:
     """Create an event"""
     chat: Chat = context.bot_data.get_chat(chat_id)
 
-    # Check for an existing active (non-completed) event on the same date
-    for existing in chat.active_events:
-        if existing.event_date == event_data.event_date:
+    existing = chat.get_event_by_date(event_data.event_date)
+    if existing is not None:
+        if not existing.completed:
             await context.bot.send_message(
                 chat_id,
                 f"Event already exists for: {event_data.event_date}"
                 "\nSend /cancelevent first if you wish to cancel it.",
             )
-            _logger.debug("Event already exists for date %s.", event_data.event_date)
+            _logger.debug("Active event already exists for date %s.", event_data.event_date)
+            return
+        if not force:
+            await context.bot.send_message(
+                chat_id,
+                f"A cancelled event already exists for {event_data.event_date}."
+                f"\nUse `/newevent day={event_data.event_date} force=true` to replace it.",
+            )
+            _logger.debug("Cancelled event exists for date %s, force=True required.", event_data.event_date)
             return
 
     try:
@@ -71,7 +80,7 @@ async def create_event(
     except TelegramError as e:
         _logger.error("Failed to send status message for chat_id=%s poll_id=%s: %s", chat_id, event.poll_id, e)
 
-    chat.add_event(event)
+    chat.add_event(event, force=force)
 
     # Pin new message and save to chat data for future removal
     try:

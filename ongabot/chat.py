@@ -24,21 +24,22 @@ class Chat:
 
     Attributes:
         chat_id: id of the chat the data belongs to
-        events: dictionary of Event objects indexed on poll_id
+        events: dictionary of Event objects indexed on event_date
+        _poll_id_index: secondary index mapping poll_id to event_date for O(1) lookup
         event_job: EventJob if there is one scheduled for the chat, otherwise None
         pinned_polls: dict of pinned event poll messages indexed on poll_id
     """
 
     def __init__(self, chat_id: int) -> None:
         self.chat_id = chat_id
-
-        self.events: Dict[str, Event] = {}
+        self.events: Dict[date, Event] = {}
+        self._poll_id_index: Dict[str, date] = {}
         self.event_job: Optional[EventJob] = None
         self.pinned_polls: Dict[str, Message] = {}
 
     def __setstate__(self, state: dict) -> None:
         self.__dict__.update(state)
-        # Set default values for any missing attributes (for backward compatibility with older persisted data)
+        # Migrate old pinned_poll → pinned_polls
         if not hasattr(self, "pinned_polls"):
             old = self.__dict__.pop("pinned_poll", None)
             self.pinned_polls = {}
@@ -46,10 +47,39 @@ class Chat:
                 try:
                     self.pinned_polls[old.poll.id] = old
                 except AttributeError:
-                    pass  # old message had no .poll; discard silently
-
-        # Remove old pinned_poll attribute if it exists, to avoid confusion and save memory
+                    pass
         self.__dict__.pop("pinned_poll", None)
+
+        # Migrate events from old Dict[str, Event] to Dict[date, Event]
+        if self.events and not isinstance(next(iter(self.events)), date):
+            old_events: Dict[str, Event] = self.events
+            migrated: Dict[date, Event] = {}
+            for _poll_id, event in old_events.items():
+                d = event.event_date
+                if d in migrated:
+                    existing = migrated[d]
+                    if existing.completed and not event.completed:
+                        _logger.warning(
+                            "Date collision during migration: discarding completed poll_id=%s,"
+                            " keeping active poll_id=%s for date=%s",
+                            existing.poll_id,
+                            event.poll_id,
+                            d,
+                        )
+                        migrated[d] = event
+                    else:
+                        _logger.warning(
+                            "Date collision during migration: discarding poll_id=%s for date=%s",
+                            event.poll_id,
+                            d,
+                        )
+                else:
+                    migrated[d] = event
+            self.events = migrated
+
+        # Rebuild secondary index if missing or empty
+        if not hasattr(self, "_poll_id_index") or not self._poll_id_index:
+            self._poll_id_index = {e.poll_id: e.event_date for e in self.events.values()}
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -59,29 +89,49 @@ class Chat:
         """Return a list of active (not completed) events."""
         return [e for e in self.events.values() if not e.completed]
 
-    def find_active_event(self, target_date: date) -> list[Event]:
-        """Return active events matching target_date."""
-        return [e for e in self.active_events if e.event_date == target_date]
+    def get_event_by_date(self, target_date: date) -> Optional[Event]:
+        """Return the event for target_date, or None if no event exists for that date."""
+        return self.events.get(target_date)
+
+    def get_event_by_poll_id(self, poll_id: str) -> Optional[Event]:
+        """Return the event for poll_id via the secondary index, or None."""
+        event_date = self._poll_id_index.get(poll_id)
+        if event_date is None:
+            return None
+        return self.events.get(event_date)
 
     @log.method
-    def add_event(self, event: Event) -> bool:
-        """Add an Event"""
-        if self.events.get(event.poll_id):
-            _logger.error("Event with poll_id=%s already exist!", event.poll_id)
-            return False
+    def add_event(self, event: Event, force: bool = False) -> bool | None:
+        """Add an Event to this chat.
 
-        self.events.update({event.poll_id: event})
+        Returns True on success.
+        Returns False if an active (non-completed) event already exists for the date.
+        Returns None if a completed (date-passed or cancelled) event exists for the date and force is False.
+        With force=True, replaces any existing completed event.
+        """
+        existing = self.events.get(event.event_date)
+        if existing is not None:
+            if not existing.completed:
+                _logger.error("Active event for date=%s already exists!", event.event_date)
+                return False
+            if not force:
+                _logger.debug("Cancelled event for date=%s exists, force=True required.", event.event_date)
+                return None
+            self.remove_event(existing.poll_id)
+
+        self.events[event.event_date] = event
+        self._poll_id_index[event.poll_id] = event.event_date
         return True
 
     @log.method
-    def get_event(self, poll_id: str) -> Optional[Event]:
-        """Get an event"""
-
-        if not self.events.get(poll_id):
-            _logger.error("Event with poll_id=%s doesn't exist!", poll_id)
-            return None
-
-        return self.events.get(poll_id)
+    def remove_event(self, poll_id: str) -> None:
+        """Remove an event by poll_id from both the events dict and the secondary index."""
+        event_date = self._poll_id_index.get(poll_id)
+        if event_date is None:
+            _logger.warning("Trying to remove unknown poll_id=%s from events", poll_id)
+            return
+        self.events.pop(event_date, None)
+        self._poll_id_index.pop(poll_id, None)
 
     @log.method
     def set_pinned_poll(self, poll_id: str, message: Message) -> bool:

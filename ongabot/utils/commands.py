@@ -35,19 +35,21 @@ ONGA = CommandInfo(
 
 NEWEVENT = CommandInfo(
     command="newevent",
-    brief="/newevent [day=<date|weekday>] [time=<HH:MM>] [slots=<n>] - "
+    brief="/newevent [day=<date|weekday>] [time=<HH:MM>] [slots=<n>] [force=true] - "
     "Create a new event poll (defaults: wednesday, 18:30, 5 slots)",
     usage=(
-        "Usage: /newevent [day=<date|weekday>] [time=<HH:MM>] [slots=<n>]\n"
+        "Usage: /newevent [day=<date|weekday>] [time=<HH:MM>] [slots=<n>] [force=true]\n"
         "  day: weekday name (next occurrence), YYYY-MM-DD, or dd.mm.yyyy (default: wednesday)\n"
         "  time: start time of first slot, e.g. 18:30 (default: 18:30)\n"
-        "  slots: number of 40-min time slots (default: 5)\n\n"
+        "  slots: number of 40-min time slots (default: 5)\n"
+        "  force: set to true to replace a cancelled event on the same date\n\n"
         "Examples:\n"
         "  /newevent\n"
         "  /newevent day=friday\n"
-        "  /newevent day=friday time=19:00 slots=3"
+        "  /newevent day=friday time=19:00 slots=3\n"
+        "  /newevent day=friday force=true"
     ),
-    menu_description="Create event poll [day=..] [time=..] [slots=..]",
+    menu_description="Create event poll [day=..] [time=..] [slots=..] [force=..]",
 )
 
 CANCELEVENT = CommandInfo(

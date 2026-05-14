@@ -80,13 +80,13 @@ async def callback(update: Update, context: CallbackContext) -> None:
     # At this point we have identified a single target event to cancel
     target_event = candidates[0]
 
-    question = target_event.poll.question.splitlines()[0]
     target_event.cancelled = True
     target_event.mark_complete()
     await chat.remove_pinned_poll(target_event.poll_id)
 
     await context.bot.send_message(
         update.effective_chat.id,
-        question + "\nCancelled successfully. The poll is still accessible in the channel history.",
+        f"Event for {target_event.event_date} cancelled successfully."
+        " The poll is still accessible in the channel history.",
     )
     _logger.debug("Cancelled event with poll_id %s", target_event.poll_id)
