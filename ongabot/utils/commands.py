@@ -49,7 +49,7 @@ NEWEVENT = CommandInfo(
         "  /newevent day=friday time=19:00 slots=3\n"
         "  /newevent day=friday force=true"
     ),
-    menu_description="Create event poll [day=..] [time=..] [slots=..]",
+    menu_description="Create event poll [day=..] [time=..] [slots=..] [force=..]",
 )
 
 CANCELEVENT = CommandInfo(
