@@ -100,12 +100,14 @@ class ChatSetStateMigrationTest(unittest.TestCase):
     def test_migrates_str_keyed_events_to_date_keyed(self):
         event = _make_event("p1", date(2026, 6, 4))
         chat = Chat.__new__(Chat)
-        chat.__setstate__({
-            "chat_id": 1,
-            "events": {"p1": event},
-            "event_job": None,
-            "pinned_polls": {},
-        })
+        chat.__setstate__(
+            {
+                "chat_id": 1,
+                "events": {"p1": event},
+                "event_job": None,
+                "pinned_polls": {},
+            }
+        )
         self.assertIn(date(2026, 6, 4), chat.events)
         self.assertIs(chat.events[date(2026, 6, 4)], event)
         self.assertEqual(chat._poll_id_index["p1"], date(2026, 6, 4))
@@ -114,12 +116,14 @@ class ChatSetStateMigrationTest(unittest.TestCase):
         cancelled = _make_event("p1", date(2026, 6, 4), completed=True, cancelled=True)
         active = _make_event("p2", date(2026, 6, 4), completed=False)
         chat = Chat.__new__(Chat)
-        chat.__setstate__({
-            "chat_id": 1,
-            "events": {"p1": cancelled, "p2": active},
-            "event_job": None,
-            "pinned_polls": {},
-        })
+        chat.__setstate__(
+            {
+                "chat_id": 1,
+                "events": {"p1": cancelled, "p2": active},
+                "event_job": None,
+                "pinned_polls": {},
+            }
+        )
         self.assertIs(chat.events[date(2026, 6, 4)], active)
         self.assertNotIn("p1", chat._poll_id_index)
         self.assertIn("p2", chat._poll_id_index)
@@ -127,12 +131,14 @@ class ChatSetStateMigrationTest(unittest.TestCase):
     def test_rebuilds_poll_id_index_when_missing(self):
         event = _make_event("p1", date(2026, 6, 4))
         chat = Chat.__new__(Chat)
-        chat.__setstate__({
-            "chat_id": 1,
-            "events": {date(2026, 6, 4): event},
-            "event_job": None,
-            "pinned_polls": {},
-        })
+        chat.__setstate__(
+            {
+                "chat_id": 1,
+                "events": {date(2026, 6, 4): event},
+                "event_job": None,
+                "pinned_polls": {},
+            }
+        )
         self.assertEqual(chat._poll_id_index["p1"], date(2026, 6, 4))
 
 

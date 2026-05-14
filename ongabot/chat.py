@@ -106,8 +106,8 @@ class Chat:
 
         Returns True on success.
         Returns False if an active (non-completed) event already exists for the date.
-        Returns None if a cancelled event exists for the date and force is False.
-        With force=True, replaces any existing cancelled event.
+        Returns None if a completed (date-passed or cancelled) event exists for the date and force is False.
+        With force=True, replaces any existing completed event.
         """
         existing = self.events.get(event.event_date)
         if existing is not None:
@@ -115,9 +115,7 @@ class Chat:
                 _logger.error("Active event for date=%s already exists!", event.event_date)
                 return False
             if not force:
-                _logger.debug(
-                    "Cancelled event for date=%s exists, force=True required.", event.event_date
-                )
+                _logger.debug("Cancelled event for date=%s exists, force=True required.", event.event_date)
                 return None
             self.remove_event(existing.poll_id)
 
@@ -171,9 +169,7 @@ class Chat:
     def set_event_job(self, event_job: EventJob) -> bool:
         """Set an event job for the chat"""
         if self.event_job:
-            _logger.error(
-                "job_name=%s already exist Chat with chat_id=%s!", event_job.job_name, self.chat_id
-            )
+            _logger.error("job_name=%s already exist Chat with chat_id=%s!", event_job.job_name, self.chat_id)
             return False
 
         self.event_job = event_job
