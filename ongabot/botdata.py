@@ -53,7 +53,7 @@ class BotData:
     def get_event(self, poll_id: str) -> Optional[Event]:
         """Get an event from BotData"""
         for chat in self.chats.values():
-            event = chat.get_event(poll_id)
+            event = chat.get_event_by_poll_id(poll_id)
             if event:
                 return event
 
