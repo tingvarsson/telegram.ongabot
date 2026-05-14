@@ -25,6 +25,7 @@ def _make_event_mock(poll_id: str, event_date: date):
     e = MagicMock()
     e.poll_id = poll_id
     e.event_date = event_date
+    e.cancelled = False
     return e
 
 
@@ -120,6 +121,35 @@ class EventPollAnswerStreakTest(unittest.IsolatedAsyncioTestCase):
         await callback(update, context)
 
         self.assertIn(5, streaks_at_call_time)
+
+    async def test_streak_unaffected_by_cancelled_event_in_chat(self):
+        # User voted in p_prev and p_cur; p_cancelled sits between them but is cancelled.
+        # Cancelled events are excluded from poll_id_to_date, so streak should be 2, not 0.
+        user_data = UserData()
+        user_data.set_poll_answer("p_prev", (0,))
+
+        event = self._make_event()
+
+        prev_event = _make_event_mock("p_prev", date(2026, 1, 1))
+        prev_event.cancelled = False
+
+        cancelled_event = _make_event_mock("p_cancelled", date(2026, 1, 8))
+        cancelled_event.cancelled = True
+
+        cur_event = _make_event_mock("poll1", date(2026, 1, 15))
+        cur_event.cancelled = False
+
+        chat_events = {
+            date(2026, 1, 1): prev_event,
+            date(2026, 1, 8): cancelled_event,
+            date(2026, 1, 15): cur_event,
+        }
+        context = _make_context(user_data, event, chat_events)
+
+        update = self._make_update("poll1", user_id=42)
+        await callback(update, context)
+
+        self.assertEqual(event.user_streaks[42], 2)
 
 
 if __name__ == "__main__":
