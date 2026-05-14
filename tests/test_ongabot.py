@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from telegram.error import TelegramError
 
 from ongabot import ongabot
-from ongabot.ongabot import post_init
+from ongabot.ongabot import post_init, setup_bot_metadata
 
 
 class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
@@ -95,6 +95,36 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
 
         application.job_queue.run_once.assert_called_once()
         application.job_queue.run_daily.assert_called_once()
+
+
+class SetupBotMetadataTest(unittest.IsolatedAsyncioTestCase):
+    async def test_calls_all_three_api_methods_on_success(self):
+        bot = AsyncMock()
+        await setup_bot_metadata(bot)
+        bot.set_my_commands.assert_called_once()
+        bot.set_my_description.assert_called_once()
+        bot.set_my_short_description.assert_called_once()
+
+    async def test_continues_when_set_my_commands_raises(self):
+        bot = AsyncMock()
+        bot.set_my_commands.side_effect = TelegramError("network error")
+        await setup_bot_metadata(bot)  # must not raise
+        bot.set_my_description.assert_called_once()
+        bot.set_my_short_description.assert_called_once()
+
+    async def test_continues_when_set_my_description_raises(self):
+        bot = AsyncMock()
+        bot.set_my_description.side_effect = TelegramError("network error")
+        await setup_bot_metadata(bot)  # must not raise
+        bot.set_my_commands.assert_called_once()
+        bot.set_my_short_description.assert_called_once()
+
+    async def test_continues_when_set_my_short_description_raises(self):
+        bot = AsyncMock()
+        bot.set_my_short_description.side_effect = TelegramError("network error")
+        await setup_bot_metadata(bot)  # must not raise
+        bot.set_my_commands.assert_called_once()
+        bot.set_my_description.assert_called_once()
 
 
 if __name__ == "__main__":
