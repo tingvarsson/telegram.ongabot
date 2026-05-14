@@ -111,18 +111,25 @@ async def callback(update: Update, context: CallbackContext) -> None:
         new_slots if new_slots is not None else target_event.num_slots,
     )
 
-    # Validate that the new date doesn't conflict with another active event (except itself)
+    # Validate that the new date doesn't conflict with any existing event
     if update_event_data.event_date != target_event.event_date:
-        for event in chat.active_events:
-            if event.event_date == update_event_data.event_date and event is not target_event:
+        conflicting = chat.get_event_by_date(update_event_data.event_date)
+        if conflicting is not None:
+            if not conflicting.completed:
                 await update.message.reply_text(
                     f"An active event already exists for {update_event_data.event_date}. "
                     "Cancel it first with /cancelevent."
                 )
-                return
+            else:
+                await update.message.reply_text(
+                    f"A cancelled event already exists for {update_event_data.event_date}. "
+                    f"Use `/newevent day={update_event_data.event_date} force=true` to replace it, "
+                    "or choose a different date."
+                )
+            return
 
-    # Mark the old event complete and create a new one with the merged configuration
-    target_event.mark_complete()
+    # Remove the old event and create a new one with the merged configuration
+    chat.remove_event(target_event.poll_id)
     await chat.remove_pinned_poll(target_event.poll_id)
-    _logger.info("Cancelled event poll_id=%s for update", target_event.poll_id)
+    _logger.info("Removed event poll_id=%s for update", target_event.poll_id)
     await create_event(context, update.effective_chat.id, update_event_data)
