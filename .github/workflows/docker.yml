@@ -13,22 +13,37 @@ on:
   pull_request:
 
 jobs:
+  compute-edge-version:
+    name: Compute edge version label
+    runs-on: ubuntu-latest
+    outputs:
+      version_label: ${{ steps.version.outputs.version_label }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: version
+        run: |
+          version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' ongabot/_version.py)
+          short_sha="${GITHUB_SHA::7}"
+          echo "version_label=${version}-${short_sha}" >> $GITHUB_OUTPUT
+
   edge:
     name: Build edge image
     if: github.event_name == 'push'
+    needs: [compute-edge-version]
     uses: ./.github/workflows/_docker-build.yml
     with:
       tags: ${{ github.repository }}:edge
+      version: ${{ needs.compute-edge-version.outputs.version_label }}
     secrets: inherit
 
   nightly-edge:
     name: Nightly master image
     if: github.event_name == 'schedule'
+    needs: [compute-edge-version]
     uses: ./.github/workflows/_docker-build.yml
     with:
-      tags: |
-        ${{ github.repository }}:edge
-        ${{ github.repository }}:nightly
+      tags: ${{ github.repository }}:edge
+      version: ${{ needs.compute-edge-version.outputs.version_label }}
     secrets: inherit
 
   find-latest-release:
@@ -56,13 +71,16 @@ jobs:
       tags: |
         ${{ github.repository }}:${{ needs.find-latest-release.outputs.version }}
         ${{ github.repository }}:latest
+      version: ${{ needs.find-latest-release.outputs.version }}
     secrets: inherit
 
   pr:
     name: Build PR image
     if: github.event_name == 'pull_request'
+    needs: [compute-edge-version]
     uses: ./.github/workflows/_docker-build.yml
     with:
       tags: ${{ github.repository }}:pr-${{ github.event.pull_request.number }}
+      version: ${{ needs.compute-edge-version.outputs.version_label }}
       push: false
     secrets: inherit
