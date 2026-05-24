@@ -65,6 +65,9 @@ docker-run: .env
 release: check test
 	bump-my-version bump $(PART) && \
 	NEW_VERSION=$$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' ongabot/_version.py) && \
+	python scripts/update_changelog.py $$NEW_VERSION && \
+	git add CHANGELOG.md && \
+	git commit -m "docs: update CHANGELOG for v$$NEW_VERSION" && \
 	BRANCH="release/v$$NEW_VERSION" && \
 	git push origin HEAD:refs/heads/$$BRANCH && \
 	gh pr create --title "chore: bump version to $$NEW_VERSION" --body "Release v$$NEW_VERSION" --base master --head $$BRANCH
