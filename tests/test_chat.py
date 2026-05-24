@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 from ongabot.chat import Chat
 from ongabot.event import Event
+from ongabot.eventdata import EventData
 
 
 def _make_event(poll_id: str, event_date: date, completed: bool = False, cancelled: bool = False):
@@ -201,6 +202,108 @@ class ChatSetStateMigrationOldEventTest(unittest.TestCase):
         # First event gets date.min, second gets the next surrogate date
         self.assertIn(date.min, chat.events)
         self.assertIn(date.min + timedelta(days=1), chat.events)
+
+
+class ChatSetStateRetroactiveMigrationTest(unittest.TestCase):
+    def _make_broken_migration_event(self, poll_id: str, poll_question: str, sentinel_date: date = date.min) -> Event:
+        """Build an Event simulating the broken v1.1.0 migration: data present but event_date=sentinel."""
+        poll = MagicMock()
+        poll.id = poll_id
+        poll.question = poll_question
+        event = Event.__new__(Event)
+        event.__dict__.update(
+            {
+                "chat_id": 1,
+                "poll": poll,
+                "poll_id": poll_id,
+                "poll_answers": {},
+                "first_answer": None,
+                "status_message_id": 0,
+                "data": EventData(sentinel_date),
+                "completed": True,
+                "cancelled": False,
+                "user_streaks": {},
+            }
+        )
+        return event
+
+    def test_recovers_real_date_for_event_at_date_min(self):
+        event = self._make_broken_migration_event("p1", "Event: ONGA\nWhen: 2026-06-04 18:30")
+        chat = Chat.__new__(Chat)
+        chat.__setstate__(
+            {
+                "chat_id": 1,
+                "events": {date.min: event},
+                "event_job": None,
+                "pinned_polls": {},
+            }
+        )
+        self.assertIn(date(2026, 6, 4), chat.events)
+        self.assertNotIn(date.min, chat.events)
+        self.assertIs(chat.events[date(2026, 6, 4)], event)
+        self.assertEqual(event.data.event_date, date(2026, 6, 4))
+        self.assertEqual(chat._poll_id_index["p1"], date(2026, 6, 4))
+
+    def test_recovers_real_date_for_event_at_surrogate_date(self):
+        surrogate = date.min + timedelta(days=1)
+        event = self._make_broken_migration_event("p1", "Event: ONGA\nWhen: 2026-06-04 18:30", sentinel_date=surrogate)
+        chat = Chat.__new__(Chat)
+        chat.__setstate__(
+            {
+                "chat_id": 1,
+                "events": {surrogate: event},
+                "event_job": None,
+                "pinned_polls": {},
+            }
+        )
+        self.assertIn(date(2026, 6, 4), chat.events)
+        self.assertNotIn(surrogate, chat.events)
+        self.assertEqual(chat._poll_id_index["p1"], date(2026, 6, 4))
+
+    def test_leaves_event_at_date_min_when_unparseable(self):
+        event = self._make_broken_migration_event("p1", "no when line here")
+        chat = Chat.__new__(Chat)
+        chat.__setstate__(
+            {
+                "chat_id": 1,
+                "events": {date.min: event},
+                "event_job": None,
+                "pinned_polls": {},
+            }
+        )
+        self.assertIn(date.min, chat.events)
+        self.assertIs(chat.events[date.min], event)
+        self.assertEqual(event.data.event_date, date.min)
+
+    def test_skips_recovery_when_real_date_already_occupied(self):
+        sentinel_event = self._make_broken_migration_event("p1", "Event: ONGA\nWhen: 2026-06-04 18:30")
+        occupant = _make_event("p2", date(2026, 6, 4), completed=True)
+        chat = Chat.__new__(Chat)
+        chat.__setstate__(
+            {
+                "chat_id": 1,
+                "events": {date.min: sentinel_event, date(2026, 6, 4): occupant},
+                "event_job": None,
+                "pinned_polls": {},
+            }
+        )
+        self.assertIn(date.min, chat.events)
+        self.assertIs(chat.events[date.min], sentinel_event)
+        self.assertIs(chat.events[date(2026, 6, 4)], occupant)
+
+    def test_does_not_affect_real_date_events(self):
+        event = _make_event("p1", date(2026, 6, 4))
+        chat = Chat.__new__(Chat)
+        chat.__setstate__(
+            {
+                "chat_id": 1,
+                "events": {date(2026, 6, 4): event},
+                "event_job": None,
+                "pinned_polls": {},
+            }
+        )
+        self.assertIn(date(2026, 6, 4), chat.events)
+        self.assertIs(chat.events[date(2026, 6, 4)], event)
 
 
 if __name__ == "__main__":

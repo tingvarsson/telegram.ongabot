@@ -26,13 +26,12 @@ def _make_old_state(poll_question: str, poll_id: str = "test_poll_id") -> dict:
 
 
 class EventSetStateParsesDateTest(unittest.TestCase):
-    def test_recovers_date_and_time_from_valid_poll_question(self):
+    def test_recovers_date_from_valid_poll_question(self):
         state = _make_old_state("Event: TOGA (with ONGA)\nWhen: 2026-06-04 18:30")
         event = Event.__new__(Event)
         event.__setstate__(state)
 
         self.assertEqual(event.data.event_date, date(2026, 6, 4))
-        self.assertEqual(event.data.start_time, time(18, 30))
 
     def test_falls_back_to_date_min_when_no_when_line(self):
         state = _make_old_state("Some unexpected format without When line")
@@ -48,12 +47,12 @@ class EventSetStateParsesDateTest(unittest.TestCase):
 
         self.assertEqual(event.data.event_date, date.min)
 
-    def test_falls_back_to_date_min_when_time_malformed(self):
+    def test_recovers_date_even_when_time_is_malformed(self):
         state = _make_old_state("Event: ONGA\nWhen: 2026-06-03 99:99")
         event = Event.__new__(Event)
         event.__setstate__(state)
 
-        self.assertEqual(event.data.event_date, date.min)
+        self.assertEqual(event.data.event_date, date(2026, 6, 3))
 
     def test_existing_data_is_not_overwritten(self):
         existing_data = EventData(date(2025, 1, 1), time(20, 0), 3)

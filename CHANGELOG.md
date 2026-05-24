@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Events stuck at `0001-01-01` (sentinel date) from the initial broken v1.1.0 migration are
+  now retroactively re-keyed to their real event dates on next load, by re-parsing the poll
+  question text. Events whose questions cannot be parsed remain at their sentinel date unchanged.
+
 ## [1.1.0] - 2026-05-24
 
 ### Added
