@@ -3,6 +3,7 @@
 from .authorizationhandler import AuthorizationHandler
 from .authorizecommandhandler import AuthorizeCommandHandler
 from .canceleventcommandhandler import CancelEventCommandHandler
+from .changelogcommandhandler import ChangelogCommandHandler
 from .deauthorizecommandhandler import DeAuthorizeCommandHandler
 from .deschedulecommandhandler import DeScheduleCommandHandler
 from .eventpollanswerhandler import EventPollAnswerHandler
@@ -19,6 +20,7 @@ __all__ = (
     "AuthorizationHandler",
     "AuthorizeCommandHandler",
     "CancelEventCommandHandler",
+    "ChangelogCommandHandler",
     "DeAuthorizeCommandHandler",
     "DeScheduleCommandHandler",
     "EventPollAnswerHandler",
