@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User participation streak shown in bot responses (#290)
 - Bot commands, description, and short description registered at startup via `set_my_*` API (#292)
 
+### Fixed
+
+- Migration of old polls no longer discards events due to date collisions on `0001-01-01`.
+  The real event date is now recovered from the poll question text (`When: YYYY-MM-DD HH:MM`).
+  For the rare case where parsing fails, duplicate events receive unique surrogate keys so
+  all poll statistics are preserved.
+
 ### Changed
 
 - Docker images now include OCI metadata labels: `version`, `revision`, `created`, `source`, `title`

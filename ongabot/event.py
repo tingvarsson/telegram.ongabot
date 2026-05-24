@@ -15,6 +15,22 @@ from utils import log
 _logger = logging.getLogger(__name__)
 
 
+def _parse_eventdata_from_poll_question(question: str) -> Optional[EventData]:
+    """Parse EventData from a poll question produced by _create_poll_text.
+
+    Format: "Event: <name>\nWhen: YYYY-MM-DD HH:MM"
+    Returns EventData on success, None on any parse failure.
+    """
+    try:
+        for line in question.splitlines():
+            if line.startswith("When: "):
+                date_str, time_str = line.removeprefix("When: ").split(" ", 1)
+                return EventData(date.fromisoformat(date_str), time.fromisoformat(time_str))
+        return None
+    except (ValueError, IndexError):
+        return None
+
+
 class Event:
     """
     The Event object represent an event and its poll
@@ -65,9 +81,25 @@ class Event:
         self.__dict__.update(state)
         # Set default values for any missing attributes (for backward compatibility with older persisted data)
         if not hasattr(self, "data"):
-            # date.min treated as already past, so that old events will be marked completed immediately on update
-            # and not show up as active events, otherwise assume default values for all fields
-            self.data = EventData(date.min)
+            # Try to recover the real date/time from the poll question before falling back to date.min.
+            # self.poll is always present on old events (it predates EventData).
+            parsed = _parse_eventdata_from_poll_question(self.poll.question)
+            if parsed is not None:
+                _logger.info(
+                    "Recovered EventData from poll question for poll_id=%s: date=%s time=%s",
+                    self.poll_id,
+                    parsed.event_date,
+                    parsed.start_time,
+                )
+                self.data = parsed
+            else:
+                # date.min treated as already past, so that old events will be marked completed immediately on update
+                # and not show up as active events
+                _logger.warning(
+                    "Could not parse EventData from poll question for poll_id=%s; falling back to date.min",
+                    self.poll_id,
+                )
+                self.data = EventData(date.min)
         if not hasattr(self, "completed"):
             # Assume old events are completed, aligned with date.min, to avoid showing them as active events after
             # a bot update
