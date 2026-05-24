@@ -1,5 +1,5 @@
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import MagicMock
 
 from ongabot.chat import Chat
@@ -199,8 +199,6 @@ class ChatSetStateMigrationOldEventTest(unittest.TestCase):
         # Both events must be kept — no discard
         self.assertEqual(len(chat.events), 2)
         # First event gets date.min, second gets the next surrogate date
-        from datetime import timedelta
-
         self.assertIn(date.min, chat.events)
         self.assertIn(date.min + timedelta(days=1), chat.events)
 
