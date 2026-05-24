@@ -80,6 +80,11 @@ class GetChangelogDeltaTest(unittest.TestCase):
         result = get_changelog_delta(None, "1.2.0", self.path)
         self.assertNotIn("Unreleased", result)
 
+    def test_oldest_version_is_last_in_file_returns_full_entry(self):
+        result = get_changelog_delta(None, "1.0.0", self.path)
+        self.assertIn("1.0.0", result)
+        self.assertNotIn("1.1.0", result)
+
 
 class GetVersionEntryTest(unittest.TestCase):
     def setUp(self):

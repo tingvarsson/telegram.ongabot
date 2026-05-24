@@ -4,7 +4,6 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Optional
 
 _logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ _VERSION_HEADER_RE = re.compile(r"^## \[([^\]]+)\]", re.MULTILINE)
 
 
 def get_changelog_delta(
-    old_version: Optional[str],
+    old_version: str | None,
     new_version: str,
     changelog_path: Path = CHANGELOG_PATH,
 ) -> str:
@@ -40,8 +39,13 @@ def get_changelog_delta(
         _logger.warning("Version %s not found in changelog", new_version)
         return f"ONGAbot updated to v{new_version}. (No changelog entry found)"
 
+    # Guard: same version produces empty delta
+    if old_version is not None and old_version == new_version:
+        _logger.warning("get_changelog_delta called with same old and new version: %s", new_version)
+        return ""
+
     # Resolve old_version boundary; fall back to next entry if old_version unknown
-    old_idx: Optional[int] = None
+    old_idx: int | None = None
     if old_version is not None:
         try:
             old_idx = versions.index(old_version)
