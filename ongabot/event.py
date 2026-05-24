@@ -15,17 +15,17 @@ from utils import log
 _logger = logging.getLogger(__name__)
 
 
-def _parse_eventdata_from_poll_question(question: str) -> Optional[EventData]:
-    """Parse EventData from a poll question produced by _create_poll_text.
+def parse_event_date_from_poll_question(question: str) -> Optional[date]:
+    """Parse the event date from a poll question produced by _create_poll_text.
 
     Format: "Event: <name>\nWhen: YYYY-MM-DD HH:MM"
-    Returns EventData on success, None on any parse failure.
+    Returns the event date on success, None on any parse failure.
     """
     try:
         for line in question.splitlines():
             if line.startswith("When: "):
-                date_str, time_str = line.removeprefix("When: ").split(" ", 1)
-                return EventData(date.fromisoformat(date_str), time.fromisoformat(time_str))
+                date_str = line.removeprefix("When: ").split(" ", 1)[0]
+                return date.fromisoformat(date_str)
         return None
     except (ValueError, IndexError):
         return None
@@ -83,15 +83,14 @@ class Event:
         if not hasattr(self, "data"):
             # Try to recover the real date/time from the poll question before falling back to date.min.
             # self.poll is always present on old events (it predates EventData).
-            parsed = _parse_eventdata_from_poll_question(self.poll.question)
-            if parsed is not None:
+            parsed_date = parse_event_date_from_poll_question(self.poll.question)
+            if parsed_date is not None:
                 _logger.info(
-                    "Recovered EventData from poll question for poll_id=%s: date=%s time=%s",
+                    "Recovered event date from poll question for poll_id=%s: date=%s",
                     self.poll_id,
-                    parsed.event_date,
-                    parsed.start_time,
+                    parsed_date,
                 )
-                self.data = parsed
+                self.data = EventData(parsed_date)
             else:
                 # date.min treated as already past, so that old events will be marked completed immediately on update
                 # and not show up as active events

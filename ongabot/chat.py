@@ -8,7 +8,7 @@ from telegram import Message
 from telegram.error import TelegramError
 from telegram.ext import JobQueue
 
-from event import Event
+from event import Event, parse_event_date_from_poll_question
 from eventjob import EventJob
 from utils import log
 
@@ -88,12 +88,52 @@ class Chat:
                     migrated[d] = event
             self.events = migrated
 
+        self._recover_sentinel_dates()
+
         # Rebuild secondary index if missing or empty
         if not hasattr(self, "_poll_id_index") or not self._poll_id_index:
             self._poll_id_index = {e.poll_id: e.event_date for e in self.events.values()}
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
+
+    def _recover_sentinel_dates(self) -> None:
+        """Retroactively recover real dates for events saved with sentinel dates.
+
+        Handles events stuck at date.min or surrogate keys (year == 1) by the broken
+        pre-fix v1.1.0 migration that saved date.min without parsing poll questions.
+        Rebuilds _poll_id_index if any events were re-keyed.
+        """
+        # year == 1 covers date.min (0001-01-01) and all surrogate keys (0001-01-02, etc.)
+        # assigned during the broken v1.1.0 migration; real events will never fall in year 1.
+        sentinel_items = [(d, e) for d, e in list(self.events.items()) if d.year == 1]
+        if not sentinel_items:
+            return
+        for sentinel_date, event in sentinel_items:
+            try:
+                question = event.poll.question
+            except AttributeError:
+                _logger.warning("Sentinel event poll_id=%s has no poll; skipping recovery", event.poll_id)
+                continue
+            real_date = parse_event_date_from_poll_question(question)
+            if real_date is not None and real_date.year != 1:
+                if real_date not in self.events:
+                    del self.events[sentinel_date]
+                    event.data.event_date = real_date
+                    self.events[real_date] = event
+                    _logger.info(
+                        "Retroactively recovered date=%s for poll_id=%s (was sentinel date=%s)",
+                        real_date,
+                        event.poll_id,
+                        sentinel_date,
+                    )
+                else:
+                    _logger.warning(
+                        "Cannot retroactively recover date=%s for poll_id=%s: date already occupied",
+                        real_date,
+                        event.poll_id,
+                    )
+        self._poll_id_index = {e.poll_id: e.event_date for e in self.events.values()}
 
     @property
     def active_events(self) -> list[Event]:
