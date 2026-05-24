@@ -1,7 +1,7 @@
 """This module contains the Chat class."""
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Callable, Dict, Optional
 
 from telegram import Message
@@ -63,6 +63,17 @@ class Chat:
                             "Date collision during migration: discarding completed poll_id=%s,"
                             " keeping active poll_id=%s for date=%s",
                             existing.poll_id,
+                            event.poll_id,
+                            d,
+                        )
+                        migrated[d] = event
+                    elif d == date.min:
+                        # Real date unknown for both events; assign unique surrogate key to preserve statistics
+                        while d in migrated:
+                            d += timedelta(days=1)
+                        _logger.warning(
+                            "Date collision on date.min for poll_id=%s;"
+                            " assigning surrogate date=%s to preserve statistics",
                             event.poll_id,
                             d,
                         )
