@@ -3,6 +3,7 @@
 from datetime import date, datetime, time, timedelta
 
 from .commands import ALL_COMMANDS
+from .._version import __version__
 
 
 def create_help_text() -> str:
@@ -19,7 +20,8 @@ def create_help_text() -> str:
         "\n"
         "Commandments:\n"
     )
-    return header + "\n".join(cmd.brief for cmd in ALL_COMMANDS)
+    commands = "\n".join(cmd.brief for cmd in ALL_COMMANDS)
+    return f"{header}{commands}\n\nVersion: {__version__}"
 
 
 def get_upcoming_date(today: date, upcoming_weekday: str) -> date:

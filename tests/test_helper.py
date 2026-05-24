@@ -177,5 +177,16 @@ class ParseEventJobArgsTest(unittest.TestCase):
             helper.parse_event_job_args(args, *self.DEFAULTS)
 
 
+class CreateHelpTextTest(unittest.TestCase):
+    def test_help_text_contains_version(self):
+        import ongabot
+        result = helper.create_help_text()
+        self.assertIn(ongabot.__version__, result)
+
+    def test_help_text_contains_commandments_header(self):
+        result = helper.create_help_text()
+        self.assertIn("Commandments:", result)
+
+
 if __name__ == "__main__":
     unittest.main()
