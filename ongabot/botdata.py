@@ -16,8 +16,6 @@ class BotData:
     """
     The BotData object represent all persistent data stored for the bot
 
-    Args:
-
     Attributes:
         chats: Dict of Chat objects indexed by chat_id
         authorized_chats: Set of chat IDs allowed to use the bot
