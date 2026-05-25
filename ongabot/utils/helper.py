@@ -2,8 +2,8 @@
 
 from datetime import date, datetime, time, timedelta
 
-from .commands import ALL_COMMANDS
 from _version import __version__
+from .commands import ALL_COMMANDS
 
 
 def create_help_text() -> str:

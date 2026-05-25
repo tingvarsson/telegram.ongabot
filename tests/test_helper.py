@@ -180,6 +180,7 @@ class ParseEventJobArgsTest(unittest.TestCase):
 class CreateHelpTextTest(unittest.TestCase):
     def test_help_text_contains_version(self):
         import ongabot
+
         result = helper.create_help_text()
         self.assertIn(ongabot.__version__, result)
 
