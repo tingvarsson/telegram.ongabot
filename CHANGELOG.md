@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/changelog` command shows the changelog entry for the current bot version
+- Version number displayed in `/help` output
+- Bot posts a changelog delta message to all authorized chats when a new version is detected at startup
+- `BotData.last_known_version` persists the last-seen version across restarts
+
 ## [1.2.0] - 2026-05-24
 
 ### Fixed
