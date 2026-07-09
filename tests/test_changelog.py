@@ -26,6 +26,11 @@ SAMPLE = """\
 ### Added
 
 - Initial release
+
+[Unreleased]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/tingvarsson/telegram.ongabot/releases/tag/v1.0.0
 """
 
 
@@ -85,6 +90,13 @@ class GetChangelogDeltaTest(unittest.TestCase):
         self.assertIn("1.0.0", result)
         self.assertNotIn("1.1.0", result)
 
+    def test_oldest_version_excludes_trailing_link_reference_block(self):
+        # 1.0.0 is both the "new" and only version reachable, so the slice
+        # runs to EOF and must not swallow the trailing link-reference block.
+        result = get_changelog_delta(None, "1.0.0", self.path)
+        self.assertNotIn("http", result)
+        self.assertNotIn("]: ", result)
+
 
 class IsDevVersionTest(unittest.TestCase):
     def test_clean_release_is_not_dev(self):
@@ -136,6 +148,14 @@ class GetChangelogTest(unittest.TestCase):
     def test_count_larger_than_history_stops_at_end(self):
         result = get_changelog("1.0.0", 5, self.path)
         self.assertIn("1.0.0", result)
+
+    def test_oldest_section_excludes_trailing_link_reference_block(self):
+        # Reaching the last section in the file means the slice runs to EOF;
+        # the trailing link-reference block must not leak into the output.
+        result = get_changelog("1.0.0", 1, self.path)
+        self.assertIn("Initial release", result)
+        self.assertNotIn("http", result)
+        self.assertNotIn("]: ", result)
 
     def test_count_below_one_treated_as_one(self):
         result = get_changelog("1.2.0", 0, self.path)
