@@ -28,7 +28,8 @@ install:
 	$(PIP) install -r requirements-dev.txt
 
 run: .env
-	set -a && . ./.env && set +a && $(PYTHON) ongabot/ongabot.py
+	set -a && . ./.env && set +a && \
+	CHANGELOG_PATH=$${CHANGELOG_PATH:-$(CURDIR)/CHANGELOG.md} $(PYTHON) ongabot/ongabot.py
 
 lint:
 	$(PYLINT) ongabot
