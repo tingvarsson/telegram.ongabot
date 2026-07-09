@@ -15,11 +15,11 @@ class BotDataDefaultsTest(unittest.TestCase):
 
 
 class BotDataSetStateTest(unittest.TestCase):
-    def test_migration_adds_last_known_version_when_missing(self):
+    def test_migration_seeds_known_starting_point_when_missing(self):
         bd = BotData.__new__(BotData)
-        # Simulate an old pickle that has no last_known_version
+        # Simulate an old pickle predating version tracking
         bd.__setstate__({"chats": {}, "authorized_chats": set()})
-        self.assertIsNone(bd.last_known_version)
+        self.assertEqual(bd.last_known_version, "1.2.0")
 
     def test_migration_preserves_existing_last_known_version(self):
         bd = BotData.__new__(BotData)
