@@ -49,3 +49,43 @@ jobs:
         ${{ github.repository }}:${{ needs.tag.outputs.version }}
         ${{ github.repository }}:latest
     secrets: inherit
+
+  resume-dev:
+    name: Open resume-development PR
+    needs: tag
+    if: needs.tag.outputs.is_new_version == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: master
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Re-add +dev suffix
+        run: make post-release
+
+      - name: Open resume-development PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ needs.tag.outputs.version }}"
+          BRANCH="resume-dev/v$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git commit -am "chore: resume development (${VERSION}+dev)"
+          git push --force origin "$BRANCH"
+          if gh pr view "$BRANCH" --json state --jq .state 2>/dev/null | grep -q OPEN; then
+            echo "PR already open for $BRANCH"
+          else
+            gh pr create --base master --head "$BRANCH" \
+              --title "chore: resume development (${VERSION}+dev)" \
+              --body "Automated follow-up to releasing v${VERSION}: re-adds the \`+dev\` suffix to ongabot/_version.py so master is marked as a development build again."
+          fi
