@@ -31,6 +31,11 @@ jobs:
         id: tag
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version $VERSION is a development build (not a clean release); skipping tag/release"
+            echo "is_new_version=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           TAG="v$VERSION"
           if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "refs/tags/$TAG$"; then
             echo "Tag $TAG already exists, skipping release build"
