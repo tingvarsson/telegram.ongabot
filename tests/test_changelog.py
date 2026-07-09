@@ -1,3 +1,4 @@
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -170,6 +171,30 @@ class GetChangelogTest(unittest.TestCase):
     def test_unknown_release_version_returns_fallback(self):
         result = get_changelog("9.9.9", 1, self.path)
         self.assertIn("9.9.9", result)
+
+
+class RealChangelogTest(unittest.TestCase):
+    real_path = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
+
+    def _oldest_release(self):
+        content = self.real_path.read_text(encoding="utf-8")
+        versions = re.findall(r"^## \[([^\]]+)\]", content, re.MULTILINE)
+        releases = [v for v in versions if re.fullmatch(r"\d+\.\d+\.\d+", v)]
+        self.assertTrue(releases, "no release headers found in real CHANGELOG.md")
+        return releases[-1]
+
+    def test_full_range_excludes_link_reference_block(self):
+        oldest = self._oldest_release()
+        result = get_changelog(oldest, 99, self.real_path)
+        self.assertIn(oldest, result)
+        self.assertNotIn("http", result)
+        self.assertNotIn("]: ", result)
+
+    def test_delta_to_oldest_excludes_link_reference_block(self):
+        oldest = self._oldest_release()
+        result = get_changelog_delta(None, oldest, self.real_path)
+        self.assertNotIn("http", result)
+        self.assertNotIn("]: ", result)
 
 
 if __name__ == "__main__":
