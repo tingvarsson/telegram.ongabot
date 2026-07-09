@@ -19,7 +19,7 @@ jobs:
     outputs:
       version_label: ${{ steps.version.outputs.version_label }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - id: version
         run: |
           version=$(python3 scripts/version.py --base)
@@ -53,7 +53,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: version
