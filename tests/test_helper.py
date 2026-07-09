@@ -2,6 +2,7 @@ from ongabot.utils import helper
 
 from datetime import date, time
 from parameterized import parameterized
+from unittest.mock import patch
 import unittest
 
 
@@ -187,6 +188,17 @@ class CreateHelpTextTest(unittest.TestCase):
     def test_help_text_contains_commandments_header(self):
         result = helper.create_help_text()
         self.assertIn("Commandments:", result)
+
+    def test_help_text_marks_development_build(self):
+        with patch.object(helper, "__version__", "1.2.0+dev"):
+            result = helper.create_help_text()
+        self.assertIn("1.2.0+dev", result)
+        self.assertIn("development build", result)
+
+    def test_help_text_no_marker_on_release(self):
+        with patch.object(helper, "__version__", "1.2.0"):
+            result = helper.create_help_text()
+        self.assertNotIn("development build", result)
 
 
 if __name__ == "__main__":

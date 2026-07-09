@@ -3,6 +3,7 @@
 from datetime import date, datetime, time, timedelta
 
 from _version import __version__
+from .changelog import is_dev_version
 from .commands import ALL_COMMANDS
 
 
@@ -21,7 +22,10 @@ def create_help_text() -> str:
         "Commandments:\n"
     )
     commands = "\n".join(cmd.brief for cmd in ALL_COMMANDS)
-    return f"{header}{commands}\n\nVersion: {__version__}"
+    version_line = f"Version: {__version__}"
+    if is_dev_version(__version__):
+        version_line += " (development build)"
+    return f"{header}{commands}\n\n{version_line}"
 
 
 def get_upcoming_date(today: date, upcoming_weekday: str) -> date:
