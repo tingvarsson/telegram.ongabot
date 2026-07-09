@@ -64,7 +64,7 @@ docker-run: .env
 
 release: check test
 	bump-my-version bump $(PART) && \
-	NEW_VERSION=$$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' ongabot/_version.py) && \
+	NEW_VERSION=$$(grep -oE '^__version__ = "[0-9]+\.[0-9]+\.[0-9]+' ongabot/_version.py | grep -oE '[0-9]+\.[0-9]+\.[0-9]+') && \
 	python scripts/update_changelog.py $$NEW_VERSION && \
 	git add CHANGELOG.md && \
 	git commit -m "docs: update CHANGELOG for v$$NEW_VERSION" && \
@@ -73,6 +73,6 @@ release: check test
 	gh pr create --title "chore: bump version to $$NEW_VERSION" --body "Release v$$NEW_VERSION" --base master --head $$BRANCH
 
 post-release:
-	@NEW_VERSION=$$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' ongabot/_version.py) && \
-	sed -i "s/^__version__ = \"$$NEW_VERSION\"/__version__ = \"$$NEW_VERSION+dev\"/" ongabot/_version.py && \
+	@NEW_VERSION=$$(grep -oE '^__version__ = "[0-9]+\.[0-9]+\.[0-9]+' ongabot/_version.py | grep -oE '[0-9]+\.[0-9]+\.[0-9]+') && \
+	sed -i -E "s/^__version__ = \"$$NEW_VERSION\"\$$/__version__ = \"$$NEW_VERSION+dev\"/" ongabot/_version.py && \
 	echo "Set development version $$NEW_VERSION+dev in ongabot/_version.py"
