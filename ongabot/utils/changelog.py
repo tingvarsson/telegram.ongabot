@@ -106,8 +106,3 @@ def get_changelog(version: str, count: int = 1, changelog_path: Path = CHANGELOG
     end_pos = matches[end_section_idx].start() if end_section_idx < len(matches) else len(content)
 
     return content[start_pos:end_pos].strip()
-
-
-def get_version_entry(version: str, changelog_path: Path = CHANGELOG_PATH) -> str:
-    """Return the changelog entry for a single version."""
-    return get_changelog_delta(None, version, changelog_path)

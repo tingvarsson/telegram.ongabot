@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ongabot.utils.changelog import get_changelog, get_changelog_delta, get_version_entry, is_dev_version
+from ongabot.utils.changelog import get_changelog, get_changelog_delta, is_dev_version
 
 SAMPLE = """\
 # Changelog
@@ -84,22 +84,6 @@ class GetChangelogDeltaTest(unittest.TestCase):
         result = get_changelog_delta(None, "1.0.0", self.path)
         self.assertIn("1.0.0", result)
         self.assertNotIn("1.1.0", result)
-
-
-class GetVersionEntryTest(unittest.TestCase):
-    def setUp(self):
-        self._dir = tempfile.TemporaryDirectory()
-        self.tmp = Path(self._dir.name)
-        self.path = _write_sample(self.tmp)
-
-    def tearDown(self):
-        self._dir.cleanup()
-
-    def test_returns_single_version_section(self):
-        result = get_version_entry("1.1.0", self.path)
-        self.assertIn("1.1.0", result)
-        self.assertNotIn("1.2.0", result)
-        self.assertNotIn("1.0.0", result)
 
 
 class IsDevVersionTest(unittest.TestCase):

@@ -28,9 +28,9 @@ HELP = CommandInfo(
 
 CHANGELOG = CommandInfo(
     command="changelog",
-    brief="/changelog - Show what changed in the current version",
-    usage="/changelog",
-    menu_description="Show what changed in the current version",
+    brief="/changelog - Show recent changelog entries",
+    usage="/changelog [n]\n\nShow the n most recent changelog entries (default 1).",
+    menu_description="Show recent changelog entries",
 )
 
 ONGA = CommandInfo(
