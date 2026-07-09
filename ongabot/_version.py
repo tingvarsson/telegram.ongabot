@@ -5,4 +5,4 @@ version (e.g. "1.2.0+dev"), marking a development build. `make release` strips t
 suffix to produce the clean release; `make post-release` re-adds it to the new base.
 """
 
-__version__ = "1.2.0+dev"
+__version__ = "1.3.0"
