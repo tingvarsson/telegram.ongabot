@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ongabot.utils.changelog import get_changelog_delta, get_version_entry
+from ongabot.utils.changelog import get_changelog_delta, get_version_entry, is_dev_version
 
 SAMPLE = """\
 # Changelog
@@ -100,6 +100,20 @@ class GetVersionEntryTest(unittest.TestCase):
         self.assertIn("1.1.0", result)
         self.assertNotIn("1.2.0", result)
         self.assertNotIn("1.0.0", result)
+
+
+class IsDevVersionTest(unittest.TestCase):
+    def test_clean_release_is_not_dev(self):
+        self.assertFalse(is_dev_version("1.2.0"))
+
+    def test_plus_dev_suffix_is_dev(self):
+        self.assertTrue(is_dev_version("1.2.0+dev"))
+
+    def test_hyphen_suffix_is_dev(self):
+        self.assertTrue(is_dev_version("1.2.0-rc1"))
+
+    def test_non_semver_is_dev(self):
+        self.assertTrue(is_dev_version("nightly"))
 
 
 if __name__ == "__main__":

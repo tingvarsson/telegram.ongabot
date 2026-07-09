@@ -13,6 +13,15 @@ CHANGELOG_PATH = Path(os.getenv("CHANGELOG_PATH", str(Path(__file__).parent.pare
 
 _VERSION_HEADER_RE = re.compile(r"^## \[([^\]]+)\]", re.MULTILINE)
 
+# A clean release version is exactly MAJOR.MINOR.PATCH. Anything else (e.g. a
+# "1.2.0+dev" build-metadata suffix) marks a development build.
+_RELEASE_VERSION_RE = re.compile(r"\d+\.\d+\.\d+")
+
+
+def is_dev_version(version: str) -> bool:
+    """Return True if version is a development build (not a clean X.Y.Z release)."""
+    return _RELEASE_VERSION_RE.fullmatch(version) is None
+
 
 def get_changelog_delta(
     old_version: str | None,
