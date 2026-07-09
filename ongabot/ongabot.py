@@ -29,7 +29,7 @@ from handler import StartCommandHandler
 from handler import UpdateEventCommandHandler
 from userdata import UserData
 from utils import log
-from utils.changelog import get_changelog_delta
+from utils.changelog import get_changelog_delta, is_dev_version
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
 
 logging.basicConfig(
@@ -123,7 +123,11 @@ async def post_init(application: Application) -> None:
     await setup_bot_metadata(application.bot)
 
     stored_version = bot_data.last_known_version
-    if stored_version is None:
+    if is_dev_version(CURRENT_VERSION):
+        # Development build: never announce and never overwrite the last known
+        # release, so the next real release still announces the full delta.
+        logger.info("Development build %s — skipping version announcement", CURRENT_VERSION)
+    elif stored_version is None:
         # First startup after version tracking was introduced; record silently
         logger.info("Initializing version tracking at %s", CURRENT_VERSION)
         bot_data.last_known_version = CURRENT_VERSION

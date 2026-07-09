@@ -233,6 +233,20 @@ class PostInitVersionTrackingTest(unittest.IsolatedAsyncioTestCase):
             await post_init(application)
         self.assertEqual(application.bot_data.last_known_version, "1.2.0")
 
+    async def test_no_announcement_on_dev_build(self):
+        application = self._make_application(stored_version="1.2.0")
+        with patch.object(ongabot, "CURRENT_VERSION", "1.2.0+dev"):
+            await post_init(application)
+        application.bot.send_message.assert_not_called()
+        self.assertEqual(application.bot_data.last_known_version, "1.2.0")
+
+    async def test_dev_build_does_not_seed_version_when_none(self):
+        application = self._make_application(stored_version=None)
+        with patch.object(ongabot, "CURRENT_VERSION", "1.2.0+dev"):
+            await post_init(application)
+        application.bot.send_message.assert_not_called()
+        self.assertIsNone(application.bot_data.last_known_version)
+
 
 if __name__ == "__main__":
     unittest.main()
