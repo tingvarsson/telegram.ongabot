@@ -10,10 +10,12 @@ from telegram.ext import Application, CallbackContext, ContextTypes, PicklePersi
 from telegram.error import TelegramError
 
 import eventcreator
+from _version import __version__ as CURRENT_VERSION
 from botdata import BotData
 from handler import AuthorizationHandler
 from handler import AuthorizeCommandHandler
 from handler import CancelEventCommandHandler
+from handler import ChangelogCommandHandler
 from handler import DeAuthorizeCommandHandler
 from handler import DeScheduleCommandHandler
 from handler import EventPollAnswerHandler
@@ -27,6 +29,7 @@ from handler import StartCommandHandler
 from handler import UpdateEventCommandHandler
 from userdata import UserData
 from utils import log
+from utils.changelog import get_changelog_delta, is_dev_version
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
 
 logging.basicConfig(
@@ -93,6 +96,21 @@ async def setup_bot_metadata(bot: Bot) -> None:
         logger.error("Failed to set bot short description: %s", e)
 
 
+async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, new_version: str) -> None:
+    """Send a version-change announcement to all authorized chats."""
+    delta = get_changelog_delta(old_version, new_version)
+    text = f"ONGAbot updated to v{new_version}!\n\n{delta}"
+    # Truncate to Telegram's 4096-character message limit
+    if len(text) > 4096:
+        text = text[:4090] + "\n..."
+    for chat_id in bot_data.authorized_chats:
+        try:
+            await bot.send_message(chat_id=chat_id, text=text)
+            logger.info("Sent version announcement to chat_id=%s", chat_id)
+        except TelegramError as e:
+            logger.error("Failed to send version announcement to chat_id=%s: %s", chat_id, e)
+
+
 async def post_init(application: Application) -> None:
     """Called after the application initializes with persistence loaded."""
     bot_data: BotData = application.bot_data
@@ -103,6 +121,20 @@ async def post_init(application: Application) -> None:
             bot_data.authorize_chat(int(raw_id.strip()))
 
     await setup_bot_metadata(application.bot)
+
+    stored_version = bot_data.last_known_version
+    if is_dev_version(CURRENT_VERSION):
+        # Development build: never announce and never overwrite the last known
+        # release, so the next real release still announces the full delta.
+        logger.info("Development build %s — skipping version announcement", CURRENT_VERSION)
+    elif stored_version is None:
+        # First startup after version tracking was introduced; record silently
+        logger.info("Initializing version tracking at %s", CURRENT_VERSION)
+        bot_data.last_known_version = CURRENT_VERSION
+    elif stored_version != CURRENT_VERSION:
+        logger.info("Version change detected: %s → %s", stored_version, CURRENT_VERSION)
+        await _announce_new_version(application.bot, bot_data, stored_version, CURRENT_VERSION)
+        bot_data.last_known_version = CURRENT_VERSION
 
     if application.job_queue is None:
         logger.error("Job queue is not available in post_init. Event cleanup jobs will not be scheduled.")
@@ -156,6 +188,7 @@ def main() -> None:
     application.add_handler(DeAuthorizeCommandHandler())
     application.add_handler(StartCommandHandler())
     application.add_handler(HelpCommandHandler())
+    application.add_handler(ChangelogCommandHandler())
     application.add_handler(OngaCommandHandler())
     application.add_handler(NewEventCommandHandler())
     application.add_handler(CancelEventCommandHandler())

@@ -16,16 +16,16 @@ class BotData:
     """
     The BotData object represent all persistent data stored for the bot
 
-    Args:
-
     Attributes:
         chats: Dict of Chat objects indexed by chat_id
         authorized_chats: Set of chat IDs allowed to use the bot
+        last_known_version: Version string of the last bot startup, used to detect upgrades
     """
 
     def __init__(self) -> None:
         self.chats: Dict[int, Chat] = {}
         self.authorized_chats: Set[int] = set()
+        self.last_known_version: str | None = None
 
     def __setstate__(self, state: Dict) -> None:
         self.__dict__.update(state)
@@ -34,6 +34,11 @@ class BotData:
             # Old chats are not authorized by default, to avoid accidentally authorizing all existing chats
             # when deploying the bot with persistence for the first time
             self.authorized_chats = set()
+        if not hasattr(self, "last_known_version"):
+            # Deployments predating version tracking are seeded with the known starting
+            # point (1.2.0, the release in which tracking shipped) instead of None, so
+            # the next real release announces the delta rather than recording silently.
+            self.last_known_version = "1.2.0"
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)

@@ -26,6 +26,13 @@ HELP = CommandInfo(
     menu_description="Get some aid in needing times",
 )
 
+CHANGELOG = CommandInfo(
+    command="changelog",
+    brief="/changelog - Show recent changelog entries",
+    usage="/changelog [n]\n\nShow the n most recent changelog entries (default 1).",
+    menu_description="Show recent changelog entries",
+)
+
 ONGA = CommandInfo(
     command="onga",
     brief="/onga - This is the way, let me show you",
@@ -154,6 +161,7 @@ BOT_DESCRIPTION = (
 # Ordered for help text assembly
 ALL_COMMANDS = [
     HELP,
+    CHANGELOG,
     ONGA,
     NEWEVENT,
     CANCELEVENT,

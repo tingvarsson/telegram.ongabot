@@ -13,7 +13,7 @@ VENV_PATH=venv
 
 export PYTHONPATH=$PYTHONPATH:./ongabot
 
-.PHONY: venv install run lint pep8 mypy black-check check black test clean docker-build docker-run release
+.PHONY: venv install run lint pep8 mypy black-check check black test clean docker-build docker-run release post-release
 
 .env:
 	@echo "Error: .env not found. Copy .env.example and fill in your values: cp .env.example .env"
@@ -28,7 +28,8 @@ install:
 	$(PIP) install -r requirements-dev.txt
 
 run: .env
-	set -a && . ./.env && set +a && $(PYTHON) ongabot/ongabot.py
+	set -a && . ./.env && set +a && \
+	CHANGELOG_PATH=$${CHANGELOG_PATH:-$(CURDIR)/CHANGELOG.md} $(PYTHON) ongabot/ongabot.py
 
 lint:
 	$(PYLINT) ongabot
@@ -64,10 +65,15 @@ docker-run: .env
 
 release: check test
 	bump-my-version bump $(PART) && \
-	NEW_VERSION=$$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' ongabot/_version.py) && \
+	NEW_VERSION=$$(python scripts/version.py --base) && \
 	python scripts/update_changelog.py $$NEW_VERSION && \
 	git add CHANGELOG.md && \
 	git commit -m "docs: update CHANGELOG for v$$NEW_VERSION" && \
 	BRANCH="release/v$$NEW_VERSION" && \
 	git push origin HEAD:refs/heads/$$BRANCH && \
 	gh pr create --title "chore: bump version to $$NEW_VERSION" --body "Release v$$NEW_VERSION" --base master --head $$BRANCH
+
+post-release:
+	@NEW_VERSION=$$(python scripts/version.py --base) && \
+	sed -i -E "s/^__version__ = \"$$NEW_VERSION\"\$$/__version__ = \"$$NEW_VERSION+dev\"/" ongabot/_version.py && \
+	echo "Set development version $$NEW_VERSION+dev in ongabot/_version.py"

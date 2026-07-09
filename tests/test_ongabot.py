@@ -1,6 +1,6 @@
 import unittest
 from datetime import date
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram.error import TelegramError
 
@@ -152,6 +152,100 @@ class SetupBotMetadataTest(unittest.IsolatedAsyncioTestCase):
         await setup_bot_metadata(bot)  # must not raise
         bot.set_my_commands.assert_called_once()
         bot.set_my_description.assert_called_once()
+
+
+class AnnounceNewVersionTest(unittest.IsolatedAsyncioTestCase):
+    async def test_sends_message_to_all_authorized_chats(self):
+        bot = AsyncMock()
+        bot_data = MagicMock()
+        bot_data.authorized_chats = {101, 202}
+
+        await ongabot._announce_new_version(bot, bot_data, "1.1.0", "1.2.0")
+
+        self.assertEqual(bot.send_message.call_count, 2)
+        sent_chat_ids = {call.kwargs["chat_id"] for call in bot.send_message.call_args_list}
+        self.assertEqual(sent_chat_ids, {101, 202})
+
+    async def test_continues_when_one_chat_raises_telegram_error(self):
+        from telegram.error import TelegramError
+
+        bot = AsyncMock()
+        bot.send_message.side_effect = [TelegramError("forbidden"), None]
+        bot_data = MagicMock()
+        bot_data.authorized_chats = {101, 202}
+
+        await ongabot._announce_new_version(bot, bot_data, "1.1.0", "1.2.0")
+
+        self.assertEqual(bot.send_message.call_count, 2)
+
+    async def test_message_contains_new_version(self):
+        bot = AsyncMock()
+        bot_data = MagicMock()
+        bot_data.authorized_chats = {101}
+
+        await ongabot._announce_new_version(bot, bot_data, "1.1.0", "1.2.0")
+
+        text = bot.send_message.call_args.kwargs["text"]
+        self.assertIn("1.2.0", text)
+
+    async def test_no_messages_sent_when_no_authorized_chats(self):
+        bot = AsyncMock()
+        bot_data = MagicMock()
+        bot_data.authorized_chats = set()
+
+        await ongabot._announce_new_version(bot, bot_data, "1.1.0", "1.2.0")
+
+        bot.send_message.assert_not_called()
+
+
+class PostInitVersionTrackingTest(unittest.IsolatedAsyncioTestCase):
+    def _make_application(self, stored_version):
+        application = MagicMock()
+        application.bot = AsyncMock()
+        application.bot_data.last_known_version = stored_version
+        application.bot_data.authorized_chats = {101}
+        application.bot_data.schedule_all_event_jobs.return_value = None
+        application.job_queue = MagicMock()
+        return application
+
+    async def test_announces_when_version_changed(self):
+        application = self._make_application(stored_version="1.1.0")
+        with patch.object(ongabot, "CURRENT_VERSION", "1.2.0"):
+            await post_init(application)
+        application.bot.send_message.assert_called_once()
+
+    async def test_no_announcement_when_version_unchanged(self):
+        application = self._make_application(stored_version="1.2.0")
+        with patch.object(ongabot, "CURRENT_VERSION", "1.2.0"):
+            await post_init(application)
+        application.bot.send_message.assert_not_called()
+
+    async def test_no_announcement_on_first_run_stores_version(self):
+        application = self._make_application(stored_version=None)
+        with patch.object(ongabot, "CURRENT_VERSION", "1.2.0"):
+            await post_init(application)
+        application.bot.send_message.assert_not_called()
+        self.assertEqual(application.bot_data.last_known_version, "1.2.0")
+
+    async def test_updates_stored_version_after_announcement(self):
+        application = self._make_application(stored_version="1.1.0")
+        with patch.object(ongabot, "CURRENT_VERSION", "1.2.0"):
+            await post_init(application)
+        self.assertEqual(application.bot_data.last_known_version, "1.2.0")
+
+    async def test_no_announcement_on_dev_build(self):
+        application = self._make_application(stored_version="1.2.0")
+        with patch.object(ongabot, "CURRENT_VERSION", "1.2.0+dev"):
+            await post_init(application)
+        application.bot.send_message.assert_not_called()
+        self.assertEqual(application.bot_data.last_known_version, "1.2.0")
+
+    async def test_dev_build_does_not_seed_version_when_none(self):
+        application = self._make_application(stored_version=None)
+        with patch.object(ongabot, "CURRENT_VERSION", "1.2.0+dev"):
+            await post_init(application)
+        application.bot.send_message.assert_not_called()
+        self.assertIsNone(application.bot_data.last_known_version)
 
 
 if __name__ == "__main__":
