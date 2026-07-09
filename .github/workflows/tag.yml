@@ -17,25 +17,17 @@ jobs:
 
       - name: Read version
         id: version
-        run: |
-          version=$(python -c "
-          import re, sys
-          m = re.search(r'__version__ = \"([^\"]+)\"', open('ongabot/_version.py').read())
-          if not m:
-              sys.exit('Could not find __version__ in ongabot/_version.py')
-          print(m.group(1))
-          ")
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(python3 scripts/version.py --base)" >> "$GITHUB_OUTPUT"
 
       - name: Tag new version
         id: tag
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Version $VERSION is a development build (not a clean release); skipping tag/release"
+          if python3 scripts/version.py --is-dev; then
+            echo "Development build (not a clean release); skipping tag/release"
             echo "is_new_version=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          VERSION="${{ steps.version.outputs.version }}"
           TAG="v$VERSION"
           if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "refs/tags/$TAG$"; then
             echo "Tag $TAG already exists, skipping release build"
