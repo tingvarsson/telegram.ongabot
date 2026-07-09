@@ -9,10 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `/changelog` command shows the changelog entry for the current bot version
-- Version number displayed in `/help` output
-- Bot posts a changelog delta message to all authorized chats when a new version is detected at startup
-- `BotData.last_known_version` persists the last-seen version across restarts
+- `/changelog [n]` shows the n most recent changelog entries (default 1)
+- On development builds, `/changelog` shows the `[Unreleased]` section
+- `/help` marks development builds with `(development build)` after the version
+- `BotData.last_known_version` persists the last-seen release across restarts
+
+### Changed
+
+- Startup version announcement is skipped on development builds and only fires on
+  clean release upgrades
+- Deployments predating version tracking are migrated to a `1.2.0` starting point so
+  the next release announces its delta
+- Development builds carry a `+dev` version suffix (e.g. `1.2.0+dev`)
 
 ## [1.2.0] - 2026-05-24
 

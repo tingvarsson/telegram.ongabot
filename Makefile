@@ -13,7 +13,7 @@ VENV_PATH=venv
 
 export PYTHONPATH=$PYTHONPATH:./ongabot
 
-.PHONY: venv install run lint pep8 mypy black-check check black test clean docker-build docker-run release
+.PHONY: venv install run lint pep8 mypy black-check check black test clean docker-build docker-run release post-release
 
 .env:
 	@echo "Error: .env not found. Copy .env.example and fill in your values: cp .env.example .env"
@@ -71,3 +71,8 @@ release: check test
 	BRANCH="release/v$$NEW_VERSION" && \
 	git push origin HEAD:refs/heads/$$BRANCH && \
 	gh pr create --title "chore: bump version to $$NEW_VERSION" --body "Release v$$NEW_VERSION" --base master --head $$BRANCH
+
+post-release:
+	@NEW_VERSION=$$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' ongabot/_version.py) && \
+	sed -i "s/^__version__ = \"$$NEW_VERSION\"/__version__ = \"$$NEW_VERSION+dev\"/" ongabot/_version.py && \
+	echo "Set development version $$NEW_VERSION+dev in ongabot/_version.py"
