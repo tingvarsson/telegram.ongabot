@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 from telegram import InlineKeyboardMarkup
 
 from ongabot.utils.statistics import (
+    AVG_PARTICIPANTS_LABEL,
     CALLBACK_DATA_PREFIX,
     DEFAULT_SORT_KEY,
     MAX_TABLE_ROWS,
@@ -340,6 +341,27 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
 
         self.assertEqual(row.played, 1)
 
+    def test_play_pct_uses_eligible_events_denominator(self):
+        alice = _make_user(1, "Alice")
+        e1 = _make_event(date(2026, 1, 1), num_slots=2, poll_answers={alice: _make_answer([0])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=2, poll_answers={alice: _make_answer([2])})  # No-op only
+        e3 = _make_event(date(2026, 1, 15), num_slots=2, poll_answers={})
+        e4 = _make_event(date(2026, 1, 22), num_slots=2, poll_answers={})
+        chat = MagicMock()
+        chat.events = {
+            date(2026, 1, 1): e1,
+            date(2026, 1, 8): e2,
+            date(2026, 1, 15): e3,
+            date(2026, 1, 22): e4,
+        }
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        # played=1 out of 4 eligible events (not out of 2 responses).
+        self.assertEqual(row.played, 1)
+        self.assertAlmostEqual(row.play_pct, 0.25)
+
 
 class SortColumnsTest(unittest.TestCase):
     def test_maybe_ordered_before_noop(self):
@@ -357,6 +379,20 @@ class SortColumnsTest(unittest.TestCase):
     def test_played_column_exists(self):
         column = next(c for c in SORT_COLUMNS if c.key == "played")
         self.assertEqual(column.button_label, "Played")
+
+    def test_resp_rate_button_label_is_response_rate(self):
+        column = next(c for c in SORT_COLUMNS if c.key == "resp_rate")
+        self.assertEqual(column.button_label, "Response Rate")
+        self.assertEqual(column.header, "Resp%")
+
+    def test_play_rate_column_exists(self):
+        column = next(c for c in SORT_COLUMNS if c.key == "play_rate")
+        self.assertEqual(column.button_label, "Played Rate")
+        self.assertEqual(column.header, "Play%")
+
+    def test_column_order_starts_resp_resprate_streak_play_playrate(self):
+        keys = [c.key for c in SORT_COLUMNS]
+        self.assertEqual(keys[:5], ["responses", "resp_rate", "streak", "played", "play_rate"])
 
 
 class FormatStatisticsTableTest(unittest.TestCase):
@@ -378,9 +414,9 @@ class FormatStatisticsTableTest(unittest.TestCase):
         self.assertIn("Chat Statistics", text)
         self.assertIn("Total Events", text)
         self.assertIn("Answered Events", text)
-        self.assertIn("Average number of Bangers", text)
+        self.assertIn("Average number of Bangers per event", text)
         self.assertIn("2.5", text)
-        self.assertIn("18.30", text)
+        self.assertIn("Slot picked - 18.30", text)
         self.assertIn("100%", text)
 
     def test_chat_table_has_no_header_row(self):
@@ -405,7 +441,7 @@ class FormatStatisticsTableTest(unittest.TestCase):
 
         chat_table = text.split("```")[1]
         lines = chat_table.strip("\n").splitlines()
-        what_width = len("Average number of Bangers")
+        what_width = len(AVG_PARTICIPANTS_LABEL)
         for line in lines:
             self.assertEqual(line[what_width], " ")
 
@@ -416,13 +452,42 @@ class FormatStatisticsTableTest(unittest.TestCase):
 
         self.assertIn("75%", text)
 
+    def test_total_events_percentage_is_always_100(self):
+        result = StatisticsResult(event_count=5, answered_events=2, avg_participants=1.0)
+
+        text = format_statistics(result)
+
+        chat_table = text.split("```")[1]
+        total_events_line = next(line for line in chat_table.splitlines() if line.startswith("Total Events"))
+        self.assertTrue(total_events_line.rstrip().endswith("100%"))
+
+    def test_avg_bangers_percentage_of_known_users(self):
+        result = StatisticsResult(
+            event_count=2,
+            answered_events=2,
+            avg_participants=2.0,
+            user_rows=[
+                UserStatRow(user=_make_user(1, "Alice"), responses=2),
+                UserStatRow(user=_make_user(2, "Bob"), responses=2),
+                UserStatRow(user=_make_user(3, "Carol"), responses=0),
+                UserStatRow(user=_make_user(4, "Dan"), responses=0),
+            ],
+        )
+
+        text = format_statistics(result)
+
+        chat_table = text.split("```")[1]
+        bangers_line = next(line for line in chat_table.splitlines() if AVG_PARTICIPANTS_LABEL in line)
+        # avg_participants=2.0 out of 4 known users -> 50%.
+        self.assertTrue(bangers_line.rstrip().endswith("50%"))
+
     def test_avg_bangers_dash_when_no_answers(self):
         result = StatisticsResult(event_count=1, answered_events=0, avg_participants=None)
 
         text = format_statistics(result)
 
         chat_table = text.split("```")[1]
-        bangers_line = next(line for line in chat_table.splitlines() if "Average number of Bangers" in line)
+        bangers_line = next(line for line in chat_table.splitlines() if AVG_PARTICIPANTS_LABEL in line)
         tokens = bangers_line.split()
         self.assertEqual(tokens[-2], "-")
         self.assertEqual(tokens[-1], "-")
