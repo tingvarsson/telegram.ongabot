@@ -150,6 +150,13 @@ DEAUTHORIZE = CommandInfo(
     menu_description="Deauthorize this chat (admins only)",
 )
 
+STATISTICS = CommandInfo(
+    command="statistics",
+    brief="/statistics - Show all-time participation statistics for this chat",
+    usage="/statistics",
+    menu_description="Show all-time participation statistics",
+)
+
 BOT_SHORT_DESCRIPTION = "ONGAbot - the only bot you'll ever need"
 
 BOT_DESCRIPTION = (
@@ -171,4 +178,5 @@ ALL_COMMANDS = [
     DESCHEDULE,
     AUTHORIZE,
     DEAUTHORIZE,
+    STATISTICS,
 ]

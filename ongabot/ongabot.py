@@ -26,6 +26,8 @@ from handler import OngaCommandHandler
 from handler import RescheduleCommandHandler
 from handler import ScheduleCommandHandler
 from handler import StartCommandHandler
+from handler import StatisticsCommandHandler
+from handler import StatisticsSortCallbackHandler
 from handler import UpdateEventCommandHandler
 from userdata import UserData
 from utils import log
@@ -198,6 +200,8 @@ def main() -> None:
     application.add_handler(DeScheduleCommandHandler())
     application.add_handler(UpdateEventCommandHandler())
     application.add_handler(RescheduleCommandHandler())
+    application.add_handler(StatisticsCommandHandler())
+    application.add_handler(StatisticsSortCallbackHandler())
     application.add_error_handler(error)
 
     # Start the bot

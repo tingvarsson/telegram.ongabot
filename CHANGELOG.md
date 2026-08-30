@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/statistics` shows all-time participation statistics in two sections: a
+  Chat Statistics table (total/answered events with a % of total, average
+  number of Bangers per event with a % of known chat users, and per-slot
+  popularity, all in one aligned table with no header row) and a sortable
+  User Statistics table with one row per user (response count and rate,
+  current streak, "played" count and rate for actual slot picks, total
+  slots picked, Maybe Baby/No-op counts, and a "didn't bother answer"
+  count). Tap the buttons below the user table to re-sort it by any column.
+
 ## [1.3.1] - 2026-08-30
 
 ### Fixed
