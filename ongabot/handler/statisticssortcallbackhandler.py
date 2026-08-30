@@ -36,9 +36,8 @@ async def callback(update: Update, context: CallbackContext) -> None:
     sort_by = query.data.removeprefix(f"{CALLBACK_DATA_PREFIX}:")
     chat_id = update.effective_chat.id
     chat = context.bot_data.get_chat(chat_id)
-    chat_member_count = await context.bot.get_chat_member_count(chat_id)
 
-    text, keyboard = render_statistics_message(chat, chat_member_count, sort_by=sort_by)
+    text, keyboard = render_statistics_message(chat, sort_by=sort_by)
 
     try:
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=keyboard)

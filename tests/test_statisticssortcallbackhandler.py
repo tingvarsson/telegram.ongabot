@@ -18,7 +18,6 @@ class StatisticsSortCallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
         context = MagicMock()
         chat = MagicMock()
         context.bot_data.get_chat.return_value = chat
-        context.bot.get_chat_member_count = AsyncMock(return_value=42)
 
         return update, context, chat
 
@@ -43,8 +42,7 @@ class StatisticsSortCallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             await callback(update, context)
 
         context.bot_data.get_chat.assert_called_once_with(123)
-        context.bot.get_chat_member_count.assert_awaited_once_with(123)
-        render.assert_called_once_with(chat, 42, sort_by="streak")
+        render.assert_called_once_with(chat, sort_by="streak")
 
     async def test_edits_message_with_rendered_text_and_keyboard(self):
         update, context, _chat = self._make()

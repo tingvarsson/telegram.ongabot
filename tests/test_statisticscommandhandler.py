@@ -15,11 +15,10 @@ class StatisticsCommandHandlerTest(unittest.IsolatedAsyncioTestCase):
         context = MagicMock()
         chat = MagicMock()
         context.bot_data.get_chat.return_value = chat
-        context.bot.get_chat_member_count = AsyncMock(return_value=42)
 
         return update, context, chat
 
-    async def test_looks_up_chat_and_member_count_for_effective_chat(self):
+    async def test_looks_up_chat_for_effective_chat(self):
         update, context, _chat = self._make()
 
         with patch(
@@ -29,8 +28,7 @@ class StatisticsCommandHandlerTest(unittest.IsolatedAsyncioTestCase):
             await callback(update, context)
 
         context.bot_data.get_chat.assert_called_once_with(123)
-        context.bot.get_chat_member_count.assert_awaited_once_with(123)
-        render.assert_called_once_with(_chat, 42)
+        render.assert_called_once_with(_chat)
 
     async def test_replies_with_rendered_text_and_keyboard(self):
         update, context, _chat = self._make()

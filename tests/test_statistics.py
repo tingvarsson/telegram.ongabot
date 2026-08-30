@@ -12,6 +12,7 @@ from ongabot.utils.statistics import (
     NO_OP_TEXT,
     MAYBE_TEXT,
     SORT_COLUMNS,
+    SlotStat,
     StatisticsResult,
     UserStatRow,
     build_sort_keyboard,
@@ -65,12 +66,17 @@ def _row_for(result: StatisticsResult, user_id: int) -> UserStatRow:
     return row
 
 
+def _slot_for(result: StatisticsResult, text: str) -> SlotStat:
+    (slot,) = (s for s in result.slot_stats if s.text == text)
+    return slot
+
+
 class ComputeStatisticsEmptyTest(unittest.TestCase):
     def test_no_events_returns_empty_result(self):
         chat = MagicMock()
         chat.events = {}
 
-        result = compute_statistics(chat, chat_member_count=10)
+        result = compute_statistics(chat)
 
         self.assertEqual(result, StatisticsResult())
 
@@ -85,10 +91,117 @@ class ComputeStatisticsEmptyTest(unittest.TestCase):
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): event}
 
-        result = compute_statistics(chat, chat_member_count=10)
+        result = compute_statistics(chat)
 
         self.assertEqual(result.event_count, 0)
         self.assertEqual(result.user_rows, [])
+
+
+class ComputeStatisticsChatSummaryTest(unittest.TestCase):
+    def test_answered_events_counts_events_with_at_least_one_response(self):
+        alice = _make_user(1, "Alice")
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers={alice: _make_answer([0])})
+        e3 = _make_event(date(2026, 1, 15), num_slots=1, poll_answers={})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2, date(2026, 1, 15): e3}
+
+        result = compute_statistics(chat)
+
+        self.assertEqual(result.event_count, 3)
+        self.assertEqual(result.answered_events, 2)
+
+    def test_avg_participants_averages_over_answered_events_only(self):
+        alice = _make_user(1, "Alice")
+        bob = _make_user(2, "Bob")
+        carol = _make_user(3, "Carol")
+        dan = _make_user(4, "Dan")
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0]), bob: _make_answer([0])})
+        e2 = _make_event(
+            date(2026, 1, 8),
+            num_slots=1,
+            poll_answers={
+                alice: _make_answer([0]),
+                bob: _make_answer([0]),
+                carol: _make_answer([0]),
+                dan: _make_answer([0]),
+            },
+        )
+        e3 = _make_event(date(2026, 1, 15), num_slots=1, poll_answers={})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2, date(2026, 1, 15): e3}
+
+        result = compute_statistics(chat)
+
+        # (2 + 4) / 2 answered events = 3.0, not / 3 total events.
+        self.assertAlmostEqual(result.avg_participants, 3.0)
+
+    def test_avg_participants_none_when_no_events_answered(self):
+        event = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): event}
+
+        result = compute_statistics(chat)
+
+        self.assertEqual(result.answered_events, 0)
+        self.assertIsNone(result.avg_participants)
+
+
+class ComputeStatisticsSlotStatsTest(unittest.TestCase):
+    def test_total_picks_vs_event_pct_differ_when_multiple_users_pick_same_slot(self):
+        alice = _make_user(1, "Alice")
+        bob = _make_user(2, "Bob")
+        e1 = _make_event(
+            date(2026, 1, 1),
+            num_slots=2,
+            poll_answers={alice: _make_answer([0]), bob: _make_answer([0])},
+            slot_texts=["18.30", "19.10"],
+        )
+        e2 = _make_event(date(2026, 1, 8), num_slots=2, poll_answers={}, slot_texts=["18.30", "19.10"])
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
+
+        result = compute_statistics(chat)
+        slot = _slot_for(result, "18.30")
+
+        self.assertEqual(result.answered_events, 1)
+        self.assertEqual(slot.total_picks, 2)  # both alice and bob picked it
+        self.assertAlmostEqual(slot.event_pct, 1.0)  # picked in 1 of 1 answered events
+
+    def test_slot_stats_sorted_by_text(self):
+        alice = _make_user(1, "Alice")
+        event = _make_event(
+            date(2026, 1, 1),
+            num_slots=2,
+            poll_answers={alice: _make_answer([0, 1])},
+            slot_texts=["19.10", "18.30"],
+        )
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): event}
+
+        result = compute_statistics(chat)
+
+        self.assertEqual([s.text for s in result.slot_stats], ["18.30", "19.10"])
+
+    def test_no_op_and_maybe_excluded_from_slot_stats(self):
+        alice = _make_user(1, "Alice")
+        event = _make_event(date(2026, 1, 1), num_slots=2, poll_answers={alice: _make_answer([2])})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): event}
+
+        result = compute_statistics(chat)
+
+        self.assertEqual(result.slot_stats, [])
+
+    def test_no_slot_picks_yields_empty_slot_stats(self):
+        alice = _make_user(1, "Alice")
+        event = _make_event(date(2026, 1, 1), num_slots=2, poll_answers={alice: _make_answer([])})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): event}
+
+        result = compute_statistics(chat)
+
+        self.assertEqual(result.slot_stats, [])
 
 
 class ComputeStatisticsUserRowsTest(unittest.TestCase):
@@ -100,7 +213,7 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2, date(2026, 1, 15): e3}
 
-        result = compute_statistics(chat, chat_member_count=10)
+        result = compute_statistics(chat)
         row = _row_for(result, 1)
 
         # Eligible events = [e2, e3] (2), not all 3 - alice wasn't seen before e2.
@@ -116,7 +229,7 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2, date(2026, 1, 15): e3}
 
-        result = compute_statistics(chat, chat_member_count=10)
+        result = compute_statistics(chat)
         row = _row_for(result, 1)
 
         self.assertEqual(row.responses, 1)
@@ -133,7 +246,7 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         chat = MagicMock()
         chat.events = events
 
-        result = compute_statistics(chat, chat_member_count=10)
+        result = compute_statistics(chat)
         row = _row_for(result, 1)
 
         self.assertAlmostEqual(row.response_pct, 0.25)
@@ -144,7 +257,7 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): event}
 
-        result = compute_statistics(chat, chat_member_count=10)
+        result = compute_statistics(chat)
         row = _row_for(result, 1)
 
         self.assertEqual(row.responses, 0)
@@ -157,7 +270,7 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): event}
 
-        result = compute_statistics(chat, chat_member_count=10)
+        result = compute_statistics(chat)
 
         self.assertEqual(result.user_rows, [])
 
@@ -168,7 +281,7 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
 
-        result = compute_statistics(chat, chat_member_count=10)
+        result = compute_statistics(chat)
         row = _row_for(result, 1)
 
         self.assertEqual(row.slots_total, 3)
@@ -182,7 +295,7 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
 
-        result = compute_statistics(chat, chat_member_count=10)
+        result = compute_statistics(chat)
         row = _row_for(result, 1)
 
         self.assertEqual(row.streak, 2)
@@ -198,62 +311,10 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): event}
 
-        result = compute_statistics(chat, chat_member_count=10)
+        result = compute_statistics(chat)
 
         self.assertEqual(_row_for(result, 1).no_op, 1)
         self.assertEqual(_row_for(result, 2).maybe, 1)
-
-
-class ComputeStatisticsTopSlotTest(unittest.TestCase):
-    def test_most_popular_slot_excludes_no_op_and_maybe(self):
-        alice = _make_user(1, "Alice")
-        bob = _make_user(2, "Bob")
-        event = _make_event(
-            date(2026, 1, 1),
-            num_slots=2,
-            poll_answers={alice: _make_answer([0]), bob: _make_answer([2])},  # bob picks No-op
-            slot_texts=["18.30", "19.10"],
-        )
-        chat = MagicMock()
-        chat.events = {date(2026, 1, 1): event}
-
-        result = compute_statistics(chat, chat_member_count=10)
-
-        self.assertEqual(result.top_slot, ("18.30", 1))
-
-    def test_no_slot_votes_yields_none_top_slot(self):
-        alice = _make_user(1, "Alice")
-        event = _make_event(date(2026, 1, 1), num_slots=2, poll_answers={alice: _make_answer([2])})
-        chat = MagicMock()
-        chat.events = {date(2026, 1, 1): event}
-
-        result = compute_statistics(chat, chat_member_count=10)
-
-        self.assertIsNone(result.top_slot)
-
-
-class ComputeStatisticsParticipationRateTest(unittest.TestCase):
-    def test_participation_rate_averages_respondents_over_effective_member_count(self):
-        alice = _make_user(1, "Alice")
-        bob = _make_user(2, "Bob")
-        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0]), bob: _make_answer([0])})
-        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers={})
-        chat = MagicMock()
-        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
-
-        result = compute_statistics(chat, chat_member_count=11)
-
-        self.assertAlmostEqual(result.participation_rate, 0.1)
-
-    def test_participation_rate_none_when_effective_member_count_not_positive(self):
-        alice = _make_user(1, "Alice")
-        event = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])})
-        chat = MagicMock()
-        chat.events = {date(2026, 1, 1): event}
-
-        result = compute_statistics(chat, chat_member_count=1)
-
-        self.assertIsNone(result.participation_rate)
 
 
 class FormatStatisticsTableTest(unittest.TestCase):
@@ -261,14 +322,52 @@ class FormatStatisticsTableTest(unittest.TestCase):
         text = format_statistics(StatisticsResult())
         self.assertIn("No event history", text)
 
+    def test_chat_summary_table_present(self):
+        result = StatisticsResult(
+            event_count=3,
+            answered_events=2,
+            avg_participants=2.5,
+            slot_stats=[SlotStat(text="18.30", total_picks=3, event_pct=1.0)],
+            user_rows=[UserStatRow(user=_make_user(1, "Alice"), responses=1)],
+        )
+
+        text = format_statistics(result)
+
+        self.assertIn("Chat Statistics", text)
+        self.assertIn("Total Events", text)
+        self.assertIn("Answered Events", text)
+        self.assertIn("Avg Participants", text)
+        self.assertIn("2.5", text)
+        self.assertIn("18.30", text)
+        self.assertIn("100%", text)
+
+    def test_avg_participants_dash_when_none(self):
+        result = StatisticsResult(event_count=1, answered_events=0, avg_participants=None)
+
+        text = format_statistics(result)
+
+        self.assertIn("Avg Participants", text)
+        self.assertIn("-", text)
+        self.assertIn("No slot picks yet", text)
+
     def test_empty_user_rows_shows_no_participation_message(self):
         text = format_statistics(StatisticsResult(event_count=1))
         self.assertIn("No participation data", text)
 
+    def test_user_statistics_header_and_sort_caption_present(self):
+        result = StatisticsResult(event_count=1, user_rows=[UserStatRow(user=_make_user(1, "Alice"), responses=1)])
+
+        text = format_statistics(result)
+
+        self.assertIn("User Statistics", text)
+        self.assertIn("sort", text.lower())
+        sort_index = text.lower().index("sort")
+        self.assertIn("User Statistics", text[sort_index:])
+
     def test_table_wrapped_in_fenced_code_block(self):
         result = StatisticsResult(event_count=1, user_rows=[UserStatRow(user=_make_user(1, "Alice"), responses=1)])
         text = format_statistics(result)
-        self.assertEqual(text.count("```"), 2)
+        self.assertGreaterEqual(text.count("```"), 2)
 
     def test_default_sort_is_by_responses_descending(self):
         alice = UserStatRow(user=_make_user(1, "Alice"), responses=2, streak=1)
@@ -303,8 +402,8 @@ class FormatStatisticsTableTest(unittest.TestCase):
 
         text = format_statistics(result)
 
-        table_body = text.split("```")[1]
-        data_lines = table_body.strip("\n").splitlines()[1:]  # drop header line
+        user_table = text.split("```")[-2]
+        data_lines = user_table.strip("\n").splitlines()[1:]  # drop header line
         self.assertEqual(len(data_lines), MAX_TABLE_ROWS)
 
     def test_long_name_is_truncated_with_dot_marker(self):
@@ -339,7 +438,7 @@ class RenderStatisticsMessageTest(unittest.TestCase):
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): event}
 
-        text, keyboard = render_statistics_message(chat, chat_member_count=10)
+        text, keyboard = render_statistics_message(chat)
 
         self.assertIn("Chat Statistics", text)
         self.assertIsInstance(keyboard, InlineKeyboardMarkup)

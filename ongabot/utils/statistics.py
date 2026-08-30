@@ -37,12 +37,22 @@ class UserStatRow:
 
 
 @dataclass
+class SlotStat:
+    """One time-slot's popularity across a chat's event history."""
+
+    text: str
+    total_picks: int
+    event_pct: float  # fraction of answered_events in which this slot got >=1 pick
+
+
+@dataclass
 class StatisticsResult:
     """Computed chat-wide statistics, ready for formatting into a message."""
 
     event_count: int = 0
-    participation_rate: Optional[float] = None
-    top_slot: Optional[Tuple[str, int]] = None
+    answered_events: int = 0
+    avg_participants: Optional[float] = None
+    slot_stats: List[SlotStat] = field(default_factory=list)
     user_rows: List[UserStatRow] = field(default_factory=list)
 
 
@@ -52,6 +62,7 @@ class _Accumulator:
 
     total_responses: Dict[int, int] = field(default_factory=dict)
     slot_text_counts: Dict[str, int] = field(default_factory=dict)
+    slot_event_counts: Dict[str, int] = field(default_factory=dict)
     user_slot_totals: Dict[int, int] = field(default_factory=dict)
     no_op_counts: Dict[int, int] = field(default_factory=dict)
     maybe_counts: Dict[int, int] = field(default_factory=dict)
@@ -66,6 +77,7 @@ def _tally_event(event: Event, index: int, acc: _Accumulator) -> int:
     each user's first-appearance index (including a retracted-vote-only appearance).
     """
     respondents = 0
+    slots_seen_this_event = set()
     for user, answer in event.poll_answers.items():
         acc.user_by_id[user.id] = user
         acc.first_seen_index.setdefault(user.id, index)
@@ -78,19 +90,27 @@ def _tally_event(event: Event, index: int, acc: _Accumulator) -> int:
             if option_id < event.num_slots:
                 acc.slot_text_counts[option_text] = acc.slot_text_counts.get(option_text, 0) + 1
                 acc.user_slot_totals[user.id] = acc.user_slot_totals.get(user.id, 0) + 1
+                slots_seen_this_event.add(option_text)
             elif option_text == NO_OP_TEXT:
                 acc.no_op_counts[user.id] = acc.no_op_counts.get(user.id, 0) + 1
             elif option_text == MAYBE_TEXT:
                 acc.maybe_counts[user.id] = acc.maybe_counts.get(user.id, 0) + 1
+    for text in slots_seen_this_event:
+        acc.slot_event_counts[text] = acc.slot_event_counts.get(text, 0) + 1
     return respondents
 
 
-def _compute_participation_rate(respondent_counts: List[int], chat_member_count: int) -> Optional[float]:
-    """Average respondents per event, divided by today's member count (excluding the bot itself)."""
-    effective_member_count = chat_member_count - 1
-    if effective_member_count <= 0:
-        return None
-    return (sum(respondent_counts) / len(respondent_counts)) / effective_member_count
+def _build_slot_stats(acc: _Accumulator, answered_events: int) -> List[SlotStat]:
+    """Build one SlotStat per slot ever picked, sorted by text (zero-padded HH.MM sorts chronologically)."""
+    stats = [
+        SlotStat(
+            text=text,
+            total_picks=count,
+            event_pct=(acc.slot_event_counts.get(text, 0) / answered_events) if answered_events > 0 else 0.0,
+        )
+        for text, count in acc.slot_text_counts.items()
+    ]
+    return sorted(stats, key=lambda s: s.text)
 
 
 def _build_user_rows(acc: _Accumulator, num_events: int, streaks: Dict[int, int]) -> List[UserStatRow]:
@@ -116,15 +136,15 @@ def _build_user_rows(acc: _Accumulator, num_events: int, streaks: Dict[int, int]
     return rows
 
 
-def compute_statistics(chat: Chat, chat_member_count: int) -> StatisticsResult:
+def compute_statistics(chat: Chat) -> StatisticsResult:
     """Compute all-time, chat-wide participation statistics from a chat's event history.
 
     Cancelled events are excluded entirely (a user whose only appearance was in a
     cancelled event gets no row). Retracted votes (empty option_ids) count toward a
     user's first-appearance/eligibility but not toward their response count. Streaks are
-    read from the latest event's already-maintained user_streaks. Participation rate
-    approximates historical chat membership with today's member count, since no
-    historical snapshot exists.
+    read from the latest event's already-maintained user_streaks. avg_participants
+    averages respondent counts over answered events only, not diluted by zero-response
+    events.
     """
     events = sorted((e for e in chat.events.values() if not e.cancelled), key=lambda e: e.event_date)
     if not events:
@@ -134,7 +154,9 @@ def compute_statistics(chat: Chat, chat_member_count: int) -> StatisticsResult:
     respondent_counts = [_tally_event(event, index, acc) for index, event in enumerate(events)]
 
     latest_event = events[-1]
-    top_slot = max(acc.slot_text_counts.items(), key=lambda kv: kv[1]) if acc.slot_text_counts else None
+    answered_events = sum(1 for count in respondent_counts if count > 0)
+    avg_participants = (sum(respondent_counts) / answered_events) if answered_events > 0 else None
+    slot_stats = _build_slot_stats(acc, answered_events)
     user_rows = _build_user_rows(acc, len(events), dict(latest_event.user_streaks))
 
     _logger.debug(
@@ -146,8 +168,9 @@ def compute_statistics(chat: Chat, chat_member_count: int) -> StatisticsResult:
 
     return StatisticsResult(
         event_count=len(events),
-        participation_rate=_compute_participation_rate(respondent_counts, chat_member_count),
-        top_slot=top_slot,
+        answered_events=answered_events,
+        avg_participants=avg_participants,
+        slot_stats=slot_stats,
         user_rows=user_rows,
     )
 
@@ -198,22 +221,44 @@ def _format_table(rows: List[UserStatRow], sort_by: str) -> str:
     return "```\n" + "\n".join(lines) + "\n```"
 
 
+_SUMMARY_LABEL_WIDTH = len("Answered Events")
+_SLOT_TEXT_WIDTH = 6
+_SLOT_PICKS_WIDTH = 5
+_SLOT_PCT_WIDTH = 4
+
+
+def _format_chat_summary_table(result: StatisticsResult) -> str:
+    avg_text = f"{result.avg_participants:.1f}" if result.avg_participants is not None else "-"
+    lines = [
+        f"{'Total Events'.ljust(_SUMMARY_LABEL_WIDTH)} {result.event_count}",
+        f"{'Answered Events'.ljust(_SUMMARY_LABEL_WIDTH)} {result.answered_events}",
+        f"{'Avg Participants'.ljust(_SUMMARY_LABEL_WIDTH)} {avg_text}",
+    ]
+    return "```\n" + "\n".join(lines) + "\n```"
+
+
+def _format_slot_table(slot_stats: List[SlotStat]) -> str:
+    header = f"{'Slot'.ljust(_SLOT_TEXT_WIDTH)} {'Picks'.rjust(_SLOT_PICKS_WIDTH)} {'%'.rjust(_SLOT_PCT_WIDTH)}"
+    lines = [header]
+    for slot in slot_stats:
+        pct_text = f"{slot.event_pct * 100:.0f}%"
+        picks_text = str(slot.total_picks).rjust(_SLOT_PICKS_WIDTH)
+        lines.append(f"{slot.text.ljust(_SLOT_TEXT_WIDTH)} {picks_text} {pct_text.rjust(_SLOT_PCT_WIDTH)}")
+    return "```\n" + "\n".join(lines) + "\n```"
+
+
 def format_statistics(result: StatisticsResult, sort_by: str = DEFAULT_SORT_KEY) -> str:
     """Format a StatisticsResult into a MarkdownV2 message for /statistics."""
     if result.event_count == 0:
         return "No event history yet for this chat\\!"
 
-    sections = [f"*__Chat Statistics__* \\(across {result.event_count} tracked events\\)"]
+    sections = ["*__Chat Statistics__*", _format_chat_summary_table(result)]
+    sections.append(_format_slot_table(result.slot_stats) if result.slot_stats else "No slot picks yet\\.")
 
-    if result.participation_rate is not None:
-        sections.append(f"Average participation: *{result.participation_rate * 100:.0f}%*")
-
-    if result.top_slot is not None:
-        slot_text, count = result.top_slot
-        sections.append(f"*Most Popular Slot:* {escape_markdown(slot_text, version=2)} \\({count} picks\\)")
-
+    sections.append("*__User Statistics__*")
     if result.user_rows:
         sections.append(_format_table(result.user_rows, sort_by))
+        sections.append("_Tap a button to sort User Statistics by that column_")
     else:
         sections.append("No participation data yet\\.")
 
@@ -232,9 +277,7 @@ def build_sort_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
-def render_statistics_message(
-    chat: Chat, chat_member_count: int, sort_by: str = DEFAULT_SORT_KEY
-) -> Tuple[str, InlineKeyboardMarkup]:
+def render_statistics_message(chat: Chat, sort_by: str = DEFAULT_SORT_KEY) -> Tuple[str, InlineKeyboardMarkup]:
     """Compute statistics fresh and render the (text, keyboard) pair for a /statistics reply or edit."""
-    result = compute_statistics(chat, chat_member_count)
+    result = compute_statistics(chat)
     return format_statistics(result, sort_by=sort_by), build_sort_keyboard()

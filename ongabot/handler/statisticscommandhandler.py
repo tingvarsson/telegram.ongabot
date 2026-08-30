@@ -24,7 +24,6 @@ async def callback(update: Update, context: CallbackContext) -> None:
     """Reply with all-time participation statistics for this chat."""
     chat_id = update.effective_chat.id
     chat = context.bot_data.get_chat(chat_id)
-    chat_member_count = await context.bot.get_chat_member_count(chat_id)
 
-    text, keyboard = render_statistics_message(chat, chat_member_count)
+    text, keyboard = render_statistics_message(chat)
     await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=keyboard)

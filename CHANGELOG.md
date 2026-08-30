@@ -9,12 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `/statistics` shows all-time, chat-wide participation statistics: a sortable
+- `/statistics` shows all-time participation statistics in two sections: a
+  Chat Statistics table (total/answered events, average participants per
+  answered event, and per-slot popularity) and a sortable User Statistics
   table with one row per user (responses, response rate, current streak,
-  slots picked, No-op/Maybe Baby counts, and a "didn't even bother" count),
-  plus chat-wide summary lines for tracked events, average participation, and
-  the most popular time slot. Tap the buttons below the table to re-sort it
-  by any column.
+  slots picked, No-op/Maybe Baby counts, and a "didn't even bother" count).
+  Tap the buttons below the user table to re-sort it by any column.
 
 ## [1.3.1] - 2026-08-30
 
