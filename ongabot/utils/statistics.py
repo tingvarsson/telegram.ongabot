@@ -27,6 +27,7 @@ class UserStatRow:
 
     user: User
     responses: int = 0
+    played: int = 0
     response_pct: float = 0.0
     streak: int = 0
     slots_total: int = 0
@@ -61,6 +62,7 @@ class _Accumulator:
     """Mutable per-user/per-slot tallies built while iterating events in event_date order."""
 
     total_responses: Dict[int, int] = field(default_factory=dict)
+    user_played_counts: Dict[int, int] = field(default_factory=dict)
     slot_text_counts: Dict[str, int] = field(default_factory=dict)
     slot_event_counts: Dict[str, int] = field(default_factory=dict)
     user_slot_totals: Dict[int, int] = field(default_factory=dict)
@@ -85,16 +87,20 @@ def _tally_event(event: Event, index: int, acc: _Accumulator) -> int:
             continue
         respondents += 1
         acc.total_responses[user.id] = acc.total_responses.get(user.id, 0) + 1
+        played_this_event = False
         for option_id in answer.option_ids:
             option_text = event.poll.options[option_id].text
             if option_id < event.num_slots:
                 acc.slot_text_counts[option_text] = acc.slot_text_counts.get(option_text, 0) + 1
                 acc.user_slot_totals[user.id] = acc.user_slot_totals.get(user.id, 0) + 1
                 slots_seen_this_event.add(option_text)
+                played_this_event = True
             elif option_text == NO_OP_TEXT:
                 acc.no_op_counts[user.id] = acc.no_op_counts.get(user.id, 0) + 1
             elif option_text == MAYBE_TEXT:
                 acc.maybe_counts[user.id] = acc.maybe_counts.get(user.id, 0) + 1
+        if played_this_event:
+            acc.user_played_counts[user.id] = acc.user_played_counts.get(user.id, 0) + 1
     for text in slots_seen_this_event:
         acc.slot_event_counts[text] = acc.slot_event_counts.get(text, 0) + 1
     return respondents
@@ -124,6 +130,7 @@ def _build_user_rows(acc: _Accumulator, num_events: int, streaks: Dict[int, int]
             UserStatRow(
                 user=user,
                 responses=responses,
+                played=acc.user_played_counts.get(user_id, 0),
                 response_pct=(responses / eligible) if eligible > 0 else 0.0,
                 streak=streaks.get(user_id, 0),
                 slots_total=slots_total,
@@ -189,13 +196,14 @@ class _Column:
 
 SORT_COLUMNS: List[_Column] = [
     _Column("responses", "Resp", 4, "Responses", lambda r: r.responses, lambda r: str(r.responses)),
+    _Column("played", "Play", 4, "Played", lambda r: r.played, lambda r: str(r.played)),
     _Column("rate", "Rate%", 5, "Rate %", lambda r: r.response_pct, lambda r: f"{r.response_pct * 100:.0f}%"),
     _Column("streak", "Strk", 4, "Streak", lambda r: r.streak, lambda r: str(r.streak)),
-    _Column("slots", "Slot", 4, "Slots", lambda r: r.slots_total, lambda r: str(r.slots_total)),
+    _Column("slots", "Slot", 4, "Total Slots", lambda r: r.slots_total, lambda r: str(r.slots_total)),
     _Column("avg", " Avg", 4, "Avg Slots", lambda r: r.slots_avg, lambda r: f"{r.slots_avg:.1f}"),
-    _Column("noop", "NoOp", 4, "No-op", lambda r: r.no_op, lambda r: str(r.no_op)),
     _Column("maybe", " May", 4, "Maybe", lambda r: r.maybe, lambda r: str(r.maybe)),
-    _Column("bother", " DNB", 4, "Didn't Bother", lambda r: r.didnt_bother, lambda r: str(r.didnt_bother)),
+    _Column("noop", "NoOp", 4, "No-op", lambda r: r.no_op, lambda r: str(r.no_op)),
+    _Column("bother", " DNB", 4, "Didn't Bother Answer", lambda r: r.didnt_bother, lambda r: str(r.didnt_bother)),
 ]
 _COLUMNS_BY_KEY: Dict[str, _Column] = {c.key: c for c in SORT_COLUMNS}
 DEFAULT_SORT_KEY = "responses"
@@ -221,29 +229,30 @@ def _format_table(rows: List[UserStatRow], sort_by: str) -> str:
     return "```\n" + "\n".join(lines) + "\n```"
 
 
-_SUMMARY_LABEL_WIDTH = len("Answered Events")
-_SLOT_TEXT_WIDTH = 6
-_SLOT_PICKS_WIDTH = 5
-_SLOT_PCT_WIDTH = 4
+AVG_PARTICIPANTS_LABEL = "Average number of Bangers"
 
 
-def _format_chat_summary_table(result: StatisticsResult) -> str:
+def _chat_stat_rows(result: StatisticsResult) -> List[Tuple[str, str, str]]:
+    """Build (what, #, %) rows for the merged chat table: 3 summary rows, then one per slot."""
+    answered_pct = f"{result.answered_events / result.event_count * 100:.0f}%" if result.event_count > 0 else "-"
     avg_text = f"{result.avg_participants:.1f}" if result.avg_participants is not None else "-"
-    lines = [
-        f"{'Total Events'.ljust(_SUMMARY_LABEL_WIDTH)} {result.event_count}",
-        f"{'Answered Events'.ljust(_SUMMARY_LABEL_WIDTH)} {result.answered_events}",
-        f"{'Avg Participants'.ljust(_SUMMARY_LABEL_WIDTH)} {avg_text}",
+    rows = [
+        ("Total Events", str(result.event_count), "-"),
+        ("Answered Events", str(result.answered_events), answered_pct),
+        (AVG_PARTICIPANTS_LABEL, avg_text, "-"),
     ]
-    return "```\n" + "\n".join(lines) + "\n```"
+    for slot in result.slot_stats:
+        rows.append((slot.text, str(slot.total_picks), f"{slot.event_pct * 100:.0f}%"))
+    return rows
 
 
-def _format_slot_table(slot_stats: List[SlotStat]) -> str:
-    header = f"{'Slot'.ljust(_SLOT_TEXT_WIDTH)} {'Picks'.rjust(_SLOT_PICKS_WIDTH)} {'%'.rjust(_SLOT_PCT_WIDTH)}"
-    lines = [header]
-    for slot in slot_stats:
-        pct_text = f"{slot.event_pct * 100:.0f}%"
-        picks_text = str(slot.total_picks).rjust(_SLOT_PICKS_WIDTH)
-        lines.append(f"{slot.text.ljust(_SLOT_TEXT_WIDTH)} {picks_text} {pct_text.rjust(_SLOT_PCT_WIDTH)}")
+def _format_chat_table(result: StatisticsResult) -> str:
+    """Format the merged Chat Statistics table: three columns (what, #, %), no header row."""
+    rows = _chat_stat_rows(result)
+    what_width = max(len(what) for what, _, _ in rows)
+    value_width = max(len(value) for _, value, _ in rows)
+    pct_width = max(len(pct) for _, _, pct in rows)
+    lines = [f"{what.ljust(what_width)} {value.rjust(value_width)} {pct.rjust(pct_width)}" for what, value, pct in rows]
     return "```\n" + "\n".join(lines) + "\n```"
 
 
@@ -252,8 +261,7 @@ def format_statistics(result: StatisticsResult, sort_by: str = DEFAULT_SORT_KEY)
     if result.event_count == 0:
         return "No event history yet for this chat\\!"
 
-    sections = ["*__Chat Statistics__*", _format_chat_summary_table(result)]
-    sections.append(_format_slot_table(result.slot_stats) if result.slot_stats else "No slot picks yet\\.")
+    sections = ["*__Chat Statistics__*", _format_chat_table(result)]
 
     sections.append("*__User Statistics__*")
     if result.user_rows:

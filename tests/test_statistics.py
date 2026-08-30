@@ -316,13 +316,55 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         self.assertEqual(_row_for(result, 1).no_op, 1)
         self.assertEqual(_row_for(result, 2).maybe, 1)
 
+    def test_played_counts_events_with_at_least_one_slot_pick(self):
+        alice = _make_user(1, "Alice")
+        e1 = _make_event(date(2026, 1, 1), num_slots=2, poll_answers={alice: _make_answer([0])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=2, poll_answers={alice: _make_answer([2])})  # No-op only
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.responses, 2)
+        self.assertEqual(row.played, 1)
+
+    def test_played_counts_once_per_event_even_with_multiple_slots(self):
+        alice = _make_user(1, "Alice")
+        event = _make_event(date(2026, 1, 1), num_slots=3, poll_answers={alice: _make_answer([0, 1])})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): event}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.played, 1)
+
+
+class SortColumnsTest(unittest.TestCase):
+    def test_maybe_ordered_before_noop(self):
+        keys = [c.key for c in SORT_COLUMNS]
+        self.assertLess(keys.index("maybe"), keys.index("noop"))
+
+    def test_slots_button_label_is_total_slots(self):
+        column = next(c for c in SORT_COLUMNS if c.key == "slots")
+        self.assertEqual(column.button_label, "Total Slots")
+
+    def test_bother_button_label_is_didnt_bother_answer(self):
+        column = next(c for c in SORT_COLUMNS if c.key == "bother")
+        self.assertEqual(column.button_label, "Didn't Bother Answer")
+
+    def test_played_column_exists(self):
+        column = next(c for c in SORT_COLUMNS if c.key == "played")
+        self.assertEqual(column.button_label, "Played")
+
 
 class FormatStatisticsTableTest(unittest.TestCase):
     def test_no_events_message(self):
         text = format_statistics(StatisticsResult())
         self.assertIn("No event history", text)
 
-    def test_chat_summary_table_present(self):
+    def test_chat_table_merges_summary_and_slot_rows(self):
         result = StatisticsResult(
             event_count=3,
             answered_events=2,
@@ -336,19 +378,54 @@ class FormatStatisticsTableTest(unittest.TestCase):
         self.assertIn("Chat Statistics", text)
         self.assertIn("Total Events", text)
         self.assertIn("Answered Events", text)
-        self.assertIn("Avg Participants", text)
+        self.assertIn("Average number of Bangers", text)
         self.assertIn("2.5", text)
         self.assertIn("18.30", text)
         self.assertIn("100%", text)
 
-    def test_avg_participants_dash_when_none(self):
+    def test_chat_table_has_no_header_row(self):
+        result = StatisticsResult(
+            event_count=3,
+            answered_events=2,
+            avg_participants=2.5,
+            slot_stats=[SlotStat(text="18.30", total_picks=3, event_pct=1.0)],
+        )
+
+        text = format_statistics(result)
+
+        chat_table = text.split("```")[1]
+        lines = chat_table.strip("\n").splitlines()
+        # 3 summary rows + 1 slot row, no header line.
+        self.assertEqual(len(lines), 4)
+
+    def test_chat_table_rows_are_column_aligned(self):
+        result = StatisticsResult(event_count=3, answered_events=2, avg_participants=2.0)
+
+        text = format_statistics(result)
+
+        chat_table = text.split("```")[1]
+        lines = chat_table.strip("\n").splitlines()
+        what_width = len("Average number of Bangers")
+        for line in lines:
+            self.assertEqual(line[what_width], " ")
+
+    def test_answered_events_shows_percentage_of_total(self):
+        result = StatisticsResult(event_count=4, answered_events=3, avg_participants=2.0)
+
+        text = format_statistics(result)
+
+        self.assertIn("75%", text)
+
+    def test_avg_bangers_dash_when_no_answers(self):
         result = StatisticsResult(event_count=1, answered_events=0, avg_participants=None)
 
         text = format_statistics(result)
 
-        self.assertIn("Avg Participants", text)
-        self.assertIn("-", text)
-        self.assertIn("No slot picks yet", text)
+        chat_table = text.split("```")[1]
+        bangers_line = next(line for line in chat_table.splitlines() if "Average number of Bangers" in line)
+        tokens = bangers_line.split()
+        self.assertEqual(tokens[-2], "-")
+        self.assertEqual(tokens[-1], "-")
 
     def test_empty_user_rows_shows_no_participation_message(self):
         text = format_statistics(StatisticsResult(event_count=1))
