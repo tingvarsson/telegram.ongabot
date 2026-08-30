@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/statistics` shows all-time, chat-wide participation statistics: most active
+  users, current streak leaders, the most popular time slot, an approximate
+  participation rate, and leaderboards for most "No-op" and most "Maybe Baby"
+  answers
+
 ## [1.3.1] - 2026-08-30
 
 ### Fixed

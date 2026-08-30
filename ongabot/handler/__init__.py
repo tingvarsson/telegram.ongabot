@@ -14,6 +14,7 @@ from .ongacommandhandler import OngaCommandHandler
 from .reschedulecommandhandler import RescheduleCommandHandler
 from .schedulecommandhandler import ScheduleCommandHandler
 from .startcommandhandler import StartCommandHandler
+from .statisticscommandhandler import StatisticsCommandHandler
 from .updateeventcommandhandler import UpdateEventCommandHandler
 
 __all__ = (
@@ -31,5 +32,6 @@ __all__ = (
     "RescheduleCommandHandler",
     "ScheduleCommandHandler",
     "StartCommandHandler",
+    "StatisticsCommandHandler",
     "UpdateEventCommandHandler",
 )
