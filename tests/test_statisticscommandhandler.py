@@ -22,27 +22,28 @@ class StatisticsCommandHandlerTest(unittest.IsolatedAsyncioTestCase):
     async def test_looks_up_chat_and_member_count_for_effective_chat(self):
         update, context, _chat = self._make()
 
-        with (
-            patch("ongabot.handler.statisticscommandhandler.compute_statistics", return_value="RESULT") as compute,
-            patch("ongabot.handler.statisticscommandhandler.format_statistics", return_value="TEXT"),
-        ):
+        with patch(
+            "ongabot.handler.statisticscommandhandler.render_statistics_message",
+            return_value=("TEXT", "KEYBOARD"),
+        ) as render:
             await callback(update, context)
 
         context.bot_data.get_chat.assert_called_once_with(123)
         context.bot.get_chat_member_count.assert_awaited_once_with(123)
-        compute.assert_called_once_with(_chat, 42)
+        render.assert_called_once_with(_chat, 42)
 
-    async def test_replies_with_formatted_statistics(self):
+    async def test_replies_with_rendered_text_and_keyboard(self):
         update, context, _chat = self._make()
 
-        with (
-            patch("ongabot.handler.statisticscommandhandler.compute_statistics", return_value="RESULT") as compute,
-            patch("ongabot.handler.statisticscommandhandler.format_statistics", return_value="TEXT") as format_stats,
+        with patch(
+            "ongabot.handler.statisticscommandhandler.render_statistics_message",
+            return_value=("TEXT", "KEYBOARD"),
         ):
             await callback(update, context)
 
-        format_stats.assert_called_once_with(compute.return_value)
-        update.message.reply_text.assert_awaited_once_with("TEXT", parse_mode=ParseMode.MARKDOWN_V2)
+        update.message.reply_text.assert_awaited_once_with(
+            "TEXT", parse_mode=ParseMode.MARKDOWN_V2, reply_markup="KEYBOARD"
+        )
 
 
 if __name__ == "__main__":

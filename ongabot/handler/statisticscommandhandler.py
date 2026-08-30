@@ -7,7 +7,7 @@ from telegram.constants import ParseMode
 from telegram.ext import CallbackContext, CommandHandler
 
 from utils.log import log
-from utils.statistics import compute_statistics, format_statistics
+from utils.statistics import render_statistics_message
 
 _logger = logging.getLogger(__name__)
 
@@ -26,5 +26,5 @@ async def callback(update: Update, context: CallbackContext) -> None:
     chat = context.bot_data.get_chat(chat_id)
     chat_member_count = await context.bot.get_chat_member_count(chat_id)
 
-    result = compute_statistics(chat, chat_member_count)
-    await update.message.reply_text(format_statistics(result), parse_mode=ParseMode.MARKDOWN_V2)
+    text, keyboard = render_statistics_message(chat, chat_member_count)
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=keyboard)

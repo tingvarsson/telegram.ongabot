@@ -15,6 +15,7 @@ from .reschedulecommandhandler import RescheduleCommandHandler
 from .schedulecommandhandler import ScheduleCommandHandler
 from .startcommandhandler import StartCommandHandler
 from .statisticscommandhandler import StatisticsCommandHandler
+from .statisticssortcallbackhandler import StatisticsSortCallbackHandler
 from .updateeventcommandhandler import UpdateEventCommandHandler
 
 __all__ = (
@@ -33,5 +34,6 @@ __all__ = (
     "ScheduleCommandHandler",
     "StartCommandHandler",
     "StatisticsCommandHandler",
+    "StatisticsSortCallbackHandler",
     "UpdateEventCommandHandler",
 )
