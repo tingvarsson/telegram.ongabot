@@ -67,6 +67,11 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
+          # Without an explicit context, build-push-action defaults to a *remote*
+          # git context (repo URL + triggering GITHUB_SHA), silently ignoring the
+          # actions/checkout step above (and its `ref` input) entirely. Pinning to
+          # the local workspace makes the build actually respect `inputs.ref`.
+          context: .
           push: ${{ inputs.push }}
           tags: ${{ inputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

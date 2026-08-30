@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Docker release builds now build from the actual checked-out ref instead of a
+  remote git context tied to the triggering commit. Without an explicit `context: .`,
+  `docker/build-push-action` silently ignored the `ref` passed to reusable workflow
+  `_docker-build.yml`, so the nightly `latest` refresh rebuilt from `master`'s current
+  tip instead of the pinned release tag — clobbering the clean release image with
+  whatever `+dev` state `master` was in.
+
 ## [1.3.0] - 2026-07-09
 
 ### Added
