@@ -8,12 +8,16 @@ from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CallbackQueryHandler
 
 from utils.log import log
-from utils.statistics import CALLBACK_DATA_PREFIX, SORT_COLUMNS, render_statistics_message
+from utils.statistics import CALLBACK_DATA_PREFIX, render_statistics_message
 
 _logger = logging.getLogger(__name__)
 
-_SORT_KEYS_PATTERN = "|".join(c.key for c in SORT_COLUMNS)
-CALLBACK_PATTERN = rf"^{CALLBACK_DATA_PREFIX}:({_SORT_KEYS_PATTERN})$"
+# Matches any key, not just today's SORT_COLUMNS: a column renamed or removed in a later
+# deploy must still route here so a stale button (from a message sent before that deploy)
+# falls back to the default sort (see format_statistics's _COLUMNS_BY_KEY.get fallback)
+# instead of going dead - Telegram would otherwise spin the tapped button forever since
+# answer() would never be called.
+CALLBACK_PATTERN = rf"^{CALLBACK_DATA_PREFIX}:(\w+)$"
 
 
 class StatisticsSortCallbackHandler(CallbackQueryHandler):

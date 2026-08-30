@@ -197,14 +197,16 @@ class _Column:
     render: Callable[[UserStatRow], str]
 
 
+def _format_pct(value: float) -> str:
+    return f"{value * 100:.0f}%"
+
+
 SORT_COLUMNS: List[_Column] = [
     _Column("responses", "Resp", 4, "Responses", lambda r: r.responses, lambda r: str(r.responses)),
-    _Column(
-        "resp_rate", "Resp%", 5, "Response Rate", lambda r: r.response_pct, lambda r: f"{r.response_pct * 100:.0f}%"
-    ),
+    _Column("resp_rate", "Resp%", 5, "Response Rate", lambda r: r.response_pct, lambda r: _format_pct(r.response_pct)),
     _Column("streak", "Strk", 4, "Streak", lambda r: r.streak, lambda r: str(r.streak)),
     _Column("played", "Play", 4, "Played", lambda r: r.played, lambda r: str(r.played)),
-    _Column("play_rate", "Play%", 5, "Played Rate", lambda r: r.play_pct, lambda r: f"{r.play_pct * 100:.0f}%"),
+    _Column("play_rate", "Play%", 5, "Played Rate", lambda r: r.play_pct, lambda r: _format_pct(r.play_pct)),
     _Column("slots", "Slot", 4, "Total Slots", lambda r: r.slots_total, lambda r: str(r.slots_total)),
     _Column("avg", " Avg", 4, "Avg Slots", lambda r: r.slots_avg, lambda r: f"{r.slots_avg:.1f}"),
     _Column("maybe", " May", 4, "Maybe", lambda r: r.maybe, lambda r: str(r.maybe)),
@@ -223,7 +225,10 @@ def _format_name_cell(name: str) -> str:
 
 
 def _format_table(rows: List[UserStatRow], sort_by: str) -> str:
-    column = _COLUMNS_BY_KEY.get(sort_by, _COLUMNS_BY_KEY[DEFAULT_SORT_KEY])
+    column = _COLUMNS_BY_KEY.get(sort_by)
+    if column is None:
+        _logger.debug("Unknown sort_by=%s for statistics table; falling back to default=%s", sort_by, DEFAULT_SORT_KEY)
+        column = _COLUMNS_BY_KEY[DEFAULT_SORT_KEY]
     ranked = sorted(rows, key=column.value, reverse=True)[:MAX_TABLE_ROWS]
 
     header = "Name".ljust(NAME_WIDTH) + " " + " ".join(c.header for c in SORT_COLUMNS)
@@ -241,21 +246,21 @@ SLOT_ROW_PREFIX = "Slot picked - "
 
 def _chat_stat_rows(result: StatisticsResult) -> List[Tuple[str, str, str]]:
     """Build (what, #, %) rows for the merged chat table: 3 summary rows, then one per slot."""
-    answered_pct = f"{result.answered_events / result.event_count * 100:.0f}%" if result.event_count > 0 else "-"
+    answered_pct = _format_pct(result.answered_events / result.event_count) if result.event_count > 0 else "-"
     avg_text = f"{result.avg_participants:.1f}" if result.avg_participants is not None else "-"
     known_users = len(result.user_rows)
     avg_pct = (
-        f"{result.avg_participants / known_users * 100:.0f}%"
+        _format_pct(result.avg_participants / known_users)
         if result.avg_participants is not None and known_users > 0
         else "-"
     )
     rows = [
-        ("Total Events", str(result.event_count), "100%"),
+        ("Total Events", str(result.event_count), _format_pct(1.0)),
         ("Answered Events", str(result.answered_events), answered_pct),
         (AVG_PARTICIPANTS_LABEL, avg_text, avg_pct),
     ]
     for slot in result.slot_stats:
-        rows.append((f"{SLOT_ROW_PREFIX}{slot.text}", str(slot.total_picks), f"{slot.event_pct * 100:.0f}%"))
+        rows.append((f"{SLOT_ROW_PREFIX}{slot.text}", str(slot.total_picks), _format_pct(slot.event_pct)))
     return rows
 
 

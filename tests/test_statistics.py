@@ -538,6 +538,14 @@ class FormatStatisticsTableTest(unittest.TestCase):
 
         self.assertLess(text.index("Bob"), text.index("Alice"))
 
+    def test_unknown_sort_by_logs_the_fallback(self):
+        result = StatisticsResult(event_count=1, user_rows=[UserStatRow(user=_make_user(1, "Alice"), responses=1)])
+
+        with self.assertLogs("ongabot.utils.statistics", level="DEBUG") as log_ctx:
+            format_statistics(result, sort_by="a_retired_column")
+
+        self.assertTrue(any("a_retired_column" in message for message in log_ctx.output))
+
     def test_table_capped_to_max_rows(self):
         rows = [UserStatRow(user=_make_user(i, f"U{i}"), responses=i) for i in range(MAX_TABLE_ROWS + 5)]
         result = StatisticsResult(event_count=1, user_rows=rows)

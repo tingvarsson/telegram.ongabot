@@ -1,10 +1,20 @@
+import re
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
 
-from ongabot.handler.statisticssortcallbackhandler import callback
+from ongabot.handler.statisticssortcallbackhandler import CALLBACK_PATTERN, callback
+
+
+class CallbackPatternTest(unittest.TestCase):
+    def test_matches_a_key_no_longer_in_sort_columns(self):
+        """A column renamed/removed after this deploy must still route here, not go dead client-side."""
+        self.assertIsNotNone(re.match(CALLBACK_PATTERN, "stats_sort:some_retired_column"))
+
+    def test_does_not_match_an_unrelated_prefix(self):
+        self.assertIsNone(re.match(CALLBACK_PATTERN, "other_feature:responses"))
 
 
 class StatisticsSortCallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
