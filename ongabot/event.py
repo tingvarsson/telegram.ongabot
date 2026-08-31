@@ -53,8 +53,9 @@ class Event:
             which the user picked an actual time slot; this is what the status message stars
         cs2_played: user id -> True for each linked member seen in a real CS2 match on this
             event's date. ONGAbot's own derived fact; no Leetify data is ever stored here.
-        cs2_reported: whether the CS2 results message has been posted, so the sweep job that
-            posts it never posts twice
+        cs2_message_id: id of the CS2 results message, once posted. The sweep edits this one
+            message as the night's matches come in, so it must survive a restart.
+        cs2_reported: whether the CS2 results are final, so the sweep job stops updating them
     """
 
     def __init__(self, chat_id: int, poll: Poll, data: EventData) -> None:
@@ -70,6 +71,7 @@ class Event:
         self.user_streaks: Dict[int, int] = {}
         self.user_played_streaks: Dict[int, int] = {}
         self.cs2_played: Dict[int, bool] = {}
+        self.cs2_message_id: int = 0
         self.cs2_reported: bool = False
 
     @property
@@ -121,6 +123,9 @@ class Event:
             self.user_played_streaks = {}
         if not hasattr(self, "cs2_played"):
             self.cs2_played = {}
+        if not hasattr(self, "cs2_message_id"):
+            # 0 means "not posted yet": the sweep sends a new message instead of editing.
+            self.cs2_message_id = 0
         if not hasattr(self, "cs2_reported"):
             # Events that predate CS2 results are never swept - their matches have long since
             # fallen out of Leetify's ~4.5-month history window anyway.
@@ -157,8 +162,25 @@ class Event:
         self.completed = True
 
     @log.method
+    def update_cs2_progress(self, message_id: int, played_user_ids: Set[int]) -> None:
+        """Record the live CS2 results message and who has been seen playing so far.
+
+        Called on every sweep pass that changes the message, so a bot restart mid-night
+        picks up the same message to edit instead of posting a second one. The results are
+        not final yet, so cs2_reported is deliberately left alone.
+        """
+        self.cs2_message_id = message_id
+        self.cs2_played = {user_id: True for user_id in played_user_ids}
+        _logger.debug(
+            "Updated live CS2 results for poll_id=%s: message_id=%s, %d member(s) played so far",
+            self.poll_id,
+            message_id,
+            len(played_user_ids),
+        )
+
+    @log.method
     def record_cs2_session(self, played_user_ids: Set[int]) -> None:
-        """Record which linked members were seen playing, and mark the CS2 results as posted.
+        """Record which linked members were seen playing, and mark the CS2 results as final.
 
         Only these derived booleans are persisted - the Leetify scoreboard behind them is
         rendered into the message and discarded.

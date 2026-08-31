@@ -20,6 +20,34 @@ _logger = logging.getLogger(__name__)
 
 
 @log.log
+async def event_session(
+    client: MatchSource,
+    chat: "Chat",
+    event: "Event",
+    user_data: Mapping[int, "UserData"],
+) -> Optional[Cs2Session]:
+    """Fetch the CS2 session for one event, or None when Leetify could not be reached.
+
+    None means "unknown", not "nobody played" - a caller polling through the evening should
+    retry rather than report an empty night.
+    """
+    links = steam_links(chat, user_data)
+    if not links:
+        _logger.debug("No linked members in chat_id=%s; nothing to report", chat.chat_id)
+
+    return await build_session(client, event.event_date, links)
+
+
+def render_results(session: Cs2Session, live: bool = False) -> str:
+    """Render a fetched session into the CS2 results message.
+
+    Kept here so a caller that fetches once and renders twice - the sweep, dropping the live
+    marker on its final pass - does not have to reach into cs2.format itself.
+    """
+    return format_session(session, live=live)
+
+
+@log.log
 async def event_results(
     client: MatchSource,
     chat: "Chat",
@@ -31,15 +59,11 @@ async def event_results(
     Returns (session, message text), or (None, None) when Leetify could not be reached at
     all - the caller should retry rather than report that nobody played.
     """
-    links = steam_links(chat, user_data)
-    if not links:
-        _logger.debug("No linked members in chat_id=%s; nothing to report", chat.chat_id)
-
-    session = await build_session(client, event.event_date, links)
+    session = await event_session(client, chat, event, user_data)
     if session is None:
         return None, None
 
-    return session, format_session(session)
+    return session, render_results(session)
 
 
 def latest_reportable_event(chat: "Chat") -> Optional["Event"]:

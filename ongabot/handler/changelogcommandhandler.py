@@ -6,7 +6,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 from _version import __version__
-from utils.changelog import get_changelog
+from utils.changelog import get_changelog, split_for_telegram
 from utils.commands import CHANGELOG
 from utils.log import log
 
@@ -31,4 +31,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
             return
         count = int(arg)
     entry = get_changelog(__version__, count)
-    await update.message.reply_text(entry)
+    # Several entries together exceed Telegram's message limit, which would fail the whole
+    # reply rather than truncate it - send them as consecutive messages instead.
+    for chunk in split_for_telegram(entry):
+        await update.message.reply_text(chunk)

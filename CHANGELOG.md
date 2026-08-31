@@ -7,123 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- CS2 results now follow the night as it happens. The sweep starts at the
+  event's start time instead of after midnight, posts as soon as Leetify has
+  the first match, and edits that same message as later matches land. It is
+  marked as updating live until no new match has appeared for 90 minutes.
+- `/changelog` sends long output as several messages instead of failing on
+  Telegram's 4096-character limit, as does the version announcement on upgrade.
+  The 1.7.0 entry, which was over that limit, has been cut down to what it
+  actually changed for users.
+
 ## [1.7.0] - 2026-08-31
 
 ### Added
 
-- **CS2 match results.** After an event completes, ONGAbot looks up the CS2
-  games actually played that day and posts a "CS2 results" message. Data comes
-  from the [Leetify public API][leetify-api]. The message opens with the date
-  and the night's record (`3 matches · 2W 1L · 1 OT`), then a session table
-  combining each member's kills, deaths and K/D across every match they played,
-  then one scoreboard per match showing **all ten players** split by side, your
-  team first, with the map, score, outcome and the time the match ended.
-  Players are not individually marked: Telegram does not allow bold inside a
-  code block, and the Session table already lists exactly the chat's members. Both tables carry kills, assists, deaths, K/D, total damage, ADR and aces;
-  everyone is named by their Steam in-game name. Per-match K/D and ADR are Leetify's own `kd_ratio`
-  and `dpr`, printed untouched; the session row sums raw counts instead, and its
-  ADR is total damage over total rounds rather than an average of per-match
-  averages, which would misweigh a short match against a long one.
-  Clutches won, HLTV Rating and Utility Rating are not shown because the API
-  exposes none of them: there is no clutch count, no HLTV rating, and utility
-  rating exists only as a career-wide profile figure. A long night is trimmed to fit Telegram's message limit,
-  oldest matches first, and says how many it dropped.
-  Round-by-round detail and match start times are deliberately absent: Leetify
-  exposes neither, and the only route to them would be downloading and parsing
-  each match's demo.
-  Only **one** member per match needs a Leetify account: Leetify's match-detail
-  endpoint returns the full ten-player scoreboard whether or not those players
-  use Leetify, so a single enrolled "scout" reveals the whole lobby. Everyone
-  else just runs `/linksteam` so the bot recognises their Steam64.
-  Results arrive as a separate follow-up message rather than inside the Banger
-  Points recap, because that recap fires at midnight, before Leetify has
-  processed the night's demos. A sweep job checks every 20 minutes and posts
-  once the night's match list stops growing, giving up after 14 hours.
-  A match counts as an ONGA game when at least 2 linked members appear on its
-  scoreboard. Only Valve matchmaking counts - competitive and Premier; FACEIT,
-  wingman and casual are excluded. Matches are attributed to the event's
-  calendar date in server local time, since Leetify reports UTC and an evening
-  game under CEST would otherwise land on the wrong day.
-- New `/linksteam <steam64|profile URL>` and `/unlinksteam` commands. Linking is
-  per-user and opt-in, since it publishes your match stats to the chat. A raw
-  17-digit Steam64 or a `steamcommunity.com/profiles/<id>` URL both work; a
-  vanity `/id/<name>` URL cannot be resolved without a Steam Web API key and is
-  rejected with an explanation.
-- New `/cs2 [target_date=<date|weekday>]` command to show the results for an
-  event on demand, defaulting to the most recent completed event.
-- Optional `LEETIFY_API_KEY` environment variable. The public API works without
-  one; a key just raises the rate limits.
-- Optional `CS2_MIN_MEMBERS` environment variable (default 2) to lower the
-  threshold, for a test deployment where only one person has linked an account.
+- **CS2 match results.** ONGAbot looks up the CS2 games played on an event's
+  date and posts a "CS2 results" message: the night's record
+  (`3 matches · 2W 1L · 1 OT`), a session table combining each member's stats
+  across every match they played, and a full ten-player scoreboard per match
+  with map, score, outcome and end time. Data comes from the
+  [Leetify public API][leetify-api]; nothing from Leetify is stored. Only Valve
+  matchmaking counts (competitive and Premier), and a match is an ONGA game
+  when at least 2 linked members appear on its scoreboard. Only one member per
+  match needs an actual Leetify account - see the README for setup.
+- `/linksteam <steam64|profile URL>` and `/unlinksteam`. Opt-in and per user,
+  since linking publishes your match stats to the chat. A vanity `/id/<name>`
+  URL is rejected: resolving it needs a Steam Web API key.
+- `/cs2 [target_date=<date|weekday>]` shows an event's results on demand,
+  defaulting to the most recent completed event.
+- Optional `LEETIFY_API_KEY` (raises Leetify's rate limits) and
+  `CS2_MIN_MEMBERS` (default 2) environment variables.
 
 ### Fixed
 
 - Table name columns no longer shift out of line for names containing emoji,
   CJK characters or combining marks. Cells were padded by `len()`, which counts
-  code points rather than monospace columns: a five-character Chinese name is
-  ten columns wide, a combining accent is zero, and an emoji is unpredictable.
-  Names are now measured by grapheme cluster rather than code point, so a ZWJ
-  family sequence and a flag each count as the single glyph they render as.
-  Emoji are assumed to be three columns wide, matching how Telegram renders
-  them; that assumption is a single constant, `EMOJI_WIDTH`. A name mixing emoji with text drops
-  the emoji, which keeps that row exact; a name that is *only* emoji keeps them,
-  since two columns is a better guess than losing the name. Invisible format
-  characters - zero-width joiners and bidi overrides, the latter also a spoofing
-  vector - are always removed, and a name left with nothing renderable falls
-  back to a short Steam64 tag. This also affects `/statistics` and
-  `/leaderboard`, which share the same name-cell helper.
-
-Per Leetify's [Developer Guidelines][leetify-guidelines], no Leetify data is
-stored. Stats are fetched at render time, shown under Leetify's own field names,
-and discarded; every message carries the required attribution and a per-match
-"View on Leetify" link. The only things persisted are ONGAbot's own derived
-facts - which members were seen playing, and whether results have been posted.
-A Leetify outage cannot affect anything else: every call returns `None` on
-failure, so polls, status messages and the Banger Points recap are unaffected,
-and the sweep simply retries.
+  code points rather than monospace columns; names are now measured by grapheme
+  cluster. Also affects `/statistics` and `/leaderboard`.
 
 [leetify-api]: https://api-public-docs.cs-prod.leetify.com/
-[leetify-guidelines]: https://leetify.com/blog/leetify-api-developer-guidelines/
 
 ## [1.6.0] - 2026-08-31
 
 ### Fixed
 
 - `/statistics` Played Streak (`PStk`) showed 0 for every user on data predating
-  1.5.0. Both streak columns were read from the latest event's stored
-  `user_streaks` / `user_played_streaks` maps, which are only written when a vote
-  arrives. `user_streaks` has been maintained since 1.1.0, so `RStk` was
-  unaffected, but `user_played_streaks` shipped in 1.5.0 and was therefore empty
-  on every already-persisted event. Both streaks are now derived from the event
-  history that `/statistics` already walks, so they are correct immediately for
-  all existing data and no longer depend on when the feature was deployed.
+  1.5.0: it was read from the latest event's stored `user_played_streaks` map,
+  which only 1.5.0 onwards ever wrote. Both streaks are now derived from the
+  event history, so they are correct for all existing data.
 
 ### Added
 
 - New `/leaderboard` command showing **Banger Points**, a single score per user
-  that weights each vote by how much it actually mattered rather than just
-  counting votes. A vote earns more when it was decisive: picking the winning
-  slot pays a clutch bonus scaled by how close that slot was to quorum (5
-  players), plus an extra "rescue" when it landed on quorum exactly. Picking
-  more slots helps with diminishing returns, so all five is not worth five times
-  one, and propping up a slot the chat usually ignores earns a rarity bonus.
-  Answering "No-op" beats ghosting, and being first to the poll pays too.
+  that weights each vote by how much it mattered rather than just counting
+  votes. Picking the winning slot pays a clutch bonus, scaled by how close that
+  slot was to quorum and topped up when the vote landed on quorum exactly.
+  Picking more slots helps with diminishing returns, propping up an unpopular
+  slot earns a rarity bonus, "No-op" beats ghosting, and answering first pays.
   Two standings are shown: **Form**, the rolling last 20 events, and All-time.
-- A Banger Points recap is now posted to the chat when an event completes,
-  showing what the poll decided, who scored what and why, and the top 5 of the
-  Form table. Because polls are never closed, a late vote can still change an
-  event's points afterwards - the recap is a snapshot at completion time, and
-  `/leaderboard` recomputes live.
+- A Banger Points recap is posted to the chat when an event completes, showing
+  what the poll decided, who scored what and why, and the top 5 of the Form
+  table. It is a snapshot at completion time - a late vote can still change an
+  event's points afterwards, and `/leaderboard` recomputes live.
 
 ## [1.5.0] - 2026-08-31
 
 ### Fixed
 
-- `make mypy` now type-checks all 34 modules instead of only the entry point.
-  With `mypy_path = ongabot`, `mypy -p ongabot` resolved the package name to the
-  `ongabot/ongabot.py` module and reported "no issues found in 1 source file",
-  so type errors anywhere in the codebase passed CI unnoticed. The five errors
-  this uncovered (across three files) are fixed; none affected runtime behavior.
+- `make mypy` now type-checks all 34 modules instead of only the entry point:
+  `mypy -p ongabot` resolved to the `ongabot/ongabot.py` module alone, so type
+  errors anywhere else passed CI unnoticed. The five errors this uncovered are
+  fixed; none affected runtime behavior.
 
 ### Changed
 

@@ -39,9 +39,15 @@ docker run --rm --env API_TOKEN=your_token tingvarsson/telegram.ongabot:latest
 
 ## CS2 match results
 
-When an event completes, ONGAbot looks up the CS2 games played that day and posts a
-"CS2 results" message with the maps, scores and each member's scoreboard. `/cs2` shows
-the same thing on demand.
+ONGAbot follows an event's evening as it happens. From the event's start time it checks
+every 20 minutes for CS2 games the chat has played, posts a "CS2 results" message with the
+maps, scores and each member's scoreboard as soon as the first match shows up, and edits
+that same message as later matches land. The message is marked as updating live until no
+new match has appeared for 90 minutes, at which point the night counts as over. `/cs2`
+shows an event's results on demand.
+
+A match only becomes visible once Leetify has processed its demo, so results trail the
+actual games by a while.
 
 Match data comes from the [Leetify public API](https://api-public-docs.cs-prod.leetify.com/).
 Setting `LEETIFY_API_KEY` in `.env` is optional — the public API works without a key, but

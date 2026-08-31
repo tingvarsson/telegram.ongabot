@@ -185,8 +185,20 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
         # Should not raise
         await post_init(application)
 
-        application.job_queue.run_once.assert_called_once()
-        application.job_queue.run_daily.assert_called_once()
+        # Event cleanup (startup + daily) and the hourly CS2 sweep scheduler are all registered.
+        scheduled = [
+            call.kwargs["name"]
+            for calls in (
+                application.job_queue.run_once.call_args_list,
+                application.job_queue.run_daily.call_args_list,
+                application.job_queue.run_repeating.call_args_list,
+            )
+            for call in calls
+        ]
+        self.assertEqual(
+            sorted(scheduled),
+            ["complete_past_events", "complete_past_events_startup", "cs2_sweeps"],
+        )
 
 
 class PostInitMetadataWiringTest(unittest.IsolatedAsyncioTestCase):

@@ -28,6 +28,10 @@ _logger = logging.getLogger(__name__)
 MATCH_URL = "https://leetify.com/app/match-details/{id}"
 ATTRIBUTION = "Data Provided by Leetify"
 
+# Shown while the sweep is still running, so a reader knows the night is not over and more
+# matches will be added to this same message.
+LIVE_NOTE = "updating live - more matches may follow"
+
 # Telegram rejects a message over 4096 characters outright, so a long night is trimmed
 # rather than lost. The margin absorbs the "not shown" note appended after trimming.
 MAX_MESSAGE_CHARS = 4096
@@ -227,12 +231,15 @@ def _trim_to_limit(head: List[str], sections: List[List[str]], tail: List[str]) 
     return body + tail, dropped
 
 
-def format_session(session: Cs2Session) -> str:
+def format_session(session: Cs2Session, live: bool = False) -> str:
     """Format a session into the MarkdownV2 body of the CS2 results message.
 
     Everyone is labelled by their in-game name, members included: a CS2 scoreboard is a Steam
     scoreboard, and the marker on a row is what says who is in the chat. /statistics and
     /leaderboard keep Telegram names, since most of their users have no linked Steam account.
+
+    live marks the message as still being updated by the sweep. The note joins the head of the
+    message, so trimming accounts for it like everything else.
     """
     heading = f"*__CS2 results · {escape_markdown(str(session.event_date), version=2)}__*"
     attribution = f"_{escape_markdown(ATTRIBUTION, version=2)}_"
@@ -242,6 +249,8 @@ def format_session(session: Cs2Session) -> str:
         return "\n\n".join([heading, summary, attribution])
 
     head = [heading, escape_markdown(_summary_line(session), version=2)]
+    if live:
+        head.append(f"_{escape_markdown(LIVE_NOTE, version=2)}_")
     table = _session_table(session)
     if table is not None:
         head += ["*Session*", table]

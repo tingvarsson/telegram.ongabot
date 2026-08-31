@@ -1,7 +1,9 @@
 import unittest
 from datetime import date, datetime
 
-from ongabot.cs2.format import ATTRIBUTION, MAX_MESSAGE_CHARS, format_session
+from telegram.helpers import escape_markdown
+
+from ongabot.cs2.format import ATTRIBUTION, LIVE_NOTE, MAX_MESSAGE_CHARS, format_session
 from ongabot.cs2.session import Cs2Match, Cs2Session, PlayerLine
 from ongabot.utils.statistics import display_width
 
@@ -199,6 +201,13 @@ class MatchScoreboardTest(unittest.TestCase):
 
         self.assertTrue(text)
         self.assertNotIn("```", text)
+
+    def test_marks_a_live_session_as_still_being_updated(self):
+        """The sweep edits this message all evening; a reader must know more may follow."""
+        self.assertIn(escape_markdown(LIVE_NOTE, version=2), format_session(_session(), live=True))
+
+    def test_a_finished_session_carries_no_live_marker(self):
+        self.assertNotIn(escape_markdown(LIVE_NOTE, version=2), format_session(_session()))
 
 
 class MessageLengthTest(unittest.TestCase):

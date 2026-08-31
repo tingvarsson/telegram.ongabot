@@ -25,6 +25,14 @@ class ChangelogCommandHandlerTest(unittest.IsolatedAsyncioTestCase):
             await callback(update, context)
         self.assertEqual(gc.call_args.args[1], 3)
 
+    async def test_an_entry_too_long_for_one_message_is_sent_in_parts(self):
+        """Telegram rejects an over-long message outright, which used to fail the whole reply."""
+        update, context = self._make(["3"])
+        entry = "\n\n".join(["paragraph " * 20] * 60)
+        with patch("ongabot.handler.changelogcommandhandler.get_changelog", return_value=entry):
+            await callback(update, context)
+        self.assertGreater(update.message.reply_text.await_count, 1)
+
     async def test_invalid_count_replies_usage_and_skips_lookup(self):
         update, context = self._make(["abc"])
         with patch("ongabot.handler.changelogcommandhandler.get_changelog") as gc:
