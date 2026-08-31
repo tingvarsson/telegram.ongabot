@@ -82,6 +82,10 @@ class _Accumulator:
     per_event_slot_texts: List[Set[str]] = field(default_factory=list)
     slot_instances: int = 0  # slots offered across answered events, for avg picks per slot
     user_slot_totals: Dict[int, int] = field(default_factory=dict)
+    # One entry per event, in ascending date order, holding the ids of the users who
+    # answered at all / who picked an actual slot. These drive the two streak columns.
+    responders_per_event: List[Set[int]] = field(default_factory=list)
+    players_per_event: List[Set[int]] = field(default_factory=list)
     no_op_counts: Dict[int, int] = field(default_factory=dict)
     maybe_counts: Dict[int, int] = field(default_factory=dict)
     user_by_id: Dict[int, User] = field(default_factory=dict)
@@ -104,12 +108,15 @@ def _tally_event(event: Event, index: int, acc: _Accumulator) -> _EventTally:
     respondents = 0
     players = 0
     slots_seen_this_event: Set[str] = set()
+    responders_this_event: Set[int] = set()
+    players_this_event: Set[int] = set()
     for user, answer in event.poll_answers.items():
         acc.user_by_id[user.id] = user
         acc.first_seen_index.setdefault(user.id, index)
         if not answer.option_ids:
             continue
         respondents += 1
+        responders_this_event.add(user.id)
         acc.total_responses[user.id] = acc.total_responses.get(user.id, 0) + 1
         played_this_event = False
         for option_id in answer.option_ids:
@@ -125,8 +132,11 @@ def _tally_event(event: Event, index: int, acc: _Accumulator) -> _EventTally:
                 acc.maybe_counts[user.id] = acc.maybe_counts.get(user.id, 0) + 1
         if played_this_event:
             players += 1
+            players_this_event.add(user.id)
             acc.user_played_counts[user.id] = acc.user_played_counts.get(user.id, 0) + 1
     acc.per_event_slot_texts.append(slots_seen_this_event)
+    acc.responders_per_event.append(responders_this_event)
+    acc.players_per_event.append(players_this_event)
     if respondents > 0:
         acc.slot_instances += event.num_slots
     return _EventTally(respondents=respondents, players=players)
@@ -205,12 +215,23 @@ def _build_slot_stats(acc: _Accumulator, answered_events: int) -> List[SlotStat]
     return stats
 
 
-def _build_user_rows(
-    acc: _Accumulator,
-    num_events: int,
-    streaks: Dict[int, int],
-    played_streaks: Dict[int, int],
-) -> List[UserStatRow]:
+def _streak_from(per_event: List[Set[int]], user_id: int) -> int:
+    """Count consecutive most-recent events (newest first) whose set contains user_id.
+
+    The statistics-side mirror of UserData._streak: same newest-first walk, same
+    break-on-first-miss rule. Cancelled events never reach per_event (compute_statistics
+    filters them out), just as the poll answer handler filters them out of its own
+    streak inputs, so a cancelled event is skipped rather than breaking a streak.
+    """
+    streak = 0
+    for members in reversed(per_event):
+        if user_id not in members:
+            break
+        streak += 1
+    return streak
+
+
+def _build_user_rows(acc: _Accumulator, num_events: int) -> List[UserStatRow]:
     """Build one UserStatRow per user ever seen, scoping eligibility to events since first appearance."""
     rows = []
     for user_id, user in acc.user_by_id.items():
@@ -225,8 +246,8 @@ def _build_user_rows(
                 played=played,
                 response_pct=(responses / eligible) if eligible > 0 else 0.0,
                 play_pct=(played / eligible) if eligible > 0 else 0.0,
-                response_streak=streaks.get(user_id, 0),
-                played_streak=played_streaks.get(user_id, 0),
+                response_streak=_streak_from(acc.responders_per_event, user_id),
+                played_streak=_streak_from(acc.players_per_event, user_id),
                 slots_total=slots_total,
                 slots_avg=(slots_total / played) if played > 0 else 0.0,
                 no_op=acc.no_op_counts.get(user_id, 0),
@@ -243,13 +264,15 @@ def compute_statistics(chat: Chat) -> StatisticsResult:
     Cancelled events are excluded entirely (a user whose only appearance was in a
     cancelled event gets no row). Retracted votes (empty option_ids) count toward a
     user's first-appearance/eligibility but not toward their response count. Both streaks are
-    read from the latest event's already-maintained maps: user_streaks counts consecutive
-    most-recent events answered at all (No-op and Maybe Baby </3 included), user_played_streaks
-    only those with an actual slot pick. A user absent from those maps did not vote in the
-    latest event, so their streak is 0 either way. avg_participants counts
-    only users who picked at least one slot (i.e. who can actually play, not everyone who
-    answered), averaged over answered events only so zero-response events do not dilute
-    it. avg_per_slot spreads all slot picks over every slot offered in those events.
+    derived here from the event history rather than read from the events' user_streaks /
+    user_played_streaks maps, which are only written when a vote arrives and are therefore
+    empty on events that predate the feature. response_streak counts consecutive most-recent
+    events answered at all (No-op and Maybe Baby </3 included), played_streak only those with
+    an actual slot pick. A user who did not answer the latest event has a streak of 0 either
+    way. avg_participants counts only users who picked at least one slot (i.e. who can
+    actually play, not everyone who answered), averaged over answered events only so
+    zero-response events do not dilute it. avg_per_slot spreads all slot picks over every
+    slot offered in those events.
     """
     events = sorted((e for e in chat.events.values() if not e.cancelled), key=lambda e: e.event_date)
     if not events:
@@ -258,18 +281,12 @@ def compute_statistics(chat: Chat) -> StatisticsResult:
     acc = _Accumulator()
     tallies = [_tally_event(event, index, acc) for index, event in enumerate(events)]
 
-    latest_event = events[-1]
     answered_events = sum(1 for tally in tallies if tally.respondents > 0)
     avg_participants = (sum(t.players for t in tallies) / answered_events) if answered_events > 0 else None
     total_picks = sum(acc.slot_text_counts.values())
     avg_per_slot = (total_picks / acc.slot_instances) if acc.slot_instances > 0 else None
     slot_stats = _build_slot_stats(acc, answered_events)
-    user_rows = _build_user_rows(
-        acc,
-        len(events),
-        dict(latest_event.user_streaks),
-        dict(latest_event.user_played_streaks),
-    )
+    user_rows = _build_user_rows(acc, len(events))
 
     _logger.debug(
         "Computed statistics for chat_id=%s: %s events, %s known users, %s slot groups from %s picks over %s slots",
@@ -279,6 +296,11 @@ def compute_statistics(chat: Chat) -> StatisticsResult:
         len(slot_stats),
         total_picks,
         acc.slot_instances,
+    )
+    _logger.debug(
+        "Streaks derived from history for chat_id=%s: %s",
+        chat.chat_id,
+        {row.user.id: (row.response_streak, row.played_streak) for row in user_rows},
     )
 
     return StatisticsResult(
