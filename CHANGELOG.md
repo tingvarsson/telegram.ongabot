@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-31
+
 ### Fixed
 
 - `make mypy` now type-checks all 34 modules instead of only the entry point.
@@ -170,7 +172,8 @@ No user-facing changes (version bump only).
 
 Initial release — basic Telegram bot for recurring event polls in group chats.
 
-[Unreleased]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.2.0...v1.3.0
