@@ -52,11 +52,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CJK characters or combining marks. Cells were padded by `len()`, which counts
   code points rather than monospace columns: a five-character Chinese name is
   ten columns wide, a combining accent is zero, and an emoji is unpredictable.
-  Names are now measured by display width, and characters whose rendered width
-  cannot be predicted - emoji and other pictographs, plus invisible format
-  characters such as zero-width joiners and bidi overrides - are stripped; a
-  name left empty by that falls back to a short Steam64 tag. This also affects
-  `/statistics` and `/leaderboard`, which share the same name-cell helper.
+  Names are now measured by grapheme cluster rather than code point, so a ZWJ
+  family sequence and a flag each count as the single glyph they render as.
+  Emoji are assumed to be two columns wide. A name mixing emoji with text drops
+  the emoji, which keeps that row exact; a name that is *only* emoji keeps them,
+  since two columns is a better guess than losing the name. Invisible format
+  characters - zero-width joiners and bidi overrides, the latter also a spoofing
+  vector - are always removed, and a name left with nothing renderable falls
+  back to a short Steam64 tag. This also affects `/statistics` and
+  `/leaderboard`, which share the same name-cell helper.
 
 Per Leetify's [Developer Guidelines][leetify-guidelines], no Leetify data is
 stored. Stats are fetched at render time, shown under Leetify's own field names,
