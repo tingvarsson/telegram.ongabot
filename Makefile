@@ -37,9 +37,6 @@ lint:
 pep8:
 	$(PEP8) ongabot tests
 
-# Check the directory, not `-p ongabot`: with mypy_path=ongabot the package name
-# resolves to the ongabot/ongabot.py entry module, so `-p` only ever checked that
-# one file ("no issues found in 1 source file") plus whatever it imported.
 mypy:
 	$(MYPY) ongabot
 
