@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-08-31
+
 ### Added
 
 - **CS2 match results.** After an event completes, ONGAbot looks up the CS2
@@ -278,7 +280,8 @@ No user-facing changes (version bump only).
 
 Initial release — basic Telegram bot for recurring event polls in group chats.
 
-[Unreleased]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.3.1...v1.4.0
