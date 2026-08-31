@@ -70,11 +70,19 @@ class MatchSource(Protocol):
         """Return the full scoreboard for a match, or None if unavailable."""
 
 
-@dataclass(frozen=True)
-class MemberLine:
-    """One linked member's line on a match scoreboard."""
+# CS2 is MR12: first to 13 ends regulation, so any score above 13 can only have come from
+# overtime. Equal scores mean a draw, which competitive allows since it has no overtime.
+REGULATION_WIN_SCORE = 13
 
-    user_id: int  # Telegram user id
+
+@dataclass(frozen=True)
+class PlayerLine:
+    """One player's line on a match scoreboard - a linked member or anyone else in the lobby.
+
+    Leetify returns all ten players whether or not they use Leetify, so most lines belong to
+    people ONGAbot knows nothing about: user_id is None and is_member is False for them.
+    """
+
     steam64_id: str
     name: str  # in-game name, as Leetify reports it
     total_kills: int
@@ -82,6 +90,12 @@ class MemberLine:
     kd_ratio: float
     mvps: int
     team_number: int
+    user_id: Optional[int] = None  # Telegram user id, when this player is a linked member
+
+    @property
+    def is_member(self) -> bool:
+        """True when this player is a linked member of the chat."""
+        return self.user_id is not None
 
 
 @dataclass(frozen=True)
@@ -91,13 +105,31 @@ class Cs2Match:
     id: str  # Leetify game UUID, used for the View-on-Leetify link
     map_name: str
     finished_at: Optional[datetime]  # local time, None when the timestamp was unparseable
-    score: Tuple[int, int]  # (members' side, opponents') when the members share a team
-    members: Tuple[MemberLine, ...]
+    score: Tuple[int, int]  # (our side, theirs), our side being where most members started
+    our_team: int  # initial_team_number most linked members started on
+    players: Tuple[PlayerLine, ...]  # every player in the lobby, not only members
+
+    @property
+    def members(self) -> Tuple[PlayerLine, ...]:
+        """Only the linked members. Drives the qualifying threshold and Event.cs2_played."""
+        return tuple(player for player in self.players if player.is_member)
+
+    @property
+    def outcome(self) -> str:
+        """ "W", "L" or "D", from our side's perspective."""
+        if self.score[0] > self.score[1]:
+            return "W"
+        return "L" if self.score[0] < self.score[1] else "D"
 
     @property
     def won(self) -> bool:
-        """True when the members' side finished ahead."""
-        return self.score[0] > self.score[1]
+        """True when our side finished ahead."""
+        return self.outcome == "W"
+
+    @property
+    def overtime(self) -> bool:
+        """True when the match went past regulation."""
+        return max(self.score) > REGULATION_WIN_SCORE
 
 
 @dataclass(frozen=True)
@@ -162,27 +194,30 @@ def _parse_finished_at(finished_at: str) -> Optional[datetime]:
         return None
 
 
-def _score_for(detail: MatchDetail, members: Sequence[MemberLine]) -> Tuple[int, int]:
-    """Round score as (members' side, opponents').
+def _our_team(members: Sequence[PlayerLine]) -> int:
+    """The team most linked members started on.
 
-    Members are normally all on one team. When they are split across both - which happens if
-    two of them queued into opposite sides - there is no "our side", so the score is reported
-    highest-first rather than inventing a perspective.
+    Members usually queue together onto one side, but two of them can land on opposite
+    teams. Majority wins, ties going to the first member, so there is always a perspective
+    to report the score and the W/L from.
     """
+    counts: Dict[int, int] = {}
+    for member in members:
+        counts[member.team_number] = counts.get(member.team_number, 0) + 1
+    # max() keeps the first key seen on a tie, and dicts preserve insertion order.
+    return max(counts, key=lambda team: counts[team]) if counts else 0
+
+
+def _score_for(detail: MatchDetail, our_team: int) -> Tuple[int, int]:
+    """Round score as (our side, theirs)."""
     scores = detail.team_scores
-    teams = {member.team_number for member in members}
-    if len(teams) == 1:
-        ours = teams.pop()
-        own = scores.get(ours, 0)
-        other = max((score for team, score in scores.items() if team != ours), default=0)
-        return own, other
-
-    ordered = sorted(scores.values(), reverse=True)
-    return (ordered[0] if ordered else 0), (ordered[1] if len(ordered) > 1 else 0)
+    own = scores.get(our_team, 0)
+    other = max((score for team, score in scores.items() if team != our_team), default=0)
+    return own, other
 
 
-def _member_line(player: PlayerStats, user_id: int) -> MemberLine:
-    return MemberLine(
+def _player_line(player: PlayerStats, user_id: Optional[int]) -> PlayerLine:
+    return PlayerLine(
         user_id=user_id,
         steam64_id=player.steam64_id,
         name=player.name,
@@ -255,22 +290,23 @@ async def build_session(
             _logger.warning("Skipping match %s: details could not be fetched", match_id)
             continue
 
-        members = tuple(
-            _member_line(player, user_by_steam64[player.steam64_id])
-            for player in detail.players
-            if player.steam64_id in user_by_steam64
-        )
+        # Every player in the lobby is carried, not only the members: the scoreboard shows
+        # all ten. Only members count towards the qualifying threshold, though.
+        players = tuple(_player_line(player, user_by_steam64.get(player.steam64_id)) for player in detail.players)
+        members = tuple(player for player in players if player.is_member)
         if len(members) < threshold:
             _logger.debug("Skipping match %s: %d linked member(s), need %d", match_id, len(members), threshold)
             continue
 
+        our_team = _our_team(members)
         matches.append(
             Cs2Match(
                 id=detail.id,
                 map_name=detail.map_name,
                 finished_at=_parse_finished_at(detail.finished_at),
-                score=_score_for(detail, members),
-                members=members,
+                score=_score_for(detail, our_team),
+                our_team=our_team,
+                players=players,
             )
         )
 

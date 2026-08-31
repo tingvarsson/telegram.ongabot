@@ -12,7 +12,7 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 
 from ongabot import ongabot
-from ongabot.cs2.session import Cs2Match, Cs2Session, MemberLine
+from ongabot.cs2.session import Cs2Match, Cs2Session, PlayerLine
 
 EVENT_DATE = date(2026, 9, 2)
 
@@ -23,9 +23,10 @@ def _match(match_id):
         map_name="de_mirage",
         finished_at=datetime(2026, 9, 2, 21, 0),
         score=(13, 7),
-        members=(
-            MemberLine(11, "76561198000000011", "tommy", 20, 10, 2.0, 3, 2),
-            MemberLine(22, "76561198000000022", "kalle", 12, 14, 0.86, 1, 2),
+        our_team=2,
+        players=(
+            PlayerLine("76561198000000011", "tommy", 20, 10, 2.0, 3, 2, user_id=11),
+            PlayerLine("76561198000000022", "kalle", 12, 14, 0.86, 1, 2, user_id=22),
         ),
     )
 
@@ -77,7 +78,11 @@ class Cs2SweepCallbackTest(unittest.IsolatedAsyncioTestCase):
         with _patch_results(_session(["m1"])):
             await ongabot.cs2_sweep_callback(context)
 
-        context.bot.send_message.assert_awaited_once_with(123, "RESULTS", parse_mode=ParseMode.MARKDOWN_V2)
+        context.bot.send_message.assert_awaited_once()
+        self.assertEqual(context.bot.send_message.await_args.args, (123, "RESULTS"))
+        kwargs = context.bot.send_message.await_args.kwargs
+        self.assertEqual(kwargs["parse_mode"], ParseMode.MARKDOWN_V2)
+        self.assertTrue(kwargs["link_preview_options"].is_disabled, "Leetify links must not preview")
         event.record_cs2_session.assert_called_once_with({11, 22})
         context.job.schedule_removal.assert_called_once()
 

@@ -1,6 +1,7 @@
 """Utilities for computing and formatting chat-wide participation statistics."""
 
 import logging
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
@@ -347,11 +348,67 @@ _COLUMNS_BY_KEY: Dict[str, _Column] = {c.key: c for c in SORT_COLUMNS}
 DEFAULT_SORT_KEY = "responses"
 
 
+def display_width(text: str) -> int:
+    """Width of text in monospace columns, which is not the same as len().
+
+    East Asian wide and fullwidth characters take two columns; combining marks take none.
+    Counting code points instead shifts every following column on a row - a five-character
+    Chinese name is ten columns wide, not five.
+    """
+    width = 0
+    for char in text:
+        if unicodedata.combining(char) or unicodedata.category(char) in ("Mn", "Me"):
+            continue
+        width += 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+    return width
+
+
+def sanitize_name(name: str) -> str:
+    """Strip the characters of a name whose rendered width cannot be predicted.
+
+    In-game names arrive from CS2 and routinely contain emoji, ZWJ sequences and bidi
+    overrides. Emoji are dropped rather than measured: Telegram renders them with a colour
+    emoji font whose advance width is not tied to the monospace cell, so no column count is
+    reliable and one emoji shifts the whole row. Invisible format characters (ZWJ, and bidi
+    overrides, which reorder the rest of the row) go too. Accents are preserved by composing
+    first, so "e" + U+0301 becomes a single-column "é" rather than being thrown away.
+    """
+    composed = unicodedata.normalize("NFC", name)
+    kept = [
+        char
+        for char in composed
+        # "So" is Symbol/other: emoji, hearts, stars and the rest of the decorative pile.
+        # "Cf" is the invisible format characters. U+FE00-FE0F select emoji presentation.
+        if unicodedata.category(char) not in ("So", "Cf") and not 0xFE00 <= ord(char) <= 0xFE0F
+    ]
+    return " ".join("".join(kept).split())
+
+
+def fit_name(name: str, width: int = NAME_WIDTH, fallback: str = "?") -> str:
+    """Sanitize a name and pad or truncate it to exactly width monospace columns.
+
+    fallback is used when sanitizing leaves nothing behind, so a player whose whole name was
+    emoji still gets a legible row rather than a blank one.
+    """
+    clean = sanitize_name(name) or sanitize_name(fallback) or "?"
+
+    if display_width(clean) <= width:
+        return clean + " " * (width - display_width(clean))
+
+    # Truncate by column, not by character, leaving one column for the ellipsis dot.
+    cell = ""
+    for char in clean:
+        if display_width(cell + char) > width - 1:
+            break
+        cell += char
+    cell += "."
+    # A wide character can leave the cell a column short of width, so pad the remainder.
+    return cell + " " * (width - display_width(cell))
+
+
 def format_name_cell(name: str) -> str:
     """Truncate/pad a display name to NAME_WIDTH and escape it for a MarkdownV2 code entity."""
-    clean = name.replace("\n", " ").replace("\r", " ")
-    cell = clean[: NAME_WIDTH - 1] + "." if len(clean) > NAME_WIDTH else clean.ljust(NAME_WIDTH)
-    return escape_markdown(cell, version=2, entity_type="code")
+    return escape_markdown(fit_name(name), version=2, entity_type="code")
 
 
 def display_names(users: Iterable[User]) -> Dict[int, str]:

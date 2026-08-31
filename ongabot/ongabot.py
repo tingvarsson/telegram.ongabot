@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any, Dict, cast
 
-from telegram import Bot, BotCommand
+from telegram import Bot, BotCommand, LinkPreviewOptions
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, ContextTypes, JobQueue, PicklePersistence
 from telegram.error import TelegramError
@@ -128,7 +128,13 @@ async def cs2_sweep_callback(context: CallbackContext) -> None:
         return
 
     try:
-        await context.bot.send_message(chat.chat_id, text, parse_mode=ParseMode.MARKDOWN_V2)
+        await context.bot.send_message(
+            chat.chat_id,
+            text,
+            parse_mode=ParseMode.MARKDOWN_V2,
+            # The per-match Leetify links would otherwise each drag in a preview card.
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
     except TelegramError as e:
         # Leave the event unreported and the job alive, so the next pass can try again.
         logger.warning("Failed to send CS2 results for chat_id=%s on %s: %s", job.chat_id, event_date, e)

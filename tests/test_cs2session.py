@@ -258,8 +258,11 @@ class SplitTeamScoreTest(unittest.IsolatedAsyncioTestCase):
             os.environ["TZ"] = self._old_tz
         time.tzset()
 
-    async def test_reports_highest_first_when_members_queued_onto_opposite_teams(self):
-        """With members on both sides there is no 'our side' to take the score from."""
+    async def test_an_evenly_split_lobby_takes_the_first_members_side(self):
+        """One member per side is a tie, broken by the first member - SCOUT, on team 2.
+
+        Reporting highest-first instead would claim a win for a match half of them lost.
+        """
         detail = MatchDetail(
             id="m1",
             finished_at="2026-09-02T19:00:00.000Z",
@@ -273,9 +276,11 @@ class SplitTeamScoreTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": detail},
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        match = (await build_session(client, date(2026, 9, 2), LINKS)).matches[0]
 
-        self.assertEqual(session.matches[0].score, (13, 7))
+        self.assertEqual(match.our_team, 2)
+        self.assertEqual(match.score, (7, 13))
+        self.assertEqual(match.outcome, "L")
 
     async def test_returns_an_empty_session_when_nobody_has_linked_an_account(self):
         client = FakeClient(histories={}, details={})
@@ -349,6 +354,163 @@ class SingleLinkedMemberTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(session.matches), 1)
         self.assertEqual(session.played_user_ids, {11})
+
+
+def _detail_10(match_id, member_steams, scores=(13, 7), our_team=2, finished="2026-09-02T19:00:00.000Z"):
+    """A realistic 10-player lobby: members on our_team, strangers filling both sides."""
+    players = []
+    for i, sid in enumerate(member_steams):
+        players.append(_player(sid, kills=20 - i, deaths=10, team=our_team))
+    other_team = 3 if our_team == 2 else 2
+    for i in range(5 - len(member_steams)):
+        players.append(_player(f"7656119870000000{i}", kills=5 + i, deaths=12, team=our_team))
+    for i in range(5):
+        players.append(_player(f"7656119880000000{i}", kills=8 + i, deaths=11, team=other_team))
+    return MatchDetail(
+        id=match_id,
+        finished_at=finished,
+        data_source="matchmaking_competitive",
+        map_name="de_mirage",
+        team_scores={our_team: scores[0], other_team: scores[1]},
+        players=tuple(players),
+    )
+
+
+class AllPlayersTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self._old_tz = os.environ.get("TZ")
+        os.environ["TZ"] = "UTC"
+        time.tzset()
+
+    def tearDown(self):
+        if self._old_tz is None:
+            del os.environ["TZ"]
+        else:
+            os.environ["TZ"] = self._old_tz
+        time.tzset()
+
+    async def _build(self, detail, links=None):
+        client = FakeClient(
+            histories={SCOUT: [_summary("m1", "2026-09-02T19:00:00.000Z")]},
+            details={"m1": detail},
+        )
+        return await build_session(client, date(2026, 9, 2), links if links is not None else LINKS)
+
+    async def test_carries_every_player_in_the_lobby(self):
+        session = await self._build(_detail_10("m1", [SCOUT, MATE]))
+
+        self.assertEqual(len(session.matches[0].players), 10)
+
+    async def test_members_are_flagged_and_non_members_are_not(self):
+        match = (await self._build(_detail_10("m1", [SCOUT, MATE]))).matches[0]
+
+        members = [p for p in match.players if p.is_member]
+        self.assertEqual({p.user_id for p in members}, {11, 22})
+        self.assertTrue(all(p.user_id is None for p in match.players if not p.is_member))
+
+    async def test_members_property_still_returns_only_linked_players(self):
+        match = (await self._build(_detail_10("m1", [SCOUT, MATE]))).matches[0]
+
+        self.assertEqual(len(match.members), 2)
+
+    async def test_played_user_ids_still_counts_only_members(self):
+        """Drives Event.cs2_played - strangers must never leak into it."""
+        session = await self._build(_detail_10("m1", [SCOUT, MATE]))
+
+        self.assertEqual(session.played_user_ids, {11, 22})
+
+    async def test_threshold_still_counts_members_not_lobby_size(self):
+        """A full 10-player lobby with one linked member is still a solo game."""
+        session = await self._build(_detail_10("m1", [SCOUT]), links={11: SCOUT})
+
+        self.assertEqual(session.matches, [])
+
+
+class MatchOutcomeTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self._old_tz = os.environ.get("TZ")
+        os.environ["TZ"] = "UTC"
+        time.tzset()
+
+    def tearDown(self):
+        if self._old_tz is None:
+            del os.environ["TZ"]
+        else:
+            os.environ["TZ"] = self._old_tz
+        time.tzset()
+
+    async def _match(self, scores, our_team=2):
+        client = FakeClient(
+            histories={SCOUT: [_summary("m1", "2026-09-02T19:00:00.000Z")]},
+            details={"m1": _detail_10("m1", [SCOUT, MATE], scores=scores, our_team=our_team)},
+        )
+        session = await build_session(client, date(2026, 9, 2), LINKS)
+        return session.matches[0]
+
+    async def test_win(self):
+        match = await self._match((13, 7))
+        self.assertEqual(match.outcome, "W")
+        self.assertEqual(match.score, (13, 7))
+
+    async def test_loss(self):
+        match = await self._match((7, 13))
+        self.assertEqual(match.outcome, "L")
+
+    async def test_draw(self):
+        """CS2 competitive has no overtime, so 12-12 is a real result."""
+        match = await self._match((12, 12))
+        self.assertEqual(match.outcome, "D")
+
+    async def test_score_is_from_our_side_even_when_we_are_team_three(self):
+        match = await self._match((13, 5), our_team=3)
+        self.assertEqual(match.score, (13, 5))
+        self.assertEqual(match.outcome, "W")
+
+    async def test_regulation_win_is_not_overtime(self):
+        self.assertFalse((await self._match((13, 7))).overtime)
+
+    async def test_a_score_above_thirteen_is_overtime(self):
+        """MR12: 13 ends regulation, so anything higher can only come from OT."""
+        self.assertTrue((await self._match((19, 16))).overtime)
+
+    async def test_a_draw_is_not_overtime(self):
+        self.assertFalse((await self._match((12, 12))).overtime)
+
+
+class SplitTeamPerspectiveTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self._old_tz = os.environ.get("TZ")
+        os.environ["TZ"] = "UTC"
+        time.tzset()
+
+    def tearDown(self):
+        if self._old_tz is None:
+            del os.environ["TZ"]
+        else:
+            os.environ["TZ"] = self._old_tz
+        time.tzset()
+
+    async def test_our_side_is_where_most_members_started(self):
+        """Two members on team 2, one on team 3 -> team 2 is 'us', which won 13-7."""
+        detail = MatchDetail(
+            id="m1",
+            finished_at="2026-09-02T19:00:00.000Z",
+            data_source="matchmaking_competitive",
+            map_name="de_mirage",
+            team_scores={2: 13, 3: 7},
+            players=(
+                _player(SCOUT, team=2),
+                _player(MATE, team=2),
+                _player(SECOND_SCOUT, team=3),
+            ),
+        )
+        client = FakeClient(histories={SCOUT: [_summary("m1", "2026-09-02T19:00:00.000Z")]}, details={"m1": detail})
+
+        match = (await build_session(client, date(2026, 9, 2), LINKS)).matches[0]
+
+        self.assertEqual(match.our_team, 2)
+        self.assertEqual(match.score, (13, 7))
+        self.assertEqual(match.outcome, "W")
 
 
 if __name__ == "__main__":

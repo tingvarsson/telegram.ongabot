@@ -3,7 +3,7 @@
 import logging
 from typing import Optional
 
-from telegram import Update
+from telegram import LinkPreviewOptions, Update
 from telegram.constants import ParseMode
 from telegram.ext import CallbackContext, CommandHandler
 
@@ -71,4 +71,9 @@ async def callback(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text("Couldn't reach Leetify right now - try again in a bit.")
         return
 
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        # The per-match Leetify links would otherwise each drag in a preview card.
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
+    )

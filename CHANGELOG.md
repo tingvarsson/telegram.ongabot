@@ -10,9 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **CS2 match results.** After an event completes, ONGAbot looks up the CS2
-  games actually played that day and posts a "CS2 results" message with the
-  maps, scores, and each member's scoreboard. Data comes from the
-  [Leetify public API][leetify-api].
+  games actually played that day and posts a "CS2 results" message. Data comes
+  from the [Leetify public API][leetify-api]. The message opens with the date
+  and the night's record (`3 matches · 2W 1L · 1 OT`), then a session table
+  combining each member's kills, deaths and K/D across every match they played,
+  then one scoreboard per match showing **all ten players** split by side - your
+  team first, ONGA members marked - with the map, score, outcome and the time
+  the match ended. A long night is trimmed to fit Telegram's message limit,
+  oldest matches first, and says how many it dropped.
+  Round-by-round detail and match start times are deliberately absent: Leetify
+  exposes neither, and the only route to them would be downloading and parsing
+  each match's demo.
   Only **one** member per match needs a Leetify account: Leetify's match-detail
   endpoint returns the full ten-player scoreboard whether or not those players
   use Leetify, so a single enrolled "scout" reveals the whole lobby. Everyone
@@ -37,6 +45,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one; a key just raises the rate limits.
 - Optional `CS2_MIN_MEMBERS` environment variable (default 2) to lower the
   threshold, for a test deployment where only one person has linked an account.
+
+### Fixed
+
+- Table name columns no longer shift out of line for names containing emoji,
+  CJK characters or combining marks. Cells were padded by `len()`, which counts
+  code points rather than monospace columns: a five-character Chinese name is
+  ten columns wide, a combining accent is zero, and an emoji is unpredictable.
+  Names are now measured by display width, and characters whose rendered width
+  cannot be predicted - emoji and other pictographs, plus invisible format
+  characters such as zero-width joiners and bidi overrides - are stripped; a
+  name left empty by that falls back to a short Steam64 tag. This also affects
+  `/statistics` and `/leaderboard`, which share the same name-cell helper.
 
 Per Leetify's [Developer Guidelines][leetify-guidelines], no Leetify data is
 stored. Stats are fetched at render time, shown under Leetify's own field names,

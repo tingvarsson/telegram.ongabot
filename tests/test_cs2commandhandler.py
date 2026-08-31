@@ -49,7 +49,11 @@ class Cs2CommandHandlerTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertIs(results.await_args.args[1], chat)
         self.assertEqual(results.await_args.args[2].event_date, date(2026, 9, 2))
-        update.message.reply_text.assert_awaited_once_with("RESULTS", parse_mode=ParseMode.MARKDOWN_V2)
+        update.message.reply_text.assert_awaited_once()
+        self.assertEqual(update.message.reply_text.await_args.args, ("RESULTS",))
+        kwargs = update.message.reply_text.await_args.kwargs
+        self.assertEqual(kwargs["parse_mode"], ParseMode.MARKDOWN_V2)
+        self.assertTrue(kwargs["link_preview_options"].is_disabled, "Leetify links must not preview")
 
     async def test_reports_the_event_named_by_target_date(self):
         events = [_event(date(2026, 8, 26)), _event(date(2026, 9, 2))]
