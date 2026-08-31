@@ -60,6 +60,11 @@ class PlayerStats:
     kd_ratio: float
     mvps: int
     initial_team_number: int
+    total_assists: int = 0
+    dpr: float = 0.0  # damage per round, i.e. ADR
+    total_damage: int = 0  # with rounds_count, lets a session ADR be summed rather than averaged
+    rounds_count: int = 0
+    multi5k: int = 0  # aces
 
 
 @dataclass(frozen=True)
@@ -92,6 +97,11 @@ def _parse_player(raw: Dict[str, Any]) -> PlayerStats:
         kd_ratio=float(raw.get("kd_ratio") or 0.0),
         mvps=int(raw.get("mvps") or 0),
         initial_team_number=int(raw.get("initial_team_number") or 0),
+        total_assists=int(raw.get("total_assists") or 0),
+        dpr=float(raw.get("dpr") or 0.0),
+        total_damage=int(raw.get("total_damage") or 0),
+        rounds_count=int(raw.get("rounds_count") or 0),
+        multi5k=int(raw.get("multi5k") or 0),
     )
 
 

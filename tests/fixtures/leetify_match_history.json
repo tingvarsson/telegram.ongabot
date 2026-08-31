@@ -21,10 +21,15 @@
         "steam64_id": "76561198034202275",
         "name": "Akkaman",
         "total_kills": 23,
+        "total_assists": 1,
         "total_deaths": 15,
         "kd_ratio": 1.53,
         "mvps": 2,
-        "initial_team_number": 2
+        "initial_team_number": 2,
+        "dpr": 147.2,
+        "total_damage": 2208,
+        "rounds_count": 15,
+        "multi5k": 1
       }
     ]
   },
@@ -50,10 +55,15 @@
         "steam64_id": "76561198034202275",
         "name": "M. Azbayar",
         "total_kills": 39,
+        "total_assists": 2,
         "total_deaths": 15,
         "kd_ratio": 2.6,
         "mvps": 4,
-        "initial_team_number": 2
+        "initial_team_number": 2,
+        "dpr": 139.25,
+        "total_damage": 3342,
+        "rounds_count": 24,
+        "multi5k": 0
       }
     ]
   },
@@ -79,10 +89,15 @@
         "steam64_id": "76561198034202275",
         "name": "s1mplecsgod",
         "total_kills": 19,
+        "total_assists": 4,
         "total_deaths": 16,
         "kd_ratio": 1.19,
         "mvps": 3,
-        "initial_team_number": 2
+        "initial_team_number": 2,
+        "dpr": 72.13,
+        "total_damage": 1731,
+        "rounds_count": 24,
+        "multi5k": 0
       }
     ]
   }

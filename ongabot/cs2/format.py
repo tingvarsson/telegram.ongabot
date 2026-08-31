@@ -16,13 +16,12 @@ metrics, and it is the number people actually want out of a night.
 """
 
 import logging
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from telegram import User
 from telegram.helpers import escape_markdown
 
 from cs2.session import Cs2Match, Cs2Session, PlayerLine
-from utils.statistics import NAME_WIDTH, display_names, fit_name
+from utils.statistics import NAME_WIDTH, fit_name
 
 _logger = logging.getLogger(__name__)
 
@@ -36,12 +35,33 @@ TRIM_MARGIN_CHARS = 200
 
 MEMBER_MARK = "* "  # prefix marking a linked member; two spaces for everyone else
 MARK_WIDTH = len(MEMBER_MARK)
+# Column widths. The board runs to 39 columns and the session table to 41; Telegram code
+# blocks scroll rather than wrap on desktop, and this is the set of stats the chat asked for.
 KILLS_WIDTH = 3
+ASSISTS_WIDTH = 3
 DEATHS_WIDTH = 3
 KD_WIDTH = 5
-MVP_WIDTH = 3
+ADR_WIDTH = 5
+ACES_WIDTH = 2
 MATCHES_WIDTH = 3
 TEAM_DIVIDER = "--"
+
+# Leetify supplies kd_ratio and dpr per match, and those are printed untouched. The session
+# row combines raw counts instead - kills/deaths summed, and damage over rounds rather than
+# an average of per-match averages, which would misweigh a short match against a long one.
+STAT_COLUMNS = (
+    ("K", KILLS_WIDTH),
+    ("A", ASSISTS_WIDTH),
+    ("D", DEATHS_WIDTH),
+    ("K/D", KD_WIDTH),
+    ("ADR", ADR_WIDTH),
+    ("5k", ACES_WIDTH),
+)
+
+
+def _columns(*pairs: Tuple[str, int]) -> str:
+    """Join right-aligned cells with a single space, as every table row does."""
+    return " ".join(value.rjust(width) for value, width in pairs)
 
 
 def _name_cell(name: str, fallback: str = "?") -> str:
@@ -84,60 +104,69 @@ def _summary_line(session: Cs2Session) -> str:
     return " · ".join(parts)
 
 
-def _session_table(session: Cs2Session, names: Mapping[int, str]) -> Optional[str]:
+def _session_table(session: Cs2Session) -> Optional[str]:
     """Each linked member's night, combined across every match they appear in."""
-    totals: Dict[int, List[int]] = {}  # user_id -> [matches, kills, deaths, mvps]
+    totals: Dict[int, Dict[str, float]] = {}
+    names: Dict[int, str] = {}
     for match in session.matches:
         for member in match.members:
-            row = totals.setdefault(member.user_id, [0, 0, 0, 0])
-            row[0] += 1
-            row[1] += member.total_kills
-            row[2] += member.total_deaths
-            row[3] += member.mvps
+            row = totals.setdefault(
+                member.user_id, {"m": 0, "k": 0, "a": 0, "d": 0, "aces": 0, "damage": 0, "rounds": 0}
+            )
+            row["m"] += 1
+            row["k"] += member.total_kills
+            row["a"] += member.total_assists
+            row["d"] += member.total_deaths
+            row["aces"] += member.multi5k
+            row["damage"] += member.total_damage
+            row["rounds"] += member.rounds_count
+            # Matches are in chronological order, so the last one wins: names change.
+            names[member.user_id] = member.name
 
     if not totals:
         return None
 
-    header = (
-        "Name".ljust(NAME_WIDTH)
-        + " "
-        + "M".rjust(MATCHES_WIDTH)
-        + " "
-        + "K".rjust(KILLS_WIDTH)
-        + " "
-        + "D".rjust(DEATHS_WIDTH)
-        + " "
-        + "K/D".rjust(KD_WIDTH)
-    )
+    header = "Name".ljust(NAME_WIDTH) + " " + _columns(("M", MATCHES_WIDTH), *STAT_COLUMNS)
     lines = [header]
-    for user_id, (played, kills, deaths, _mvps) in sorted(totals.items(), key=lambda item: item[1][1], reverse=True):
+    for user_id, row in sorted(totals.items(), key=lambda item: item[1]["k"], reverse=True):
+        adr = row["damage"] / row["rounds"] if row["rounds"] else 0.0
         lines.append(
-            f"{_name_cell(names.get(user_id, str(user_id)))} "
-            f"{played:>{MATCHES_WIDTH}} "
-            f"{kills:>{KILLS_WIDTH}} "
-            f"{deaths:>{DEATHS_WIDTH}} "
-            f"{_kd(kills, deaths):>{KD_WIDTH}}"
+            _name_cell(names[user_id], fallback=str(user_id))
+            + " "
+            + _columns(
+                (f"{int(row['m'])}", MATCHES_WIDTH),
+                (f"{int(row['k'])}", KILLS_WIDTH),
+                (f"{int(row['a'])}", ASSISTS_WIDTH),
+                (f"{int(row['d'])}", DEATHS_WIDTH),
+                (_kd(int(row["k"]), int(row["d"])), KD_WIDTH),
+                (f"{adr:.0f}", ADR_WIDTH),
+                (f"{int(row['aces'])}", ACES_WIDTH),
+            )
         )
     return _code_block(lines)
 
 
-def _player_row(player: PlayerLine, names: Mapping[int, str]) -> str:
-    """One scoreboard line. Members are marked and use their Telegram display name."""
-    if player.is_member:
-        label = names.get(player.user_id, player.name)
-        mark = MEMBER_MARK
-    else:
-        # Everyone else in the lobby is a stranger; their in-game name is all we have.
-        label = player.name
-        mark = " " * MARK_WIDTH
-    # An all-emoji name sanitizes to nothing, so fall back to the tail of the Steam64 -
+def _player_row(player: PlayerLine) -> str:
+    """One scoreboard line, labelled with the in-game name Leetify reports.
+
+    CS2 views name everyone by their Steam identity, members included - the marker is what
+    identifies an ONGA member, not the name.
+    """
+    mark = MEMBER_MARK if player.is_member else " " * MARK_WIDTH
+    # An all-emoji name can sanitize to nothing, so fall back to the tail of the Steam64 -
     # short, aligned, and still tells two such players apart.
     return (
-        f"{mark}{_name_cell(label, fallback=f'#{player.steam64_id[-4:]}')} "
-        f"{player.total_kills:>{KILLS_WIDTH}} "
-        f"{player.total_deaths:>{DEATHS_WIDTH}} "
-        f"{player.kd_ratio:>{KD_WIDTH}.2f} "
-        f"{player.mvps:>{MVP_WIDTH}}"
+        mark
+        + _name_cell(player.name, fallback=f"#{player.steam64_id[-4:]}")
+        + " "
+        + _columns(
+            (f"{player.total_kills:d}", KILLS_WIDTH),
+            (f"{player.total_assists:d}", ASSISTS_WIDTH),
+            (f"{player.total_deaths:d}", DEATHS_WIDTH),
+            (f"{player.kd_ratio:.2f}", KD_WIDTH),
+            (f"{player.adr:.0f}", ADR_WIDTH),
+            (f"{player.multi5k:d}", ACES_WIDTH),
+        )
     )
 
 
@@ -156,28 +185,17 @@ def _match_heading(match: Cs2Match) -> str:
     return f"*{escape_markdown(text, version=2)}*"
 
 
-def _match_section(match: Cs2Match, names: Mapping[int, str]) -> List[str]:
+def _match_section(match: Cs2Match) -> List[str]:
     """Heading, full ten-player scoreboard split by side, and the Leetify link."""
-    header = (
-        " " * MARK_WIDTH
-        + "Name".ljust(NAME_WIDTH)
-        + " "
-        + "K".rjust(KILLS_WIDTH)
-        + " "
-        + "D".rjust(DEATHS_WIDTH)
-        + " "
-        + "K/D".rjust(KD_WIDTH)
-        + " "
-        + "MVP".rjust(MVP_WIDTH)
-    )
+    header = " " * MARK_WIDTH + "Name".ljust(NAME_WIDTH) + " " + _columns(*STAT_COLUMNS)
     ours = [player for player in match.players if player.team_number == match.our_team]
     theirs = [player for player in match.players if player.team_number != match.our_team]
 
     lines = [header]
-    lines += [_player_row(player, names) for player in _sorted_side(ours)]
+    lines += [_player_row(player) for player in _sorted_side(ours)]
     if theirs:
         lines.append(" " * MARK_WIDTH + TEAM_DIVIDER)
-        lines += [_player_row(player, names) for player in _sorted_side(theirs)]
+        lines += [_player_row(player) for player in _sorted_side(theirs)]
 
     link_url = escape_markdown(MATCH_URL.format(id=match.id), version=2, entity_type="text_link")
     return [_match_heading(match), _code_block(lines), f"[View on Leetify]({link_url})"]
@@ -206,14 +224,13 @@ def _trim_to_limit(head: List[str], sections: List[List[str]], tail: List[str]) 
     return body + tail, dropped
 
 
-def format_session(session: Cs2Session, users: Mapping[int, User]) -> str:
+def format_session(session: Cs2Session) -> str:
     """Format a session into the MarkdownV2 body of the CS2 results message.
 
-    users maps Telegram user id to User, so members are labelled with the same display names
-    every other ONGAbot table uses. A member with no User falls back to their in-game name -
-    someone can link a Steam account without ever having answered a poll.
+    Everyone is labelled by their in-game name, members included: a CS2 scoreboard is a Steam
+    scoreboard, and the marker on a row is what says who is in the chat. /statistics and
+    /leaderboard keep Telegram names, since most of their users have no linked Steam account.
     """
-    names = display_names(users.values())
     heading = f"*__CS2 results · {escape_markdown(str(session.event_date), version=2)}__*"
     attribution = f"_{escape_markdown(ATTRIBUTION, version=2)}_"
 
@@ -222,11 +239,11 @@ def format_session(session: Cs2Session, users: Mapping[int, User]) -> str:
         return "\n\n".join([heading, summary, attribution])
 
     head = [heading, escape_markdown(_summary_line(session), version=2)]
-    table = _session_table(session, names)
+    table = _session_table(session)
     if table is not None:
         head += ["*Session*", table]
 
-    sections = [_match_section(match, names) for match in session.matches]
+    sections = [_match_section(match) for match in session.matches]
     body, dropped = _trim_to_limit(head, sections, [attribution])
 
     _logger.debug(

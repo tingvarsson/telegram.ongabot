@@ -74,7 +74,7 @@ class EventResultsTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(session.played_user_ids, {11, 22})
         self.assertIn("de\\_mirage", text)
-        self.assertIn("Thomas", text)
+        self.assertIn("tommy", text, "CS2 views label everyone by their in-game name")
 
     async def test_returns_no_text_when_leetify_is_unreachable(self):
         chat = _chat([_event(date(2026, 9, 2), [THOMAS])])

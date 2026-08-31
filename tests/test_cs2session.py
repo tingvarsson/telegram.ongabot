@@ -27,6 +27,11 @@ def _player(steam64_id, kills=10, deaths=10, team=2):
         kd_ratio=round(kills / deaths, 2) if deaths else 0.0,
         mvps=1,
         initial_team_number=team,
+        total_assists=4,
+        dpr=82.5,
+        total_damage=1237,
+        rounds_count=15,
+        multi5k=1,
     )
 
 
@@ -511,6 +516,34 @@ class SplitTeamPerspectiveTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(match.our_team, 2)
         self.assertEqual(match.score, (13, 7))
         self.assertEqual(match.outcome, "W")
+
+
+class PlayerStatFieldsTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self._old_tz = os.environ.get("TZ")
+        os.environ["TZ"] = "UTC"
+        time.tzset()
+
+    def tearDown(self):
+        if self._old_tz is None:
+            del os.environ["TZ"]
+        else:
+            os.environ["TZ"] = self._old_tz
+        time.tzset()
+
+    async def test_carries_assists_adr_aces_and_the_damage_totals(self):
+        client = FakeClient(
+            histories={SCOUT: [_summary("m1", "2026-09-02T19:00:00.000Z")]},
+            details={"m1": _detail("m1", [SCOUT, MATE])},
+        )
+
+        player = (await build_session(client, date(2026, 9, 2), LINKS)).matches[0].players[0]
+
+        self.assertEqual(player.total_assists, 4)
+        self.assertEqual(player.adr, 82.5)
+        self.assertEqual(player.multi5k, 1)
+        self.assertEqual(player.total_damage, 1237)
+        self.assertEqual(player.rounds_count, 15)
 
 
 if __name__ == "__main__":

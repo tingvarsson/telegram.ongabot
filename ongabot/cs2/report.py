@@ -8,7 +8,7 @@ import logging
 from typing import Mapping, Optional, Tuple, TYPE_CHECKING
 
 from cs2.format import format_session
-from cs2.session import Cs2Session, MatchSource, build_session, chat_members, steam_links
+from cs2.session import Cs2Session, MatchSource, build_session, steam_links
 from utils import log
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle: chat -> event -> ... -> cs2
@@ -39,7 +39,7 @@ async def event_results(
     if session is None:
         return None, None
 
-    return session, format_session(session, chat_members(chat))
+    return session, format_session(session)
 
 
 def latest_reportable_event(chat: "Chat") -> Optional["Event"]:

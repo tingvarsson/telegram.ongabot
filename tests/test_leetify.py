@@ -59,6 +59,20 @@ class LeetifyMatchDetailTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(scout.kd_ratio, 1.53)
         self.assertEqual(scout.mvps, 2)
         self.assertEqual(scout.initial_team_number, 2)
+        self.assertEqual(scout.total_assists, 1)
+        self.assertEqual(scout.multi5k, 1, "an ace in this match")
+
+    async def test_parses_the_damage_fields_behind_adr(self):
+        client = LeetifyClient()
+        with patch.object(client, "_get", AsyncMock(return_value=_fixture("leetify_match_detail.json"))):
+            match = await client.get_match("2fae0fe6-a164-4c38-a2ee-c30d7b9dc57b")
+
+        scout = next(p for p in match.players if p.steam64_id == "76561198034202275")
+        self.assertEqual(scout.dpr, 147.2)
+        self.assertEqual(scout.total_damage, 2208)
+        self.assertEqual(scout.rounds_count, 15)
+        # Leetify's dpr is damage per round, i.e. ADR - the totals must agree with it.
+        self.assertAlmostEqual(scout.total_damage / scout.rounds_count, scout.dpr, places=1)
 
     async def test_parses_team_scores(self):
         client = LeetifyClient()

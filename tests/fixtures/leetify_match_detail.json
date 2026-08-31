@@ -19,91 +19,141 @@
       "steam64_id": "76561198058758159",
       "name": "ExpNas",
       "total_kills": 2,
+      "total_assists": 2,
       "total_deaths": 6,
       "kd_ratio": 0.33,
       "mvps": 0,
-      "initial_team_number": 2
+      "initial_team_number": 2,
+      "dpr": 66,
+      "total_damage": 396,
+      "rounds_count": 6,
+      "multi5k": 0
     },
     {
       "steam64_id": "76561198880096431",
       "name": "\u0411\u043e\u0448\u043a\u0430 \u0433\u043e\u0432\u044f\u0436\u044c\u044f",
       "total_kills": 9,
+      "total_assists": 2,
       "total_deaths": 6,
       "kd_ratio": 1.5,
       "mvps": 2,
-      "initial_team_number": 3
+      "initial_team_number": 3,
+      "dpr": 58.73,
+      "total_damage": 881,
+      "rounds_count": 15,
+      "multi5k": 0
     },
     {
       "steam64_id": "76561198876807519",
       "name": "Makunga",
       "total_kills": 9,
+      "total_assists": 1,
       "total_deaths": 7,
       "kd_ratio": 1.29,
       "mvps": 4,
-      "initial_team_number": 3
+      "initial_team_number": 3,
+      "dpr": 54.33,
+      "total_damage": 815,
+      "rounds_count": 15,
+      "multi5k": 0
     },
     {
       "steam64_id": "76561198101127993",
       "name": "Smouler",
       "total_kills": 8,
+      "total_assists": 2,
       "total_deaths": 4,
       "kd_ratio": 2,
       "mvps": 3,
-      "initial_team_number": 3
+      "initial_team_number": 3,
+      "dpr": 53.13,
+      "total_damage": 797,
+      "rounds_count": 15,
+      "multi5k": 0
     },
     {
       "steam64_id": "76561198062792602",
       "name": "\u0421\u044d\u043d\u0434\u0432\u0438\u0447 \u0441\u043e \u0441\u043f\u0443\u0449\u0451\u043d\u043a\u043e\u0439",
       "total_kills": 4,
+      "total_assists": 3,
       "total_deaths": 7,
       "kd_ratio": 0.57,
       "mvps": 2,
-      "initial_team_number": 3
+      "initial_team_number": 3,
+      "dpr": 36.6,
+      "total_damage": 549,
+      "rounds_count": 15,
+      "multi5k": 0
     },
     {
       "steam64_id": "76561197969289242",
       "name": "deNboRNNN",
       "total_kills": 1,
+      "total_assists": 0,
       "total_deaths": 5,
       "kd_ratio": 0.2,
       "mvps": 0,
-      "initial_team_number": 2
+      "initial_team_number": 2,
+      "dpr": 27.8,
+      "total_damage": 139,
+      "rounds_count": 5,
+      "multi5k": 0
     },
     {
       "steam64_id": "76561198114564909",
       "name": "P.3yb",
       "total_kills": 3,
+      "total_assists": 2,
       "total_deaths": 6,
       "kd_ratio": 0.5,
       "mvps": 2,
-      "initial_team_number": 3
+      "initial_team_number": 3,
+      "dpr": 26.27,
+      "total_damage": 394,
+      "rounds_count": 15,
+      "multi5k": 0
     },
     {
       "steam64_id": "76561198312179693",
       "name": "Zenci Psikiyatir",
       "total_kills": 0,
+      "total_assists": 1,
       "total_deaths": 7,
       "kd_ratio": 0,
       "mvps": 0,
-      "initial_team_number": 2
+      "initial_team_number": 2,
+      "dpr": 19,
+      "total_damage": 133,
+      "rounds_count": 7,
+      "multi5k": 0
     },
     {
       "steam64_id": "76561198034202275",
       "name": "Akkaman",
       "total_kills": 23,
+      "total_assists": 1,
       "total_deaths": 15,
       "kd_ratio": 1.53,
       "mvps": 2,
-      "initial_team_number": 2
+      "initial_team_number": 2,
+      "dpr": 147.2,
+      "total_damage": 2208,
+      "rounds_count": 15,
+      "multi5k": 1
     },
     {
       "steam64_id": "76561198316090861",
       "name": "nichtjulez",
       "total_kills": 1,
+      "total_assists": 1,
       "total_deaths": 7,
       "kd_ratio": 0.14,
       "mvps": 0,
-      "initial_team_number": 2
+      "initial_team_number": 2,
+      "dpr": 29.14,
+      "total_damage": 204,
+      "rounds_count": 7,
+      "multi5k": 0
     }
   ]
 }

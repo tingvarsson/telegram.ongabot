@@ -91,6 +91,13 @@ class PlayerLine:
     mvps: int
     team_number: int
     user_id: Optional[int] = None  # Telegram user id, when this player is a linked member
+    total_assists: int = 0
+    adr: float = 0.0  # Leetify's dpr, damage per round
+    multi5k: int = 0  # aces
+    # Kept so a session ADR can be summed as damage/rounds rather than averaging averages,
+    # which is wrong whenever matches ran to different round counts.
+    total_damage: int = 0
+    rounds_count: int = 0
 
     @property
     def is_member(self) -> bool:
@@ -226,6 +233,11 @@ def _player_line(player: PlayerStats, user_id: Optional[int]) -> PlayerLine:
         kd_ratio=player.kd_ratio,
         mvps=player.mvps,
         team_number=player.initial_team_number,
+        total_assists=player.total_assists,
+        adr=player.dpr,
+        multi5k=player.multi5k,
+        total_damage=player.total_damage,
+        rounds_count=player.rounds_count,
     )
 
 

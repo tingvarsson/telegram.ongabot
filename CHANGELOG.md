@@ -16,7 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   combining each member's kills, deaths and K/D across every match they played,
   then one scoreboard per match showing **all ten players** split by side - your
   team first, ONGA members marked - with the map, score, outcome and the time
-  the match ended. A long night is trimmed to fit Telegram's message limit,
+  the match ended. Both tables carry kills, assists, deaths, K/D, ADR and aces;
+  everyone is named by their Steam in-game name, so the marker is what
+  identifies an ONGA member. Per-match K/D and ADR are Leetify's own `kd_ratio`
+  and `dpr`, printed untouched; the session row sums raw counts instead, and its
+  ADR is total damage over total rounds rather than an average of per-match
+  averages, which would misweigh a short match against a long one.
+  Clutches won, HLTV Rating and Utility Rating are not shown because the API
+  exposes none of them: there is no clutch count, no HLTV rating, and utility
+  rating exists only as a career-wide profile figure. A long night is trimmed to fit Telegram's message limit,
   oldest matches first, and says how many it dropped.
   Round-by-round detail and match start times are deliberately absent: Leetify
   exposes neither, and the only route to them would be downloading and parsing
