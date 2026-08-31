@@ -2,7 +2,7 @@
 
 import logging
 from datetime import date, timedelta
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, Optional, cast
 
 from telegram import Message
 from telegram.error import TelegramError
@@ -52,7 +52,9 @@ class Chat:
 
         # Migrate events from old Dict[str, Event] to Dict[date, Event]
         if self.events and not isinstance(next(iter(self.events)), date):
-            old_events: Dict[str, Event] = self.events
+            # Unpickled legacy state still has poll_id (str) keys here, which the isinstance
+            # check above has just confirmed; cast so the migration can read them as such.
+            old_events = cast(Dict[str, Event], self.events)
             migrated: Dict[date, Event] = {}
             for _poll_id, event in old_events.items():
                 d = event.event_date

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `make mypy` now type-checks all 34 modules instead of only the entry point.
+  With `mypy_path = ongabot`, `mypy -p ongabot` resolved the package name to the
+  `ongabot/ongabot.py` module and reported "no issues found in 1 source file",
+  so type errors anywhere in the codebase passed CI unnoticed. The five errors
+  this uncovered (across three files) are fixed; none affected runtime behavior.
+
 ### Changed
 
 - Bumped `python-telegram-bot` from 22.7 to 22.8. Development tooling (black,

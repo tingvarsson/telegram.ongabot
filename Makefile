@@ -38,7 +38,7 @@ pep8:
 	$(PEP8) ongabot tests
 
 mypy:
-	$(MYPY) -p ongabot
+	$(MYPY) ongabot
 
 black-check:
 	$(BLACK) . --diff --check
@@ -49,7 +49,7 @@ black:
 	$(BLACK) .
 
 test:
-	$(PYTEST) -v --cov=ongabot --cov-report=term-missing --cov-fail-under=78
+	$(PYTEST) -v --cov=ongabot --cov-report=term-missing --cov-fail-under=80
 
 clean:
 	rm -rf $(VENV_PATH)
