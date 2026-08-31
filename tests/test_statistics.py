@@ -615,11 +615,12 @@ class SortColumnsTest(unittest.TestCase):
         self.assertEqual(column.button_label, "Played Streak")
         self.assertEqual(column.header, "PStk")
 
-    def test_column_order_pairs_the_two_streaks(self):
+    def test_each_streak_follows_the_stat_it_belongs_to(self):
+        # Response count, rate, streak - then played count, rate, streak.
         keys = [c.key for c in SORT_COLUMNS]
         self.assertEqual(
             keys[:6],
-            ["responses", "resp_rate", "resp_streak", "played_streak", "played", "play_rate"],
+            ["responses", "resp_rate", "resp_streak", "played", "play_rate", "played_streak"],
         )
 
 
@@ -814,8 +815,10 @@ class FormatStatisticsTableTest(unittest.TestCase):
 
         self.assertIn("RStk", header)
         self.assertIn("PStk", header)
-        # RStk sits immediately left of PStk, so the two values appear in that order
+        # RStk closes the response group, PStk the played group that follows it
         self.assertLess(header.index("RStk"), header.index("PStk"))
+        self.assertLess(header.index("RStk"), header.index("Play"))
+        self.assertLess(header.index("Play%"), header.index("PStk"))
         self.assertEqual(cell_under("RStk"), "7")
         self.assertEqual(cell_under("PStk"), "3")
 
