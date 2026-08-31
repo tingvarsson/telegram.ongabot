@@ -458,10 +458,10 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         self.assertEqual(row.played, 0)
         self.assertAlmostEqual(row.slots_avg, 0.0)
 
-    def test_streak_comes_from_latest_event_reused_in_row(self):
+    def test_response_streak_derived_from_event_history(self):
         alice = _make_user(1, "Alice")
-        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])}, user_streaks={1: 1})
-        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers={alice: _make_answer([0])}, user_streaks={1: 2})
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers={alice: _make_answer([0])})
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
 
@@ -470,11 +470,14 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
 
         self.assertEqual(row.response_streak, 2)
 
-    def test_played_streak_comes_from_latest_event_reused_in_row(self):
+    def test_played_streak_derived_from_history_when_stored_maps_are_empty(self):
+        # Regression: events persisted before user_played_streaks shipped (v1.5.0) unpickle
+        # with an empty map, which used to render PStk as 0 for every user. The history is
+        # all that should matter.
         alice = _make_user(1, "Alice")
         answers = {alice: _make_answer([0])}
-        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers=answers, user_played_streaks={1: 1})
-        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers=answers, user_played_streaks={1: 2})
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers=answers, user_played_streaks={})
+        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers=answers, user_played_streaks={})
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
 
@@ -483,8 +486,8 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
 
         self.assertEqual(row.played_streak, 2)
 
-    def test_the_two_streaks_are_tracked_independently(self):
-        # Alice answered both events but only played the latest: response streak 2, played 1.
+    def test_stored_streak_maps_are_ignored_in_favour_of_history(self):
+        # Stale maps left on an event must not override what the answers actually say.
         alice = _make_user(1, "Alice")
         answers = {alice: _make_answer([0])}
         e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers=answers)
@@ -492,9 +495,23 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
             date(2026, 1, 8),
             num_slots=1,
             poll_answers=answers,
-            user_streaks={1: 2},
-            user_played_streaks={1: 1},
+            user_streaks={1: 99},
+            user_played_streaks={1: 99},
         )
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.response_streak, 2)
+        self.assertEqual(row.played_streak, 2)
+
+    def test_the_two_streaks_are_tracked_independently(self):
+        # Alice answered both events but only played the latest: response streak 2, played 1.
+        alice = _make_user(1, "Alice")
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([1])})  # No-op
+        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers={alice: _make_answer([0])})
         chat = MagicMock()
         chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
 
@@ -504,11 +521,69 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         self.assertEqual(row.response_streak, 2)
         self.assertEqual(row.played_streak, 1)
 
-    def test_user_absent_from_latest_event_streaks_gets_zero_for_both(self):
+    def test_played_streak_broken_by_no_op_in_the_latest_event(self):
         alice = _make_user(1, "Alice")
-        event = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])})
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers={alice: _make_answer([1])})  # No-op
         chat = MagicMock()
-        chat.events = {date(2026, 1, 1): event}
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.response_streak, 2)
+        self.assertEqual(row.played_streak, 0)
+
+    def test_both_streaks_broken_by_a_skipped_event(self):
+        alice = _make_user(1, "Alice")
+        bob = _make_user(2, "Bob")
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers={bob: _make_answer([0])})
+        e3 = _make_event(date(2026, 1, 15), num_slots=1, poll_answers={alice: _make_answer([0])})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2, date(2026, 1, 15): e3}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.response_streak, 1)
+        self.assertEqual(row.played_streak, 1)
+
+    def test_both_streaks_broken_by_a_retracted_answer(self):
+        alice = _make_user(1, "Alice")
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers={alice: _make_answer([])})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.response_streak, 0)
+        self.assertEqual(row.played_streak, 0)
+
+    def test_cancelled_event_does_not_break_either_streak(self):
+        # Matches the handler, which filters cancelled events out of its streak inputs.
+        alice = _make_user(1, "Alice")
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers={}, cancelled=True)
+        e3 = _make_event(date(2026, 1, 15), num_slots=1, poll_answers={alice: _make_answer([0])})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2, date(2026, 1, 15): e3}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.response_streak, 2)
+        self.assertEqual(row.played_streak, 2)
+
+    def test_user_absent_from_latest_event_gets_zero_for_both(self):
+        alice = _make_user(1, "Alice")
+        bob = _make_user(2, "Bob")
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers={bob: _make_answer([0])})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
 
         result = compute_statistics(chat)
         row = _row_for(result, 1)

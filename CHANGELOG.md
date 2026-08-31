@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `/statistics` Played Streak (`PStk`) showed 0 for every user on data predating
+  1.5.0. Both streak columns were read from the latest event's stored
+  `user_streaks` / `user_played_streaks` maps, which are only written when a vote
+  arrives. `user_streaks` has been maintained since 1.1.0, so `RStk` was
+  unaffected, but `user_played_streaks` shipped in 1.5.0 and was therefore empty
+  on every already-persisted event. Both streaks are now derived from the event
+  history that `/statistics` already walks, so they are correct immediately for
+  all existing data and no longer depend on when the feature was deployed.
+
 ## [1.5.0] - 2026-08-31
 
 ### Fixed
