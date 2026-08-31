@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bumped `python-telegram-bot` from 22.7 to 22.8. Development tooling (black,
+  mypy, pylint, pytest) and GitHub Actions were updated alongside it, with no
+  user-facing effect.
 - `/statistics` now shows first names only in the User Statistics table (a last
   initial is added when two users share a first name), making the table two
   columns narrower.
