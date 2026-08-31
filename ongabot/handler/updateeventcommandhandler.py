@@ -97,8 +97,8 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     if len(candidates) > 1:
         lines = ["Multiple active events match. Be more specific using target_date=:"]
-        for e in sorted(candidates, key=lambda e: (e.event_date, e.start_time)):
-            lines.append(f"  • {e.event_date} {e.start_time.strftime('%H:%M')}")
+        for candidate in sorted(candidates, key=lambda c: (c.event_date, c.start_time)):
+            lines.append(f"  • {candidate.event_date} {candidate.start_time.strftime('%H:%M')}")
         lines.append(f"\n{UPDATEEVENT.usage}")
         await update.message.reply_text("\n".join(lines))
         return
