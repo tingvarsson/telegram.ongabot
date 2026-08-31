@@ -276,14 +276,19 @@ class StatColumnsTest(unittest.TestCase):
     def test_shows_aces(self):
         self.assertRegex(self._row(aces=2), r"\s2\s*$")
 
+    def test_shows_total_damage_between_kd_and_adr(self):
+        row = self._row(adr=88.0, rounds=25).split()
+
+        self.assertEqual(row[5], "2200", "DMG is total damage, 88 ADR over 25 rounds")
+        self.assertEqual(row[6], "88", "ADR follows DMG")
+
     def test_shows_kd_ratio_as_leetify_reports_it(self):
         self.assertIn("1.53", self._row())
 
     def test_header_names_every_column(self):
         header = _scoreboard(format_session(_session()))[0]
 
-        for column in ("Name", "K", "A", "D", "K/D", "ADR", "5k"):
-            self.assertIn(column, header)
+        self.assertEqual(header.split(), ["Name", "K", "A", "D", "K/D", "DMG", "ADR", "ACE"])
 
     def test_every_scoreboard_row_is_the_same_width(self):
         rows = [r for r in _scoreboard(format_session(_session())) if r.strip() != "--"]
@@ -307,6 +312,23 @@ class SessionAdrTest(unittest.TestCase):
         # (100*30 + 10*3) / 33 = 91.8, not the naive (100+10)/2 = 55.
         self.assertIn("92", row)
         self.assertNotIn("55", row)
+
+    def test_session_table_sums_total_damage(self):
+        session = _session(
+            [
+                _match(match_id="a", players=[_member(11, "tommy", 1, 1, 1.0, adr=100.0, rounds=20), _stranger("x")]),
+                _match(match_id="b", players=[_member(11, "tommy", 1, 1, 1.0, adr=50.0, rounds=10), _stranger("y")]),
+            ]
+        )
+
+        row = next(line for line in format_session(session).splitlines() if line.startswith("tommy")).split()
+
+        self.assertEqual(row[6], "2500", "2000 + 500 damage")
+
+    def test_session_header_matches_the_board_plus_matches(self):
+        header = _scoreboard(format_session(_session()), index=0)[0]
+
+        self.assertEqual(header.split(), ["Name", "M", "K", "A", "D", "K/D", "DMG", "ADR", "ACE"])
 
     def test_session_table_sums_assists_and_aces(self):
         session = _session(

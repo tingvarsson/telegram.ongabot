@@ -43,8 +43,9 @@ KILLS_WIDTH = 3
 ASSISTS_WIDTH = 3
 DEATHS_WIDTH = 3
 KD_WIDTH = 5
-ADR_WIDTH = 5
-ACES_WIDTH = 2
+DAMAGE_WIDTH = 5  # a long overtime match tops out around 5000; a session total needs five
+ADR_WIDTH = 4
+ACES_WIDTH = 3
 MATCHES_WIDTH = 3
 TEAM_DIVIDER = "--"
 
@@ -56,8 +57,9 @@ STAT_COLUMNS = (
     ("A", ASSISTS_WIDTH),
     ("D", DEATHS_WIDTH),
     ("K/D", KD_WIDTH),
+    ("DMG", DAMAGE_WIDTH),
     ("ADR", ADR_WIDTH),
-    ("5k", ACES_WIDTH),
+    ("ACE", ACES_WIDTH),
 )
 
 
@@ -141,6 +143,7 @@ def _session_table(session: Cs2Session) -> Optional[str]:
                 (f"{int(row['a'])}", ASSISTS_WIDTH),
                 (f"{int(row['d'])}", DEATHS_WIDTH),
                 (_kd(int(row["k"]), int(row["d"])), KD_WIDTH),
+                (f"{int(row['damage'])}", DAMAGE_WIDTH),
                 (f"{adr:.0f}", ADR_WIDTH),
                 (f"{int(row['aces'])}", ACES_WIDTH),
             )
@@ -163,6 +166,7 @@ def _player_row(player: PlayerLine) -> str:
             (f"{player.total_assists:d}", ASSISTS_WIDTH),
             (f"{player.total_deaths:d}", DEATHS_WIDTH),
             (f"{player.kd_ratio:.2f}", KD_WIDTH),
+            (f"{player.total_damage:d}", DAMAGE_WIDTH),
             (f"{player.adr:.0f}", ADR_WIDTH),
             (f"{player.multi5k:d}", ACES_WIDTH),
         )

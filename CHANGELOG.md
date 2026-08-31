@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   then one scoreboard per match showing **all ten players** split by side, your
   team first, with the map, score, outcome and the time the match ended.
   Players are not individually marked: Telegram does not allow bold inside a
-  code block, and the Session table already lists exactly the chat's members. Both tables carry kills, assists, deaths, K/D, ADR and aces;
+  code block, and the Session table already lists exactly the chat's members. Both tables carry kills, assists, deaths, K/D, total damage, ADR and aces;
   everyone is named by their Steam in-game name. Per-match K/D and ADR are Leetify's own `kd_ratio`
   and `dpr`, printed untouched; the session row sums raw counts instead, and its
   ADR is total damage over total rounds rather than an average of per-match
