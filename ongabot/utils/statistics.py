@@ -37,7 +37,8 @@ class UserStatRow:
     played: int = 0
     response_pct: float = 0.0
     play_pct: float = 0.0
-    streak: int = 0
+    response_streak: int = 0  # consecutive most-recent events answered at all
+    played_streak: int = 0  # consecutive most-recent events with an actual slot pick
     slots_total: int = 0
     slots_avg: float = 0.0  # average slots picked per event the user could actually play
 
@@ -204,7 +205,12 @@ def _build_slot_stats(acc: _Accumulator, answered_events: int) -> List[SlotStat]
     return stats
 
 
-def _build_user_rows(acc: _Accumulator, num_events: int, streaks: Dict[int, int]) -> List[UserStatRow]:
+def _build_user_rows(
+    acc: _Accumulator,
+    num_events: int,
+    streaks: Dict[int, int],
+    played_streaks: Dict[int, int],
+) -> List[UserStatRow]:
     """Build one UserStatRow per user ever seen, scoping eligibility to events since first appearance."""
     rows = []
     for user_id, user in acc.user_by_id.items():
@@ -219,7 +225,8 @@ def _build_user_rows(acc: _Accumulator, num_events: int, streaks: Dict[int, int]
                 played=played,
                 response_pct=(responses / eligible) if eligible > 0 else 0.0,
                 play_pct=(played / eligible) if eligible > 0 else 0.0,
-                streak=streaks.get(user_id, 0),
+                response_streak=streaks.get(user_id, 0),
+                played_streak=played_streaks.get(user_id, 0),
                 slots_total=slots_total,
                 slots_avg=(slots_total / played) if played > 0 else 0.0,
                 no_op=acc.no_op_counts.get(user_id, 0),
@@ -235,8 +242,11 @@ def compute_statistics(chat: Chat) -> StatisticsResult:
 
     Cancelled events are excluded entirely (a user whose only appearance was in a
     cancelled event gets no row). Retracted votes (empty option_ids) count toward a
-    user's first-appearance/eligibility but not toward their response count. Streaks are
-    read from the latest event's already-maintained user_streaks. avg_participants counts
+    user's first-appearance/eligibility but not toward their response count. Both streaks are
+    read from the latest event's already-maintained maps: user_streaks counts consecutive
+    most-recent events answered at all (No-op and Maybe Baby </3 included), user_played_streaks
+    only those with an actual slot pick. A user absent from those maps did not vote in the
+    latest event, so their streak is 0 either way. avg_participants counts
     only users who picked at least one slot (i.e. who can actually play, not everyone who
     answered), averaged over answered events only so zero-response events do not dilute
     it. avg_per_slot spreads all slot picks over every slot offered in those events.
@@ -254,7 +264,12 @@ def compute_statistics(chat: Chat) -> StatisticsResult:
     total_picks = sum(acc.slot_text_counts.values())
     avg_per_slot = (total_picks / acc.slot_instances) if acc.slot_instances > 0 else None
     slot_stats = _build_slot_stats(acc, answered_events)
-    user_rows = _build_user_rows(acc, len(events), dict(latest_event.user_streaks))
+    user_rows = _build_user_rows(
+        acc,
+        len(events),
+        dict(latest_event.user_streaks),
+        dict(latest_event.user_played_streaks),
+    )
 
     _logger.debug(
         "Computed statistics for chat_id=%s: %s events, %s known users, %s slot groups from %s picks over %s slots",
@@ -295,9 +310,10 @@ def _format_pct(value: float) -> str:
 SORT_COLUMNS: List[_Column] = [
     _Column("responses", "Resp", 4, "Responses", lambda r: r.responses, lambda r: str(r.responses)),
     _Column("resp_rate", "Resp%", 5, "Response Rate", lambda r: r.response_pct, lambda r: _format_pct(r.response_pct)),
-    _Column("streak", "Strk", 4, "Streak", lambda r: r.streak, lambda r: str(r.streak)),
+    _Column("resp_streak", "RStk", 4, "Response Streak", lambda r: r.response_streak, lambda r: str(r.response_streak)),
     _Column("played", "Play", 4, "Played", lambda r: r.played, lambda r: str(r.played)),
     _Column("play_rate", "Play%", 5, "Played Rate", lambda r: r.play_pct, lambda r: _format_pct(r.play_pct)),
+    _Column("played_streak", "PStk", 4, "Played Streak", lambda r: r.played_streak, lambda r: str(r.played_streak)),
     _Column("slots", "Slot", 4, "Total Slots", lambda r: r.slots_total, lambda r: str(r.slots_total)),
     _Column("avg", " Avg", 4, "Avg Slots (played)", lambda r: r.slots_avg, lambda r: f"{r.slots_avg:.1f}"),
     _Column("maybe", " May", 4, "Maybe", lambda r: r.maybe, lambda r: str(r.maybe)),

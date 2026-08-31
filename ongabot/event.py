@@ -48,6 +48,9 @@ class Event:
         status_message_id: id of the status message for the event
         data: EventData grouping event_date, start_time, num_slots
         completed: whether the event is complete (date has passed or was cancelled)
+        user_streaks: response streak per user id - consecutive most-recent events answered
+        user_played_streaks: played streak per user id - consecutive most-recent events in
+            which the user picked an actual time slot; this is what the status message stars
     """
 
     def __init__(self, chat_id: int, poll: Poll, data: EventData) -> None:
@@ -61,6 +64,7 @@ class Event:
         self.completed: bool = False
         self.cancelled: bool = False
         self.user_streaks: Dict[int, int] = {}
+        self.user_played_streaks: Dict[int, int] = {}
 
     @property
     def event_date(self) -> date:
@@ -107,6 +111,8 @@ class Event:
             self.cancelled = False
         if not hasattr(self, "user_streaks"):
             self.user_streaks = {}
+        if not hasattr(self, "user_played_streaks"):
+            self.user_played_streaks = {}
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -156,7 +162,9 @@ class Event:
             message += f"\n*{escape_markdown(option.text, version=2)} \\({option.voter_count}\\)*"
             for user, answer in self.poll_answers.items():
                 if i in answer.option_ids:
-                    streak = self.user_streaks.get(user.id, 0)
+                    # The star is the played streak (consecutive events with an actual slot
+                    # pick), not the response streak - showing up is what earns the star.
+                    streak = self.user_played_streaks.get(user.id, 0)
                     streak_suffix = f" ★{streak}" if streak > 1 else ""
                     message += f"\n  • {user.mention_markdown_v2()}{streak_suffix}"
             message += "\n"

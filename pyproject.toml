@@ -3,7 +3,7 @@ line-length = 120
 
 [tool.pylint.design]
 max-args = 10
-max-attributes = 11
+max-attributes = 12  # UserStatRow is a flat stats row: one attribute per table column
 max-positional-arguments=10
 
 [tool.pylint.format]
