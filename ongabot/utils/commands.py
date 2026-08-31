@@ -157,6 +157,13 @@ STATISTICS = CommandInfo(
     menu_description="Show all-time participation statistics",
 )
 
+LEADERBOARD = CommandInfo(
+    command="leaderboard",
+    brief="/leaderboard - Show the Banger Points leaderboard for this chat",
+    usage="/leaderboard",
+    menu_description="Show the Banger Points leaderboard",
+)
+
 BOT_SHORT_DESCRIPTION = "ONGAbot - the only bot you'll ever need"
 
 BOT_DESCRIPTION = (
@@ -179,4 +186,5 @@ ALL_COMMANDS = [
     AUTHORIZE,
     DEAUTHORIZE,
     STATISTICS,
+    LEADERBOARD,
 ]

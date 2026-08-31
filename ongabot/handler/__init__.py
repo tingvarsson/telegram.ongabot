@@ -9,6 +9,7 @@ from .deschedulecommandhandler import DeScheduleCommandHandler
 from .eventpollanswerhandler import EventPollAnswerHandler
 from .eventpollhandler import EventPollHandler
 from .helpcommandhandler import HelpCommandHandler
+from .leaderboardcommandhandler import LeaderboardCommandHandler
 from .neweventcommandhandler import NewEventCommandHandler
 from .ongacommandhandler import OngaCommandHandler
 from .reschedulecommandhandler import RescheduleCommandHandler
@@ -28,6 +29,7 @@ __all__ = (
     "EventPollAnswerHandler",
     "EventPollHandler",
     "HelpCommandHandler",
+    "LeaderboardCommandHandler",
     "NewEventCommandHandler",
     "OngaCommandHandler",
     "RescheduleCommandHandler",

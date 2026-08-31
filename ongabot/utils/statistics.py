@@ -52,7 +52,7 @@ class SlotStat:
     """One time-slot's popularity across a chat's event history.
 
     text is the group label: a single "HH.MM" time, or "HH.MM-HH.MM" when near-identical
-    times were merged, see _group_slot_texts.
+    times were merged, see group_slot_texts.
     """
 
     text: str
@@ -158,9 +158,10 @@ def _slot_minutes(text: str) -> Optional[int]:
     return parsed.hour * 60 + parsed.minute
 
 
-def _group_slot_texts(texts: Iterable[str]) -> List[_SlotGroup]:
+def group_slot_texts(texts: Iterable[str]) -> List[_SlotGroup]:
     """Merge near-identical slot times (e.g. 20.30 and 20.40) into groups, in chronological order.
 
+    Shared with utils.points, which keys slot rarity on the group label for the same reason.
     A new group starts when the gap to the previous time exceeds SLOT_GROUP_MAX_GAP_MINUTES,
     or when the time would stretch the group past SLOT_GROUP_MAX_SPAN_MINUTES. Texts that are
     not HH.MM (hand-made polls) are never merged and are reported last, sorted by text.
@@ -199,7 +200,7 @@ def _group_slot_texts(texts: Iterable[str]) -> List[_SlotGroup]:
 def _build_slot_stats(acc: _Accumulator, answered_events: int) -> List[SlotStat]:
     """Build one SlotStat per group of near-identical slot times ever picked, in chronological order."""
     stats = []
-    for group in _group_slot_texts(acc.slot_text_counts):
+    for group in group_slot_texts(acc.slot_text_counts):
         if len(group.texts) > 1:
             _logger.debug("Grouped near-identical slot times %s into %s", list(group.texts), group.label)
         members = set(group.texts)
@@ -346,25 +347,29 @@ _COLUMNS_BY_KEY: Dict[str, _Column] = {c.key: c for c in SORT_COLUMNS}
 DEFAULT_SORT_KEY = "responses"
 
 
-def _format_name_cell(name: str) -> str:
+def format_name_cell(name: str) -> str:
     """Truncate/pad a display name to NAME_WIDTH and escape it for a MarkdownV2 code entity."""
     clean = name.replace("\n", " ").replace("\r", " ")
     cell = clean[: NAME_WIDTH - 1] + "." if len(clean) > NAME_WIDTH else clean.ljust(NAME_WIDTH)
     return escape_markdown(cell, version=2, entity_type="code")
 
 
-def _display_names(rows: List[UserStatRow]) -> Dict[int, str]:
-    """Map user_id to table name: first name only, plus a last initial where first names collide."""
+def display_names(users: Iterable[User]) -> Dict[int, str]:
+    """Map user_id to table name: first name only, plus a last initial where first names collide.
+
+    Shared with utils.points so a user is labelled identically in every table the bot renders.
+    """
+    users = list(users)
     first_name_counts: Dict[str, int] = {}
-    for row in rows:
-        first_name_counts[row.user.first_name] = first_name_counts.get(row.user.first_name, 0) + 1
+    for user in users:
+        first_name_counts[user.first_name] = first_name_counts.get(user.first_name, 0) + 1
 
     names: Dict[int, str] = {}
-    for row in rows:
-        name = row.user.first_name
-        if first_name_counts[name] > 1 and row.user.last_name:
-            name = f"{name} {row.user.last_name[0]}."
-        names[row.user.id] = name
+    for user in users:
+        name = user.first_name
+        if first_name_counts[name] > 1 and user.last_name:
+            name = f"{name} {user.last_name[0]}."
+        names[user.id] = name
     return names
 
 
@@ -374,14 +379,14 @@ def _format_table(rows: List[UserStatRow], sort_by: str) -> str:
         _logger.debug("Unknown sort_by=%s for statistics table; falling back to default=%s", sort_by, DEFAULT_SORT_KEY)
         column = _COLUMNS_BY_KEY[DEFAULT_SORT_KEY]
     # Names are disambiguated across all rows, before ranking, so they do not change with sort order.
-    names = _display_names(rows)
+    names = display_names(row.user for row in rows)
     ranked = sorted(rows, key=column.value, reverse=True)[:MAX_TABLE_ROWS]
 
     header = "Name".ljust(NAME_WIDTH) + " " + " ".join(c.header for c in SORT_COLUMNS)
     lines = [header]
     for row in ranked:
         cells = " ".join(c.render(row).rjust(c.width) for c in SORT_COLUMNS)
-        lines.append(f"{_format_name_cell(names[row.user.id])} {cells}")
+        lines.append(f"{format_name_cell(names[row.user.id])} {cells}")
 
     return "```\n" + "\n".join(lines) + "\n```"
 
