@@ -7,7 +7,14 @@ straight from CS2 and are full of exactly that.
 
 import unittest
 
-from ongabot.utils.statistics import NAME_WIDTH, display_width, emoji_name, fit_name, sanitize_name
+from ongabot.utils.statistics import (
+    EMOJI_WIDTH,
+    NAME_WIDTH,
+    display_width,
+    emoji_name,
+    fit_name,
+    sanitize_name,
+)
 
 
 class DisplayWidthTest(unittest.TestCase):
@@ -112,17 +119,18 @@ class EmojiOnlyNameTest(unittest.TestCase):
     aligned. Only a name that would otherwise vanish entirely is worth the width guess.
     """
 
-    def test_an_emoji_counts_as_two_columns(self):
-        self.assertEqual(display_width("❤️"), 2)
+    def test_an_emoji_counts_as_emoji_width(self):
+        self.assertEqual(display_width("❤️"), EMOJI_WIDTH)
+        self.assertEqual(EMOJI_WIDTH, 3, "measured against Telegram's rendering")
 
-    def test_a_zwj_sequence_is_one_glyph_of_two_columns(self):
-        self.assertEqual(display_width("👨‍👩‍👧"), 2)
+    def test_a_zwj_sequence_is_one_glyph(self):
+        self.assertEqual(display_width("👨‍👩‍👧"), EMOJI_WIDTH)
 
-    def test_a_flag_is_one_glyph_of_two_columns(self):
-        self.assertEqual(display_width("🇸🇪"), 2)
+    def test_a_flag_is_one_glyph(self):
+        self.assertEqual(display_width("🇸🇪"), EMOJI_WIDTH)
 
     def test_a_skin_tone_modifier_does_not_add_width(self):
-        self.assertEqual(display_width("👍🏽"), 2)
+        self.assertEqual(display_width("👍🏽"), EMOJI_WIDTH)
 
     def test_emoji_name_keeps_emoji_but_drops_bidi_overrides(self):
         self.assertEqual(emoji_name("❤️\u202e"), "❤️")

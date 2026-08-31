@@ -33,8 +33,10 @@ ATTRIBUTION = "Data Provided by Leetify"
 MAX_MESSAGE_CHARS = 4096
 TRIM_MARGIN_CHARS = 200
 
-MEMBER_MARK = "* "  # prefix marking a linked member; two spaces for everyone else
-MARK_WIDTH = len(MEMBER_MARK)
+# Members are not marked on the board. Telegram forbids nesting bold inside a pre entity
+# ("bold ... can contain and can be part of any other entities, except pre and code"), so
+# there is no way to emphasise a row, and a punctuation marker just adds noise to every line.
+# The Session table lists exactly the members, which is where to look for who is in the chat.
 # Column widths. The board runs to 39 columns and the session table to 41; Telegram code
 # blocks scroll rather than wrap on desktop, and this is the set of stats the chat asked for.
 KILLS_WIDTH = 3
@@ -149,15 +151,12 @@ def _session_table(session: Cs2Session) -> Optional[str]:
 def _player_row(player: PlayerLine) -> str:
     """One scoreboard line, labelled with the in-game name Leetify reports.
 
-    CS2 views name everyone by their Steam identity, members included - the marker is what
-    identifies an ONGA member, not the name.
+    CS2 views name everyone by their Steam identity, members included.
     """
-    mark = MEMBER_MARK if player.is_member else " " * MARK_WIDTH
     # An all-emoji name can sanitize to nothing, so fall back to the tail of the Steam64 -
     # short, aligned, and still tells two such players apart.
     return (
-        mark
-        + _name_cell(player.name, fallback=f"#{player.steam64_id[-4:]}")
+        _name_cell(player.name, fallback=f"#{player.steam64_id[-4:]}")
         + " "
         + _columns(
             (f"{player.total_kills:d}", KILLS_WIDTH),
@@ -187,14 +186,14 @@ def _match_heading(match: Cs2Match) -> str:
 
 def _match_section(match: Cs2Match) -> List[str]:
     """Heading, full ten-player scoreboard split by side, and the Leetify link."""
-    header = " " * MARK_WIDTH + "Name".ljust(NAME_WIDTH) + " " + _columns(*STAT_COLUMNS)
+    header = "Name".ljust(NAME_WIDTH) + " " + _columns(*STAT_COLUMNS)
     ours = [player for player in match.players if player.team_number == match.our_team]
     theirs = [player for player in match.players if player.team_number != match.our_team]
 
     lines = [header]
     lines += [_player_row(player) for player in _sorted_side(ours)]
     if theirs:
-        lines.append(" " * MARK_WIDTH + TEAM_DIVIDER)
+        lines.append(TEAM_DIVIDER)
         lines += [_player_row(player) for player in _sorted_side(theirs)]
 
     link_url = escape_markdown(MATCH_URL.format(id=match.id), version=2, entity_type="text_link")

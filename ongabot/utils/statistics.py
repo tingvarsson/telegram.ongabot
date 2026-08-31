@@ -359,7 +359,10 @@ _EMOJI_RANGES = (
 _ZWJ = "\u200d"
 _SKIN_TONES = (0x1F3FB, 0x1F3FF)
 _REGIONAL = (0x1F1E6, 0x1F1FF)
-EMOJI_WIDTH = 2
+# Measured against Telegram's own rendering, where an emoji glyph occupies three monospace
+# cells. This is client-dependent - a terminal typically shows one or two - so it is a single
+# constant to retune rather than a number spread through the formatting code.
+EMOJI_WIDTH = 3
 
 
 def _is_emoji(char: str) -> bool:

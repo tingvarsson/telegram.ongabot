@@ -158,14 +158,14 @@ class MatchScoreboardTest(unittest.TestCase):
 
         self.assertLess(block.index("teammate1"), block.index("enemy1"), "our team must come first")
 
-    def test_members_are_marked_and_strangers_are_not(self):
-        # Scoped to the match block: the session summary lists members without a marker.
-        block = format_session(_session()).split("*de\\_mirage")[1]
-        tommy = next(line for line in block.splitlines() if "tommy" in line)
-        enemy = next(line for line in block.splitlines() if "enemy1" in line)
+    def test_no_row_is_marked_since_bold_is_impossible_inside_a_code_block(self):
+        """Telegram forbids nesting bold in pre/code, so members are not singled out.
 
-        self.assertTrue(tommy.startswith("*"), tommy)
-        self.assertFalse(enemy.startswith("*"), enemy)
+        The session table above the boards is what says who is in the chat.
+        """
+        rows = _scoreboard(format_session(_session()))
+
+        self.assertTrue(all(not row.startswith(("*", "+", ">")) for row in rows), rows)
 
     def test_strangers_are_shown_by_their_ingame_name(self):
         self.assertIn("enemy1", format_session(_session()))

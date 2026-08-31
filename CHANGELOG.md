@@ -14,11 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the [Leetify public API][leetify-api]. The message opens with the date
   and the night's record (`3 matches · 2W 1L · 1 OT`), then a session table
   combining each member's kills, deaths and K/D across every match they played,
-  then one scoreboard per match showing **all ten players** split by side - your
-  team first, ONGA members marked - with the map, score, outcome and the time
-  the match ended. Both tables carry kills, assists, deaths, K/D, ADR and aces;
-  everyone is named by their Steam in-game name, so the marker is what
-  identifies an ONGA member. Per-match K/D and ADR are Leetify's own `kd_ratio`
+  then one scoreboard per match showing **all ten players** split by side, your
+  team first, with the map, score, outcome and the time the match ended.
+  Players are not individually marked: Telegram does not allow bold inside a
+  code block, and the Session table already lists exactly the chat's members. Both tables carry kills, assists, deaths, K/D, ADR and aces;
+  everyone is named by their Steam in-game name. Per-match K/D and ADR are Leetify's own `kd_ratio`
   and `dpr`, printed untouched; the session row sums raw counts instead, and its
   ADR is total damage over total rounds rather than an average of per-match
   averages, which would misweigh a short match against a long one.
@@ -62,7 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ten columns wide, a combining accent is zero, and an emoji is unpredictable.
   Names are now measured by grapheme cluster rather than code point, so a ZWJ
   family sequence and a flag each count as the single glyph they render as.
-  Emoji are assumed to be two columns wide. A name mixing emoji with text drops
+  Emoji are assumed to be three columns wide, matching how Telegram renders
+  them; that assumption is a single constant, `EMOJI_WIDTH`. A name mixing emoji with text drops
   the emoji, which keeps that row exact; a name that is *only* emoji keeps them,
   since two columns is a better guess than losing the name. Invisible format
   characters - zero-width joiners and bidi overrides, the latter also a spoofing
