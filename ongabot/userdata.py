@@ -20,14 +20,30 @@ class UserData:
     Attributes:
         poll_answer: Dict of telegram.PollAnswer given by this user indexed by poll_id
         user: telegram.User object for this user - has to be initialized via init()
+        steam64_id: Steam64 this user linked via /linksteam, or None when unlinked. UserData
+            is keyed globally by user id, so one link serves every chat the user is in.
     """
 
     def __init__(self) -> None:
         self.poll_answer: Dict[str, Tuple[int, ...]] = {}
         self.user: Optional[User] = None
+        self.steam64_id: Optional[str] = None
+
+    def __setstate__(self, state: dict) -> None:
+        self.__dict__.update(state)
+        # Set default values for any missing attributes (for backward compatibility with older persisted data)
+        if not hasattr(self, "steam64_id"):
+            # Linking is opt-in consent, so nobody is linked retroactively.
+            self.steam64_id = None
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
+
+    @log.method
+    def set_steam64_id(self, steam64_id: Optional[str]) -> None:
+        """Link this user to a Steam64, or pass None to unlink."""
+        self.steam64_id = steam64_id
+        _logger.debug("user_data:\n%s", self)
 
     @log.method
     def init_or_update(self, user: User) -> None:

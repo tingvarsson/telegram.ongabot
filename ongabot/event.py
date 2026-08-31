@@ -2,7 +2,7 @@
 
 import logging
 from datetime import date, time
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 
 from telegram import Bot, Poll, PollAnswer, User
@@ -51,6 +51,10 @@ class Event:
         user_streaks: response streak per user id - consecutive most-recent events answered
         user_played_streaks: played streak per user id - consecutive most-recent events in
             which the user picked an actual time slot; this is what the status message stars
+        cs2_played: user id -> True for each linked member seen in a real CS2 match on this
+            event's date. ONGAbot's own derived fact; no Leetify data is ever stored here.
+        cs2_reported: whether the CS2 results message has been posted, so the sweep job that
+            posts it never posts twice
     """
 
     def __init__(self, chat_id: int, poll: Poll, data: EventData) -> None:
@@ -65,6 +69,8 @@ class Event:
         self.cancelled: bool = False
         self.user_streaks: Dict[int, int] = {}
         self.user_played_streaks: Dict[int, int] = {}
+        self.cs2_played: Dict[int, bool] = {}
+        self.cs2_reported: bool = False
 
     @property
     def event_date(self) -> date:
@@ -113,6 +119,12 @@ class Event:
             self.user_streaks = {}
         if not hasattr(self, "user_played_streaks"):
             self.user_played_streaks = {}
+        if not hasattr(self, "cs2_played"):
+            self.cs2_played = {}
+        if not hasattr(self, "cs2_reported"):
+            # Events that predate CS2 results are never swept - their matches have long since
+            # fallen out of Leetify's ~4.5-month history window anyway.
+            self.cs2_reported = False
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -143,6 +155,21 @@ class Event:
     def mark_complete(self) -> None:
         """Mark this event as completed (date has passed or was cancelled)"""
         self.completed = True
+
+    @log.method
+    def record_cs2_session(self, played_user_ids: Set[int]) -> None:
+        """Record which linked members were seen playing, and mark the CS2 results as posted.
+
+        Only these derived booleans are persisted - the Leetify scoreboard behind them is
+        rendered into the message and discarded.
+        """
+        self.cs2_played = {user_id: True for user_id in played_user_ids}
+        self.cs2_reported = True
+        _logger.info(
+            "Recorded CS2 session for poll_id=%s: %d member(s) played",
+            self.poll_id,
+            len(played_user_ids),
+        )
 
     @log.method
     def _create_status_message_text(self, chat_member_count: int) -> str:

@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CS2 match results.** After an event completes, ONGAbot looks up the CS2
+  games actually played that day and posts a "CS2 results" message with the
+  maps, scores, and each member's scoreboard. Data comes from the
+  [Leetify public API][leetify-api].
+  Only **one** member per match needs a Leetify account: Leetify's match-detail
+  endpoint returns the full ten-player scoreboard whether or not those players
+  use Leetify, so a single enrolled "scout" reveals the whole lobby. Everyone
+  else just runs `/linksteam` so the bot recognises their Steam64.
+  Results arrive as a separate follow-up message rather than inside the Banger
+  Points recap, because that recap fires at midnight, before Leetify has
+  processed the night's demos. A sweep job checks every 20 minutes and posts
+  once the night's match list stops growing, giving up after 14 hours.
+  A match counts as an ONGA game when at least 2 linked members appear on its
+  scoreboard. Only Valve matchmaking counts - competitive and Premier; FACEIT,
+  wingman and casual are excluded. Matches are attributed to the event's
+  calendar date in server local time, since Leetify reports UTC and an evening
+  game under CEST would otherwise land on the wrong day.
+- New `/linksteam <steam64|profile URL>` and `/unlinksteam` commands. Linking is
+  per-user and opt-in, since it publishes your match stats to the chat. A raw
+  17-digit Steam64 or a `steamcommunity.com/profiles/<id>` URL both work; a
+  vanity `/id/<name>` URL cannot be resolved without a Steam Web API key and is
+  rejected with an explanation.
+- New `/cs2 [target_date=<date|weekday>]` command to show the results for an
+  event on demand, defaulting to the most recent completed event.
+- Optional `LEETIFY_API_KEY` environment variable. The public API works without
+  one; a key just raises the rate limits.
+
+Per Leetify's [Developer Guidelines][leetify-guidelines], no Leetify data is
+stored. Stats are fetched at render time, shown under Leetify's own field names,
+and discarded; every message carries the required attribution and a per-match
+"View on Leetify" link. The only things persisted are ONGAbot's own derived
+facts - which members were seen playing, and whether results have been posted.
+A Leetify outage cannot affect anything else: every call returns `None` on
+failure, so polls, status messages and the Banger Points recap are unaffected,
+and the sweep simply retries.
+
+[leetify-api]: https://api-public-docs.cs-prod.leetify.com/
+[leetify-guidelines]: https://leetify.com/blog/leetify-api-developer-guidelines/
+
 ## [1.6.0] - 2026-08-31
 
 ### Fixed
