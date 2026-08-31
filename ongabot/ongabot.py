@@ -6,6 +6,7 @@ import logging
 import os
 
 from telegram import Bot, BotCommand
+from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, ContextTypes, PicklePersistence
 from telegram.error import TelegramError
 
@@ -21,6 +22,7 @@ from handler import DeScheduleCommandHandler
 from handler import EventPollAnswerHandler
 from handler import EventPollHandler
 from handler import HelpCommandHandler
+from handler import LeaderboardCommandHandler
 from handler import NewEventCommandHandler
 from handler import OngaCommandHandler
 from handler import RescheduleCommandHandler
@@ -33,6 +35,7 @@ from userdata import UserData
 from utils import log
 from utils.changelog import get_changelog_delta, is_dev_version
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
+from utils.points import render_event_recap_message
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -70,6 +73,24 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
                         event.poll_id,
                         e,
                     )
+                # Banger Points recap. The event is already marked complete, so a failure here
+                # is never retried on the next sweep - log it loudly rather than silently
+                # dropping the update. Cancelled events are skipped: /cancelevent completes
+                # them too, and they are excluded from scoring entirely.
+                if not event.cancelled:
+                    try:
+                        await context.bot.send_message(
+                            chat.chat_id,
+                            render_event_recap_message(chat, event),
+                            parse_mode=ParseMode.MARKDOWN_V2,
+                        )
+                    except TelegramError as e:
+                        logger.warning(
+                            "Failed to send Banger Points recap for chat_id=%s poll_id=%s: %s",
+                            chat.chat_id,
+                            event.poll_id,
+                            e,
+                        )
                 logger.info(
                     "Auto-completed past event poll_id=%s (date=%s) in chat_id=%s",
                     event.poll_id,
@@ -202,6 +223,7 @@ def main() -> None:
     application.add_handler(RescheduleCommandHandler())
     application.add_handler(StatisticsCommandHandler())
     application.add_handler(StatisticsSortCallbackHandler())
+    application.add_handler(LeaderboardCommandHandler())
     application.add_error_handler(error)
 
     # Start the bot

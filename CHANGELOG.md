@@ -18,6 +18,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history that `/statistics` already walks, so they are correct immediately for
   all existing data and no longer depend on when the feature was deployed.
 
+### Added
+
+- New `/leaderboard` command showing **Banger Points**, a single score per user
+  that weights each vote by how much it actually mattered rather than just
+  counting votes. A vote earns more when it was decisive: picking the winning
+  slot pays a clutch bonus scaled by how close that slot was to quorum (5
+  players), plus an extra "rescue" when it landed on quorum exactly. Picking
+  more slots helps with diminishing returns, so all five is not worth five times
+  one, and propping up a slot the chat usually ignores earns a rarity bonus.
+  Answering "No-op" beats ghosting, and being first to the poll pays too.
+  Two standings are shown: **Form**, the rolling last 20 events, and All-time.
+- A Banger Points recap is now posted to the chat when an event completes,
+  showing what the poll decided, who scored what and why, and the top 5 of the
+  Form table. Because polls are never closed, a late vote can still change an
+  event's points afterwards - the recap is a snapshot at completion time, and
+  `/leaderboard` recomputes live.
+
 ## [1.5.0] - 2026-08-31
 
 ### Fixed

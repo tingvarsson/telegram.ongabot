@@ -2,6 +2,7 @@ import unittest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from telegram.constants import ParseMode
 from telegram.error import TelegramError
 
 from ongabot import ongabot
@@ -82,6 +83,96 @@ class CompletePastEventsHappyPathTest(unittest.IsolatedAsyncioTestCase):
         event.mark_complete.assert_called_once()
         event.update_status_message.assert_called_once_with(context.bot)
         chat.remove_pinned_poll.assert_called_once_with("poll1")
+
+
+def _make_past_event(poll_id: str, day: int, cancelled: bool = False):
+    """A past, not-yet-completed event mock, with cancelled set explicitly.
+
+    The recap guard reads event.cancelled, so it has to be a real bool rather than the
+    truthy MagicMock attribute a bare mock would hand back.
+    """
+    event = MagicMock()
+    event.completed = False
+    event.cancelled = cancelled
+    event.event_date = date(2020, 1, day)
+    event.poll_id = poll_id
+    event.update_status_message = AsyncMock()
+    return event
+
+
+def _make_context(chat):
+    context = MagicMock()
+    context.bot_data.chats = {"chat1": chat}
+    context.bot.send_message = AsyncMock()
+    return context
+
+
+class CompletePastEventsRecapTest(unittest.IsolatedAsyncioTestCase):
+    """The Banger Points recap posted when the daily sweep completes an event."""
+
+    def _make_chat(self, *events):
+        chat = MagicMock()
+        chat.chat_id = 42
+        chat.events = {event.event_date: event for event in events}
+        chat.remove_pinned_poll = AsyncMock()
+        return chat
+
+    async def test_recap_sent_for_a_newly_completed_event(self):
+        event = _make_past_event("poll1", 1)
+        chat = self._make_chat(event)
+        context = _make_context(chat)
+
+        with patch("ongabot.ongabot.render_event_recap_message", return_value="RECAP") as render:
+            await ongabot.complete_past_events_callback(context)
+
+        render.assert_called_once_with(chat, event)
+        context.bot.send_message.assert_awaited_once()
+        args, kwargs = context.bot.send_message.call_args
+        self.assertEqual(args[0], 42)
+        self.assertEqual(args[1], "RECAP")
+        self.assertEqual(kwargs["parse_mode"], ParseMode.MARKDOWN_V2)
+
+    async def test_recap_not_resent_on_a_second_sweep(self):
+        event = _make_past_event("poll1", 1)
+        # The real mark_complete sets the flag; that is what gates the branch on re-runs,
+        # including the run_once sweep 5s after every restart.
+        event.mark_complete = MagicMock(side_effect=lambda: setattr(event, "completed", True))
+        chat = self._make_chat(event)
+        context = _make_context(chat)
+
+        with patch("ongabot.ongabot.render_event_recap_message", return_value="RECAP"):
+            await ongabot.complete_past_events_callback(context)
+            await ongabot.complete_past_events_callback(context)
+
+        context.bot.send_message.assert_awaited_once()
+
+    async def test_no_recap_for_a_cancelled_event(self):
+        event = _make_past_event("poll1", 1, cancelled=True)
+        chat = self._make_chat(event)
+        context = _make_context(chat)
+
+        with patch("ongabot.ongabot.render_event_recap_message") as render:
+            await ongabot.complete_past_events_callback(context)
+
+        render.assert_not_called()
+        context.bot.send_message.assert_not_awaited()
+        # The event is still completed and unpinned, just not announced.
+        event.mark_complete.assert_called_once()
+        chat.remove_pinned_poll.assert_awaited_once_with("poll1")
+
+    async def test_failed_recap_does_not_abort_the_rest_of_the_sweep(self):
+        event1 = _make_past_event("poll1", 1)
+        event2 = _make_past_event("poll2", 2)
+        chat = self._make_chat(event1, event2)
+        context = _make_context(chat)
+        context.bot.send_message = AsyncMock(side_effect=[TelegramError("forbidden"), None])
+
+        with patch("ongabot.ongabot.render_event_recap_message", return_value="RECAP"):
+            await ongabot.complete_past_events_callback(context)
+
+        event1.mark_complete.assert_called_once()
+        event2.mark_complete.assert_called_once()
+        self.assertEqual(context.bot.send_message.await_count, 2)
 
 
 class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
