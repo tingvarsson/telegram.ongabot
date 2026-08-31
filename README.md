@@ -37,6 +37,49 @@ The image is also published on [Docker Hub](https://hub.docker.com/r/tingvarsson
 docker run --rm --env API_TOKEN=your_token tingvarsson/telegram.ongabot:latest
 ```
 
+## CS2 match results
+
+When an event completes, ONGAbot looks up the CS2 games played that day and posts a
+"CS2 results" message with the maps, scores and each member's scoreboard. `/cs2` shows
+the same thing on demand.
+
+Match data comes from the [Leetify public API](https://api-public-docs.cs-prod.leetify.com/).
+Setting `LEETIFY_API_KEY` in `.env` is optional — the public API works without a key, but
+anonymous requests face tighter rate limits. Get one at
+[leetify.com/app/developer](https://leetify.com/app/developer).
+
+### Setting it up for a chat
+
+Each member runs `/linksteam` once, so the bot knows which Steam account is theirs:
+
+```text
+/linksteam 76561198034202275
+/linksteam https://steamcommunity.com/profiles/76561198034202275
+```
+
+A vanity `steamcommunity.com/id/<name>` URL will not work — resolving it needs a Steam Web
+API key, which this bot deliberately avoids. Open your profile and copy the numeric
+`/profiles/` URL instead. `/unlinksteam` undoes it.
+
+**Only one member per match needs an actual [Leetify](https://leetify.com/) account.**
+Leetify's match-detail endpoint returns the full ten-player scoreboard whether or not those
+players use Leetify, so one enrolled member is enough to reveal a whole lobby. Everyone else
+only needs `/linksteam`.
+
+A match is reported as an ONGA game when at least two linked members appear on its
+scoreboard. Only Valve matchmaking counts — competitive and Premier. Matches are attributed
+to an event by the server's local calendar date.
+
+Set `CS2_MIN_MEMBERS=1` to lower that threshold. This is meant for a test deployment where
+only one person has linked an account — at two, nothing can ever reach the threshold and the
+feature looks broken. Leave it unset in a real chat: at 1 the bot reports every matchmaking
+game any single member plays.
+
+Per Leetify's [Developer Guidelines](https://leetify.com/blog/leetify-api-developer-guidelines/),
+no Leetify data is stored: stats are fetched when a message is rendered and then discarded.
+ONGAbot persists only its own derived facts — who was seen playing, and whether the results
+have been posted.
+
 ## Code cleaners
 
 For code formatting `black` is used, together with `flake8` and `pylint` for linting.

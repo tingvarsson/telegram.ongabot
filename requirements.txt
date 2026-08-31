@@ -1,1 +1,4 @@
 python-telegram-bot[all]==22.8
+# Already pulled in by python-telegram-bot; pinned explicitly because ongabot/cs2
+# imports it directly to talk to the Leetify API.
+httpx==0.28.1

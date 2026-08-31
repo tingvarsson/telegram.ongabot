@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CS2 match results.** After an event completes, ONGAbot looks up the CS2
+  games actually played that day and posts a "CS2 results" message. Data comes
+  from the [Leetify public API][leetify-api]. The message opens with the date
+  and the night's record (`3 matches · 2W 1L · 1 OT`), then a session table
+  combining each member's kills, deaths and K/D across every match they played,
+  then one scoreboard per match showing **all ten players** split by side, your
+  team first, with the map, score, outcome and the time the match ended.
+  Players are not individually marked: Telegram does not allow bold inside a
+  code block, and the Session table already lists exactly the chat's members. Both tables carry kills, assists, deaths, K/D, total damage, ADR and aces;
+  everyone is named by their Steam in-game name. Per-match K/D and ADR are Leetify's own `kd_ratio`
+  and `dpr`, printed untouched; the session row sums raw counts instead, and its
+  ADR is total damage over total rounds rather than an average of per-match
+  averages, which would misweigh a short match against a long one.
+  Clutches won, HLTV Rating and Utility Rating are not shown because the API
+  exposes none of them: there is no clutch count, no HLTV rating, and utility
+  rating exists only as a career-wide profile figure. A long night is trimmed to fit Telegram's message limit,
+  oldest matches first, and says how many it dropped.
+  Round-by-round detail and match start times are deliberately absent: Leetify
+  exposes neither, and the only route to them would be downloading and parsing
+  each match's demo.
+  Only **one** member per match needs a Leetify account: Leetify's match-detail
+  endpoint returns the full ten-player scoreboard whether or not those players
+  use Leetify, so a single enrolled "scout" reveals the whole lobby. Everyone
+  else just runs `/linksteam` so the bot recognises their Steam64.
+  Results arrive as a separate follow-up message rather than inside the Banger
+  Points recap, because that recap fires at midnight, before Leetify has
+  processed the night's demos. A sweep job checks every 20 minutes and posts
+  once the night's match list stops growing, giving up after 14 hours.
+  A match counts as an ONGA game when at least 2 linked members appear on its
+  scoreboard. Only Valve matchmaking counts - competitive and Premier; FACEIT,
+  wingman and casual are excluded. Matches are attributed to the event's
+  calendar date in server local time, since Leetify reports UTC and an evening
+  game under CEST would otherwise land on the wrong day.
+- New `/linksteam <steam64|profile URL>` and `/unlinksteam` commands. Linking is
+  per-user and opt-in, since it publishes your match stats to the chat. A raw
+  17-digit Steam64 or a `steamcommunity.com/profiles/<id>` URL both work; a
+  vanity `/id/<name>` URL cannot be resolved without a Steam Web API key and is
+  rejected with an explanation.
+- New `/cs2 [target_date=<date|weekday>]` command to show the results for an
+  event on demand, defaulting to the most recent completed event.
+- Optional `LEETIFY_API_KEY` environment variable. The public API works without
+  one; a key just raises the rate limits.
+- Optional `CS2_MIN_MEMBERS` environment variable (default 2) to lower the
+  threshold, for a test deployment where only one person has linked an account.
+
+### Fixed
+
+- Table name columns no longer shift out of line for names containing emoji,
+  CJK characters or combining marks. Cells were padded by `len()`, which counts
+  code points rather than monospace columns: a five-character Chinese name is
+  ten columns wide, a combining accent is zero, and an emoji is unpredictable.
+  Names are now measured by grapheme cluster rather than code point, so a ZWJ
+  family sequence and a flag each count as the single glyph they render as.
+  Emoji are assumed to be three columns wide, matching how Telegram renders
+  them; that assumption is a single constant, `EMOJI_WIDTH`. A name mixing emoji with text drops
+  the emoji, which keeps that row exact; a name that is *only* emoji keeps them,
+  since two columns is a better guess than losing the name. Invisible format
+  characters - zero-width joiners and bidi overrides, the latter also a spoofing
+  vector - are always removed, and a name left with nothing renderable falls
+  back to a short Steam64 tag. This also affects `/statistics` and
+  `/leaderboard`, which share the same name-cell helper.
+
+Per Leetify's [Developer Guidelines][leetify-guidelines], no Leetify data is
+stored. Stats are fetched at render time, shown under Leetify's own field names,
+and discarded; every message carries the required attribution and a per-match
+"View on Leetify" link. The only things persisted are ONGAbot's own derived
+facts - which members were seen playing, and whether results have been posted.
+A Leetify outage cannot affect anything else: every call returns `None` on
+failure, so polls, status messages and the Banger Points recap are unaffected,
+and the sweep simply retries.
+
+[leetify-api]: https://api-public-docs.cs-prod.leetify.com/
+[leetify-guidelines]: https://leetify.com/blog/leetify-api-developer-guidelines/
+
 ## [1.6.0] - 2026-08-31
 
 ### Fixed

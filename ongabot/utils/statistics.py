@@ -1,9 +1,10 @@
 """Utilities for computing and formatting chat-wide participation statistics."""
 
 import logging
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
+from typing import Callable, Dict, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, User
 from telegram.helpers import escape_markdown
@@ -347,11 +348,155 @@ _COLUMNS_BY_KEY: Dict[str, _Column] = {c.key: c for c in SORT_COLUMNS}
 DEFAULT_SORT_KEY = "responses"
 
 
+# Emoji live in these blocks. Anything here renders with Telegram's colour emoji font, whose
+# advance width is not tied to the monospace cell; two columns is the closest usable guess.
+_EMOJI_RANGES = (
+    (0x1F000, 0x1FAFF),  # pictographs, faces, symbols, extended-A
+    (0x2600, 0x27BF),  # misc symbols and dingbats, e.g. U+2764 heart
+    (0x2B00, 0x2BFF),  # misc symbols and arrows
+    (0xFE0F, 0xFE0F),  # variation selector-16, which forces emoji presentation
+)
+_ZWJ = "\u200d"
+_SKIN_TONES = (0x1F3FB, 0x1F3FF)
+_REGIONAL = (0x1F1E6, 0x1F1FF)
+# Measured against Telegram's own rendering, where an emoji glyph occupies three monospace
+# cells. This is client-dependent - a terminal typically shows one or two - so it is a single
+# constant to retune rather than a number spread through the formatting code.
+EMOJI_WIDTH = 3
+
+
+def _is_emoji(char: str) -> bool:
+    """True for characters that render as an emoji glyph rather than a monospace cell."""
+    code = ord(char)
+    if unicodedata.category(char) == "So":
+        return True
+    return any(low <= code <= high for low, high in _EMOJI_RANGES)
+
+
+def _is_modifier(char: str) -> bool:
+    """Skin-tone modifiers and variation selectors extend a cluster without widening it."""
+    code = ord(char)
+    return _SKIN_TONES[0] <= code <= _SKIN_TONES[1] or 0xFE00 <= code <= 0xFE0F
+
+
+def _clusters(text: str) -> Iterator[Tuple[str, int]]:
+    """Split text into (cluster, display width) pairs.
+
+    A cluster is what renders as one glyph, which is why this cannot be a per-character loop:
+    a ZWJ family sequence is five code points and one glyph, and a flag is two. Emoji
+    clusters are EMOJI_WIDTH columns, East Asian wide characters two, combining marks zero.
+    """
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if _is_emoji(char):
+            end = index + 1
+            while end < len(text):
+                if _is_modifier(text[end]):
+                    end += 1
+                elif text[end] == _ZWJ and end + 1 < len(text) and _is_emoji(text[end + 1]):
+                    end += 2
+                elif _REGIONAL[0] <= ord(char) <= _REGIONAL[1] and _REGIONAL[0] <= ord(text[end]) <= _REGIONAL[1]:
+                    end += 1  # the second half of a flag
+                    break
+                else:
+                    break
+            yield text[index:end], EMOJI_WIDTH
+            index = end
+            continue
+
+        if unicodedata.combining(char) or unicodedata.category(char) in ("Mn", "Me", "Cf"):
+            yield char, 0
+        else:
+            yield char, 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+        index += 1
+
+
+def display_width(text: str) -> int:
+    """Width of text in monospace columns, which is not the same as len().
+
+    East Asian wide and fullwidth characters take two columns, combining marks take none, and
+    an emoji cluster is assumed to take EMOJI_WIDTH. Counting code points instead shifts every
+    following column on a row - a five-character Chinese name is ten columns wide, not five.
+    """
+    return sum(width for _, width in _clusters(text))
+
+
+def sanitize_name(name: str) -> str:
+    """Strip the characters of a name whose rendered width cannot be predicted.
+
+    In-game names arrive from CS2 and routinely contain emoji, ZWJ sequences and bidi
+    overrides. Emoji are dropped rather than measured: Telegram renders them with a colour
+    emoji font whose advance width is not tied to the monospace cell, so no column count is
+    exact and one emoji shifts the whole row. Invisible format characters (ZWJ, and bidi
+    overrides, which reorder the rest of the row) go too. Accents are preserved by composing
+    first, so "e" + U+0301 becomes a single-column "é" rather than being thrown away.
+
+    A name made only of emoji survives this as an empty string; see emoji_name, which fit_name
+    falls back to rather than losing the name altogether.
+    """
+    composed = unicodedata.normalize("NFC", name)
+    kept = []
+    for cluster, _width in _clusters(composed):
+        base = cluster[0]
+        # Drop the whole emoji cluster, never just part of it: a skin-tone modifier is
+        # category Sk rather than So, so dropping by category alone left a bare tone swatch
+        # behind once its base emoji was gone.
+        if _is_emoji(base) or _is_modifier(base):
+            continue
+        # "Cf" is the invisible format characters - ZWJ, and bidi overrides which reorder
+        # the rest of the row.
+        if unicodedata.category(base) == "Cf":
+            continue
+        kept.append(cluster)
+    return " ".join("".join(kept).split())
+
+
+def emoji_name(name: str) -> str:
+    """Keep a name's emoji clusters, dropping only what is invisible or reorders the row.
+
+    Used for names that are nothing but emoji, where stripping would leave nothing to show.
+    Variation selectors and ZWJ are kept *inside* a cluster, since they are what make the
+    sequence render as a single wide glyph; stray format characters outside one are dropped.
+    """
+    composed = unicodedata.normalize("NFC", name)
+    kept = [
+        cluster
+        for cluster, width in _clusters(composed)
+        if width or (len(cluster) == 1 and unicodedata.category(cluster) not in ("Cf",))
+    ]
+    return " ".join("".join(kept).split())
+
+
+def fit_name(name: str, width: int = NAME_WIDTH, fallback: str = "?") -> str:
+    """Sanitize a name and pad or truncate it to exactly width monospace columns.
+
+    A name left empty by sanitizing is retried as emoji (assumed EMOJI_WIDTH per cluster), so
+    an emoji-only name shows its emoji instead of vanishing. fallback covers what is left:
+    a name of nothing but invisible characters.
+    """
+    clean = sanitize_name(name) or emoji_name(name) or sanitize_name(fallback) or "?"
+
+    if display_width(clean) <= width:
+        return clean + " " * (width - display_width(clean))
+
+    # Truncate by cluster, so a ZWJ sequence or wide character is never cut in half, and
+    # leave one column for the ellipsis dot.
+    cell = ""
+    used = 0
+    for cluster, cluster_width in _clusters(clean):
+        if used + cluster_width > width - 1:
+            break
+        cell += cluster
+        used += cluster_width
+    cell += "."
+    # A wide cluster can leave the cell a column short of width, so pad the remainder.
+    return cell + " " * (width - display_width(cell))
+
+
 def format_name_cell(name: str) -> str:
     """Truncate/pad a display name to NAME_WIDTH and escape it for a MarkdownV2 code entity."""
-    clean = name.replace("\n", " ").replace("\r", " ")
-    cell = clean[: NAME_WIDTH - 1] + "." if len(clean) > NAME_WIDTH else clean.ljust(NAME_WIDTH)
-    return escape_markdown(cell, version=2, entity_type="code")
+    return escape_markdown(fit_name(name), version=2, entity_type="code")
 
 
 def display_names(users: Iterable[User]) -> Dict[int, str]:

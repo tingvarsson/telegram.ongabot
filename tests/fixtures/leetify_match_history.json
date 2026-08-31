@@ -1,0 +1,104 @@
+[
+  {
+    "id": "2fae0fe6-a164-4c38-a2ee-c30d7b9dc57b",
+    "finished_at": "2026-08-30T19:02:30.000Z",
+    "data_source": "matchmaking_competitive",
+    "data_source_match_id": "CSGO-u7muJ-EhLdZ-2GJR2-fG9iS-DmAEB",
+    "map_name": "de_cache",
+    "has_banned_player": false,
+    "team_scores": [
+      {
+        "team_number": 2,
+        "score": 2
+      },
+      {
+        "team_number": 3,
+        "score": 13
+      }
+    ],
+    "stats": [
+      {
+        "steam64_id": "76561198034202275",
+        "name": "Akkaman",
+        "total_kills": 23,
+        "total_assists": 1,
+        "total_deaths": 15,
+        "kd_ratio": 1.53,
+        "mvps": 2,
+        "initial_team_number": 2,
+        "dpr": 147.2,
+        "total_damage": 2208,
+        "rounds_count": 15,
+        "multi5k": 1
+      }
+    ]
+  },
+  {
+    "id": "6c2b39e6-eb08-4f0e-8c6e-e942fef20fdb",
+    "finished_at": "2026-08-20T16:52:27.000Z",
+    "data_source": "matchmaking_competitive",
+    "data_source_match_id": "CSGO-nHBSU-kpSAO-dSnhm-b4FZV-UGOJM",
+    "map_name": "de_fachwerk",
+    "has_banned_player": false,
+    "team_scores": [
+      {
+        "team_number": 2,
+        "score": 13
+      },
+      {
+        "team_number": 3,
+        "score": 11
+      }
+    ],
+    "stats": [
+      {
+        "steam64_id": "76561198034202275",
+        "name": "M. Azbayar",
+        "total_kills": 39,
+        "total_assists": 2,
+        "total_deaths": 15,
+        "kd_ratio": 2.6,
+        "mvps": 4,
+        "initial_team_number": 2,
+        "dpr": 139.25,
+        "total_damage": 3342,
+        "rounds_count": 24,
+        "multi5k": 0
+      }
+    ]
+  },
+  {
+    "id": "efde1209-00e7-45da-9880-53f167e4c7c6",
+    "finished_at": "2026-08-23T20:19:02.000Z",
+    "data_source": "faceit",
+    "data_source_match_id": "1-5ef5d95c-8e62-47a1-b597-c63fcb268862",
+    "map_name": "de_mirage",
+    "has_banned_player": false,
+    "team_scores": [
+      {
+        "team_number": 2,
+        "score": 11
+      },
+      {
+        "team_number": 3,
+        "score": 13
+      }
+    ],
+    "stats": [
+      {
+        "steam64_id": "76561198034202275",
+        "name": "s1mplecsgod",
+        "total_kills": 19,
+        "total_assists": 4,
+        "total_deaths": 16,
+        "kd_ratio": 1.19,
+        "mvps": 3,
+        "initial_team_number": 2,
+        "dpr": 72.13,
+        "total_damage": 1731,
+        "rounds_count": 24,
+        "multi5k": 0
+      }
+    ]
+  }
+]

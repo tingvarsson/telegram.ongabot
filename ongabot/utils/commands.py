@@ -164,6 +164,42 @@ LEADERBOARD = CommandInfo(
     menu_description="Show the Banger Points leaderboard",
 )
 
+LINKSTEAM = CommandInfo(
+    command="linksteam",
+    brief="/linksteam <steam64|profile URL> - Link your Steam account so your CS2 games are recognised",
+    usage=(
+        "Usage: /linksteam <steam64|profile URL>\n"
+        "  Accepts a 17-digit Steam64, or a https://steamcommunity.com/profiles/<id> URL.\n"
+        "  A vanity /id/<name> URL cannot be used - open your profile and copy the\n"
+        "  numeric /profiles/ URL instead.\n\n"
+        "Examples:\n"
+        "  /linksteam 76561198034202275\n"
+        "  /linksteam https://steamcommunity.com/profiles/76561198034202275"
+    ),
+    menu_description="Link your Steam account for CS2 results",
+)
+
+UNLINKSTEAM = CommandInfo(
+    command="unlinksteam",
+    brief="/unlinksteam - Unlink your Steam account",
+    usage="/unlinksteam",
+    menu_description="Unlink your Steam account",
+)
+
+CS2 = CommandInfo(
+    command="cs2",
+    brief="/cs2 [target_date=<date|weekday>] - Show the CS2 results for an event",
+    usage=(
+        "Usage: /cs2 [target_date=<date|weekday>]\n"
+        "  Defaults to the most recent completed event.\n"
+        "  Accepts: weekday name (next occurrence), YYYY-MM-DD, or dd.mm.yyyy\n\n"
+        "Examples:\n"
+        "  /cs2\n"
+        "  /cs2 target_date=2026-09-02"
+    ),
+    menu_description="Show CS2 results for an event [target_date=..]",
+)
+
 BOT_SHORT_DESCRIPTION = "ONGAbot - the only bot you'll ever need"
 
 BOT_DESCRIPTION = (
@@ -187,4 +223,7 @@ ALL_COMMANDS = [
     DEAUTHORIZE,
     STATISTICS,
     LEADERBOARD,
+    CS2,
+    LINKSTEAM,
+    UNLINKSTEAM,
 ]

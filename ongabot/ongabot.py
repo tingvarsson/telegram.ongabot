@@ -4,25 +4,30 @@
 import datetime
 import logging
 import os
+from typing import Any, Dict, cast
 
-from telegram import Bot, BotCommand
+from telegram import Bot, BotCommand, LinkPreviewOptions
 from telegram.constants import ParseMode
-from telegram.ext import Application, CallbackContext, ContextTypes, PicklePersistence
+from telegram.ext import Application, CallbackContext, ContextTypes, JobQueue, PicklePersistence
 from telegram.error import TelegramError
 
 import eventcreator
 from _version import __version__ as CURRENT_VERSION
 from botdata import BotData
+from cs2.leetify import get_client
+from cs2.report import event_results
 from handler import AuthorizationHandler
 from handler import AuthorizeCommandHandler
 from handler import CancelEventCommandHandler
 from handler import ChangelogCommandHandler
+from handler import Cs2CommandHandler
 from handler import DeAuthorizeCommandHandler
 from handler import DeScheduleCommandHandler
 from handler import EventPollAnswerHandler
 from handler import EventPollHandler
 from handler import HelpCommandHandler
 from handler import LeaderboardCommandHandler
+from handler import LinkSteamCommandHandler
 from handler import NewEventCommandHandler
 from handler import OngaCommandHandler
 from handler import RescheduleCommandHandler
@@ -30,6 +35,7 @@ from handler import ScheduleCommandHandler
 from handler import StartCommandHandler
 from handler import StatisticsCommandHandler
 from handler import StatisticsSortCallbackHandler
+from handler import UnLinkSteamCommandHandler
 from handler import UpdateEventCommandHandler
 from userdata import UserData
 from utils import log
@@ -42,6 +48,106 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+# Leetify only has a match once its demo has been processed, which is typically well after
+# the midnight recap. The sweep therefore starts shortly after an event completes and keeps
+# checking until the night's match list stops growing.
+CS2_SWEEP_FIRST = datetime.timedelta(minutes=30)
+CS2_SWEEP_INTERVAL = datetime.timedelta(minutes=20)
+# Long enough to cover a late night plus slow demo processing; after this the sweep posts
+# whatever it found and stops, so a job never lives forever.
+CS2_SWEEP_GIVE_UP = datetime.timedelta(hours=14)
+
+
+def schedule_cs2_sweep(job_queue: JobQueue, chat_id: int, event_date: datetime.date) -> None:
+    """Start the repeating job that posts CS2 results for a just-completed event."""
+    if job_queue is None:
+        logger.error("No job queue available; CS2 results for %s will not be posted", event_date)
+        return
+
+    job_queue.run_repeating(
+        cs2_sweep_callback,
+        interval=CS2_SWEEP_INTERVAL,
+        first=CS2_SWEEP_FIRST,
+        name=f"cs2_sweep_{chat_id}_{event_date}",
+        chat_id=chat_id,
+        data={
+            "event_date": event_date,
+            # Match ids seen on the previous pass. Transient job state, never persisted -
+            # two identical passes in a row mean the night has settled.
+            "seen": set(),
+            "deadline": datetime.datetime.now() + CS2_SWEEP_GIVE_UP,
+        },
+    )
+    logger.info("Scheduled CS2 results sweep for chat_id=%s event_date=%s", chat_id, event_date)
+
+
+@log.log
+async def cs2_sweep_callback(context: CallbackContext) -> None:
+    """Post the CS2 results for one event, once the night's match list has settled.
+
+    Runs repeatedly and removes itself as soon as it has posted, or once the deadline passes.
+    """
+    job = context.job
+    bot_data: BotData = context.bot_data
+    chat = bot_data.get_chat(job.chat_id)
+    # Job.data is typed as object by python-telegram-bot; this job always sets the dict
+    # schedule_cs2_sweep builds.
+    data = cast(Dict[str, Any], job.data)
+    event_date = data["event_date"]
+
+    event = chat.get_event_by_date(event_date)
+    if event is None or event.cs2_reported:
+        logger.debug("Nothing left to sweep for chat_id=%s on %s", job.chat_id, event_date)
+        job.schedule_removal()
+        return
+
+    expired = datetime.datetime.now() >= data["deadline"]
+    session, text = await event_results(get_client(), chat, event, context.application.user_data)
+
+    if session is None:
+        # Leetify unreachable - retry on the next pass rather than claim nobody played.
+        if expired:
+            logger.warning(
+                "Giving up on CS2 results for chat_id=%s on %s: Leetify unreachable", job.chat_id, event_date
+            )
+            job.schedule_removal()
+        return
+
+    match_ids = {match.id for match in session.matches}
+    settled = bool(match_ids) and match_ids == data["seen"]
+    data["seen"] = match_ids
+
+    if not settled and not (expired and match_ids):
+        if expired:
+            logger.info("No CS2 matches found for chat_id=%s on %s; giving up", job.chat_id, event_date)
+            job.schedule_removal()
+        else:
+            logger.debug("CS2 sweep for %s still settling: %d match(es) so far", event_date, len(match_ids))
+        return
+
+    try:
+        await context.bot.send_message(
+            chat.chat_id,
+            text,
+            parse_mode=ParseMode.MARKDOWN_V2,
+            # The per-match Leetify links would otherwise each drag in a preview card.
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    except TelegramError as e:
+        # Leave the event unreported and the job alive, so the next pass can try again.
+        logger.warning("Failed to send CS2 results for chat_id=%s on %s: %s", job.chat_id, event_date, e)
+        return
+
+    event.record_cs2_session(session.played_user_ids)
+    job.schedule_removal()
+    logger.info(
+        "Posted CS2 results for chat_id=%s on %s: %d match(es)",
+        job.chat_id,
+        event_date,
+        len(session.matches),
+    )
 
 
 @log.log
@@ -91,6 +197,9 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
                             event.poll_id,
                             e,
                         )
+                    # CS2 results follow separately: Leetify has not processed the night's
+                    # demos yet at the moment this recap goes out.
+                    schedule_cs2_sweep(context.job_queue, chat.chat_id, event.event_date)
                 logger.info(
                     "Auto-completed past event poll_id=%s (date=%s) in chat_id=%s",
                     event.poll_id,
@@ -224,6 +333,9 @@ def main() -> None:
     application.add_handler(StatisticsCommandHandler())
     application.add_handler(StatisticsSortCallbackHandler())
     application.add_handler(LeaderboardCommandHandler())
+    application.add_handler(Cs2CommandHandler())
+    application.add_handler(LinkSteamCommandHandler())
+    application.add_handler(UnLinkSteamCommandHandler())
     application.add_error_handler(error)
 
     # Start the bot
