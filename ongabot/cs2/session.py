@@ -6,12 +6,13 @@ cs2.format renders the result.
 
 The attribution rule is deliberately loose in one direction and strict in the other. A match
 is *discovered* through any linked member who has a Leetify account (the "scout"), but a
-match is only *kept* when at least MIN_MEMBERS linked members appear on its scoreboard - and
+match is only *kept* when enough linked members appear on its scoreboard (see min_members) -
 that scoreboard lists everyone in the lobby, Leetify account or not. So a group where only
 one person uses Leetify still gets full results, which is the point.
 """
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Dict, List, Mapping, Optional, Protocol, Sequence, Set, Tuple
@@ -34,7 +35,29 @@ QUALIFYING_SOURCES = frozenset({"matchmaking_competitive", "matchmaking"})
 
 # Two linked members in the same lobby already makes it a shared game. The rendered message
 # always states how many took part, so a reader can judge a thin night for themselves.
-MIN_MEMBERS = 2
+DEFAULT_MIN_MEMBERS = 2
+
+
+def min_members() -> int:
+    """Linked members needed in one match before it counts as an ONGA game.
+
+    CS2_MIN_MEMBERS overrides the default. Set it to 1 in a test deployment where only one
+    person has linked an account - otherwise nothing can ever reach the threshold and the
+    feature looks broken. Leave it unset in a real chat: at 1 the bot reports every
+    matchmaking game any single member plays, which is a much noisier feature.
+    """
+    raw = os.getenv("CS2_MIN_MEMBERS")
+    if raw is None:
+        return DEFAULT_MIN_MEMBERS
+    try:
+        value = int(raw)
+    except ValueError:
+        _logger.warning("Ignoring non-numeric CS2_MIN_MEMBERS=%r; using %d", raw, DEFAULT_MIN_MEMBERS)
+        return DEFAULT_MIN_MEMBERS
+    if value < 1:
+        _logger.warning("Ignoring CS2_MIN_MEMBERS=%d below 1; using %d", value, DEFAULT_MIN_MEMBERS)
+        return DEFAULT_MIN_MEMBERS
+    return value
 
 
 class MatchSource(Protocol):
@@ -63,7 +86,7 @@ class MemberLine:
 
 @dataclass(frozen=True)
 class Cs2Match:
-    """One match that at least MIN_MEMBERS linked members played together."""
+    """One match that enough linked members played together to count as an ONGA game."""
 
     id: str  # Leetify game UUID, used for the View-on-Leetify link
     map_name: str
@@ -224,6 +247,7 @@ async def build_session(
         _logger.warning("No Leetify history could be read for any of %d linked members", len(links))
         return None
 
+    threshold = min_members()
     matches = []
     for match_id in match_ids:
         detail = await client.get_match(match_id)
@@ -236,8 +260,8 @@ async def build_session(
             for player in detail.players
             if player.steam64_id in user_by_steam64
         )
-        if len(members) < MIN_MEMBERS:
-            _logger.debug("Skipping match %s: only %d linked member(s)", match_id, len(members))
+        if len(members) < threshold:
+            _logger.debug("Skipping match %s: %d linked member(s), need %d", match_id, len(members), threshold)
             continue
 
         matches.append(

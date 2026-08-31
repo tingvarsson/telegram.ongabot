@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   event on demand, defaulting to the most recent completed event.
 - Optional `LEETIFY_API_KEY` environment variable. The public API works without
   one; a key just raises the rate limits.
+- Optional `CS2_MIN_MEMBERS` environment variable (default 2) to lower the
+  threshold, for a test deployment where only one person has linked an account.
 
 Per Leetify's [Developer Guidelines][leetify-guidelines], no Leetify data is
 stored. Stats are fetched at render time, shown under Leetify's own field names,

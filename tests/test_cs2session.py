@@ -4,7 +4,7 @@ import unittest
 from datetime import date
 
 from ongabot.cs2.leetify import MatchDetail, MatchSummary, PlayerStats
-from ongabot.cs2.session import MIN_MEMBERS, build_session, local_date
+from ongabot.cs2.session import DEFAULT_MIN_MEMBERS, build_session, local_date, min_members
 
 SCOUT = "76561198000000001"
 MATE = "76561198000000002"
@@ -152,7 +152,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
 
         session = await build_session(client, date(2026, 9, 2), LINKS)
 
-        self.assertEqual(MIN_MEMBERS, 2)
+        self.assertEqual(min_members(), 2)
         self.assertEqual(session.matches, [], "one linked member is a solo game, not an ONGA game")
 
     async def test_fetches_a_shared_match_only_once(self):
@@ -284,6 +284,71 @@ class SplitTeamScoreTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(session.matches, [])
         self.assertEqual(client.history_calls, [], "no links means no Leetify calls at all")
+
+
+class MinMembersConfigTest(unittest.TestCase):
+    """CS2_MIN_MEMBERS lets a single-user test setup see results; production keeps 2."""
+
+    def setUp(self):
+        self._old = os.environ.pop("CS2_MIN_MEMBERS", None)
+
+    def tearDown(self):
+        os.environ.pop("CS2_MIN_MEMBERS", None)
+        if self._old is not None:
+            os.environ["CS2_MIN_MEMBERS"] = self._old
+
+    def test_defaults_to_two(self):
+        self.assertEqual(min_members(), DEFAULT_MIN_MEMBERS)
+        self.assertEqual(DEFAULT_MIN_MEMBERS, 2)
+
+    def test_env_var_overrides_the_default(self):
+        os.environ["CS2_MIN_MEMBERS"] = "1"
+        self.assertEqual(min_members(), 1)
+
+    def test_falls_back_to_the_default_for_a_non_numeric_value(self):
+        os.environ["CS2_MIN_MEMBERS"] = "lots"
+        self.assertEqual(min_members(), DEFAULT_MIN_MEMBERS)
+
+    def test_falls_back_to_the_default_for_a_value_below_one(self):
+        os.environ["CS2_MIN_MEMBERS"] = "0"
+        self.assertEqual(min_members(), DEFAULT_MIN_MEMBERS)
+
+
+class SingleLinkedMemberTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self._old_tz = os.environ.get("TZ")
+        os.environ["TZ"] = "UTC"
+        time.tzset()
+        self._old_min = os.environ.pop("CS2_MIN_MEMBERS", None)
+
+    def tearDown(self):
+        os.environ.pop("CS2_MIN_MEMBERS", None)
+        if self._old_min is not None:
+            os.environ["CS2_MIN_MEMBERS"] = self._old_min
+        if self._old_tz is None:
+            del os.environ["TZ"]
+        else:
+            os.environ["TZ"] = self._old_tz
+        time.tzset()
+
+    def _client(self):
+        return FakeClient(
+            histories={SCOUT: [_summary("m1", "2026-09-02T19:00:00.000Z")]},
+            details={"m1": _detail("m1", [SCOUT, STRANGER])},
+        )
+
+    async def test_a_solo_game_is_hidden_by_default(self):
+        session = await build_session(self._client(), date(2026, 9, 2), {11: SCOUT})
+
+        self.assertEqual(session.matches, [])
+
+    async def test_a_solo_game_shows_up_when_the_threshold_is_lowered_to_one(self):
+        os.environ["CS2_MIN_MEMBERS"] = "1"
+
+        session = await build_session(self._client(), date(2026, 9, 2), {11: SCOUT})
+
+        self.assertEqual(len(session.matches), 1)
+        self.assertEqual(session.played_user_ids, {11})
 
 
 if __name__ == "__main__":
