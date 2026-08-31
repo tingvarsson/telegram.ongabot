@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `/statistics` now shows first names only in the User Statistics table (a last
+  initial is added when two users share a first name), making the table two
+  columns narrower.
+- `/statistics` `Avg` column is now the average number of slots picked per event
+  the user could actually play, instead of per response. Answering "No-op" no
+  longer drags the average down.
+- `/statistics` "Average number of Bangers per event" now counts only the users
+  who picked at least one slot, instead of everyone who answered the poll.
+- `/statistics` slot popularity rows now merge near-identical times, so a start
+  time that drifts between events (e.g. 20.30 and 20.40) is reported as one
+  `20.30-20.40` row instead of two half-count rows.
+
+### Added
+
+- `/statistics` Chat Statistics now includes "Average number of Bangers per
+  slot" - all slot picks spread over every slot offered, i.e. how many players a
+  single time slot typically draws.
+
 ## [1.4.0] - 2026-08-30
 
 ### Added

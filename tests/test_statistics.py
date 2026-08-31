@@ -6,6 +6,7 @@ from telegram import InlineKeyboardMarkup
 
 from ongabot.utils.statistics import (
     AVG_PARTICIPANTS_LABEL,
+    AVG_PER_SLOT_LABEL,
     CALLBACK_DATA_PREFIX,
     DEFAULT_SORT_KEY,
     MAX_TABLE_ROWS,
@@ -23,10 +24,12 @@ from ongabot.utils.statistics import (
 )
 
 
-def _make_user(user_id: int, name: str) -> MagicMock:
+def _make_user(user_id: int, name: str, last_name: str = "") -> MagicMock:
+    """Build a user mock; name is the first name, mirroring telegram.User's split name fields."""
     user = MagicMock()
     user.id = user_id
-    user.full_name = name
+    user.first_name = name
+    user.last_name = last_name
     return user
 
 
@@ -137,6 +140,28 @@ class ComputeStatisticsChatSummaryTest(unittest.TestCase):
         # (2 + 4) / 2 answered events = 3.0, not / 3 total events.
         self.assertAlmostEqual(result.avg_participants, 3.0)
 
+    def test_avg_participants_counts_only_users_who_can_play(self):
+        alice = _make_user(1, "Alice")
+        bob = _make_user(2, "Bob")
+        carol = _make_user(3, "Carol")
+        event = _make_event(
+            date(2026, 1, 1),
+            num_slots=2,
+            poll_answers={
+                alice: _make_answer([0]),
+                bob: _make_answer([2]),  # No-op
+                carol: _make_answer([3]),  # Maybe Baby
+            },
+        )
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): event}
+
+        result = compute_statistics(chat)
+
+        # 3 respondents, but only alice picked a slot.
+        self.assertEqual(result.answered_events, 1)
+        self.assertAlmostEqual(result.avg_participants, 1.0)
+
     def test_avg_participants_none_when_no_events_answered(self):
         event = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={})
         chat = MagicMock()
@@ -146,6 +171,44 @@ class ComputeStatisticsChatSummaryTest(unittest.TestCase):
 
         self.assertEqual(result.answered_events, 0)
         self.assertIsNone(result.avg_participants)
+
+    def test_avg_per_slot_spreads_picks_over_slots_offered(self):
+        alice = _make_user(1, "Alice")
+        bob = _make_user(2, "Bob")
+        e1 = _make_event(
+            date(2026, 1, 1),
+            num_slots=2,
+            poll_answers={alice: _make_answer([0, 1]), bob: _make_answer([0])},
+        )
+        e2 = _make_event(date(2026, 1, 8), num_slots=2, poll_answers={alice: _make_answer([0])})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
+
+        result = compute_statistics(chat)
+
+        # 4 picks over 2 answered events x 2 slots = 1.0 picks per slot.
+        self.assertAlmostEqual(result.avg_per_slot, 1.0)
+
+    def test_avg_per_slot_ignores_slots_of_unanswered_events(self):
+        alice = _make_user(1, "Alice")
+        e1 = _make_event(date(2026, 1, 1), num_slots=2, poll_answers={alice: _make_answer([0, 1])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=2, poll_answers={})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
+
+        result = compute_statistics(chat)
+
+        # 2 picks over the 2 slots of the single answered event, e2's slots don't dilute it.
+        self.assertAlmostEqual(result.avg_per_slot, 1.0)
+
+    def test_avg_per_slot_none_when_no_events_answered(self):
+        event = _make_event(date(2026, 1, 1), num_slots=2, poll_answers={})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): event}
+
+        result = compute_statistics(chat)
+
+        self.assertIsNone(result.avg_per_slot)
 
 
 class ComputeStatisticsSlotStatsTest(unittest.TestCase):
@@ -169,7 +232,7 @@ class ComputeStatisticsSlotStatsTest(unittest.TestCase):
         self.assertEqual(slot.total_picks, 2)  # both alice and bob picked it
         self.assertAlmostEqual(slot.event_pct, 1.0)  # picked in 1 of 1 answered events
 
-    def test_slot_stats_sorted_by_text(self):
+    def test_slot_stats_sorted_chronologically(self):
         alice = _make_user(1, "Alice")
         event = _make_event(
             date(2026, 1, 1),
@@ -203,6 +266,83 @@ class ComputeStatisticsSlotStatsTest(unittest.TestCase):
         result = compute_statistics(chat)
 
         self.assertEqual(result.slot_stats, [])
+
+
+class ComputeStatisticsSlotGroupingTest(unittest.TestCase):
+    """Near-identical slot times (the poll start time drifts between events) report as one slot."""
+
+    @staticmethod
+    def _chat_with_slot_picks(slot_texts_per_event):
+        """One event per entry, each with a single user picking every slot in that event."""
+        alice = _make_user(1, "Alice")
+        events = {}
+        for index, slot_texts in enumerate(slot_texts_per_event):
+            event_date = date(2026, 1, 1 + index * 7)
+            events[event_date] = _make_event(
+                event_date,
+                num_slots=len(slot_texts),
+                poll_answers={alice: _make_answer(range(len(slot_texts)))},
+                slot_texts=slot_texts,
+            )
+        chat = MagicMock()
+        chat.events = events
+        return chat
+
+    def test_close_times_merge_into_one_labelled_range(self):
+        chat = self._chat_with_slot_picks([["18.30", "20.30"], ["18.30", "20.40"]])
+
+        result = compute_statistics(chat)
+
+        self.assertEqual([s.text for s in result.slot_stats], ["18.30", "20.30-20.40"])
+
+    def test_merged_group_sums_picks_and_unions_events(self):
+        chat = self._chat_with_slot_picks([["20.30"], ["20.40"], ["20.40"]])
+
+        result = compute_statistics(chat)
+        slot = _slot_for(result, "20.30-20.40")
+
+        self.assertEqual(slot.total_picks, 3)
+        # Picked in all 3 answered events, even though no single time was.
+        self.assertAlmostEqual(slot.event_pct, 1.0)
+
+    def test_event_counted_once_when_two_grouped_times_share_an_event(self):
+        chat = self._chat_with_slot_picks([["20.30", "20.40"]])
+
+        result = compute_statistics(chat)
+        slot = _slot_for(result, "20.30-20.40")
+
+        self.assertEqual(slot.total_picks, 2)
+        self.assertAlmostEqual(slot.event_pct, 1.0)
+
+    def test_times_further_apart_than_the_gap_stay_separate(self):
+        chat = self._chat_with_slot_picks([["18.30", "19.10"]])
+
+        result = compute_statistics(chat)
+
+        self.assertEqual([s.text for s in result.slot_stats], ["18.30", "19.10"])
+
+    def test_span_cap_stops_a_run_of_close_times_chain_merging(self):
+        chat = self._chat_with_slot_picks([["20.00", "20.15", "20.30", "20.45"]])
+
+        result = compute_statistics(chat)
+
+        # 20.45 is within 15 min of 20.30, but would stretch the group past 30 min.
+        self.assertEqual([s.text for s in result.slot_stats], ["20.00-20.30", "20.45"])
+
+    def test_non_time_slot_texts_are_never_merged_and_come_last(self):
+        chat = self._chat_with_slot_picks([["18.30", "Whenever", "Anytime"]])
+
+        result = compute_statistics(chat)
+
+        self.assertEqual([s.text for s in result.slot_stats], ["18.30", "Anytime", "Whenever"])
+
+    def test_merged_group_is_logged(self):
+        chat = self._chat_with_slot_picks([["20.30", "20.40"]])
+
+        with self.assertLogs("ongabot.utils.statistics", level="DEBUG") as log_ctx:
+            compute_statistics(chat)
+
+        self.assertTrue(any("20.30-20.40" in message for message in log_ctx.output))
 
 
 class ComputeStatisticsUserRowsTest(unittest.TestCase):
@@ -288,6 +428,33 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         self.assertEqual(row.slots_total, 3)
         self.assertEqual(row.responses, 2)
         self.assertAlmostEqual(row.slots_avg, 1.5)
+
+    def test_slots_avg_divides_by_played_events_not_responses(self):
+        alice = _make_user(1, "Alice")
+        e1 = _make_event(date(2026, 1, 1), num_slots=3, poll_answers={alice: _make_answer([0, 1])})
+        e2 = _make_event(date(2026, 1, 8), num_slots=3, poll_answers={alice: _make_answer([3])})  # No-op
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        # 2 slots over the 1 event alice could play, not over her 2 responses.
+        self.assertEqual(row.responses, 2)
+        self.assertEqual(row.played, 1)
+        self.assertAlmostEqual(row.slots_avg, 2.0)
+
+    def test_slots_avg_zero_when_never_played(self):
+        alice = _make_user(1, "Alice")
+        event = _make_event(date(2026, 1, 1), num_slots=2, poll_answers={alice: _make_answer([2])})  # No-op
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): event}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.played, 0)
+        self.assertAlmostEqual(row.slots_avg, 0.0)
 
     def test_streak_comes_from_latest_event_reused_in_row(self):
         alice = _make_user(1, "Alice")
@@ -431,17 +598,17 @@ class FormatStatisticsTableTest(unittest.TestCase):
 
         chat_table = text.split("```")[1]
         lines = chat_table.strip("\n").splitlines()
-        # 3 summary rows + 1 slot row, no header line.
-        self.assertEqual(len(lines), 4)
+        # 4 summary rows + 1 slot row, no header line.
+        self.assertEqual(len(lines), 5)
 
     def test_chat_table_rows_are_column_aligned(self):
-        result = StatisticsResult(event_count=3, answered_events=2, avg_participants=2.0)
+        result = StatisticsResult(event_count=3, answered_events=2, avg_participants=2.0, avg_per_slot=1.0)
 
         text = format_statistics(result)
 
         chat_table = text.split("```")[1]
         lines = chat_table.strip("\n").splitlines()
-        what_width = len(AVG_PARTICIPANTS_LABEL)
+        what_width = max(len(AVG_PARTICIPANTS_LABEL), len(AVG_PER_SLOT_LABEL))
         for line in lines:
             self.assertEqual(line[what_width], " ")
 
@@ -489,6 +656,38 @@ class FormatStatisticsTableTest(unittest.TestCase):
         chat_table = text.split("```")[1]
         bangers_line = next(line for line in chat_table.splitlines() if AVG_PARTICIPANTS_LABEL in line)
         tokens = bangers_line.split()
+        self.assertEqual(tokens[-2], "-")
+        self.assertEqual(tokens[-1], "-")
+
+    def test_avg_bangers_per_slot_row_shows_value_and_pct_of_known_users(self):
+        result = StatisticsResult(
+            event_count=2,
+            answered_events=2,
+            avg_participants=3.0,
+            avg_per_slot=1.5,
+            user_rows=[
+                UserStatRow(user=_make_user(1, "Alice"), responses=2),
+                UserStatRow(user=_make_user(2, "Bob"), responses=2),
+                UserStatRow(user=_make_user(3, "Carol"), responses=2),
+            ],
+        )
+
+        text = format_statistics(result)
+
+        chat_table = text.split("```")[1]
+        per_slot_line = next(line for line in chat_table.splitlines() if AVG_PER_SLOT_LABEL in line)
+        self.assertIn("1.5", per_slot_line)
+        # avg_per_slot=1.5 out of 3 known users -> 50%.
+        self.assertTrue(per_slot_line.rstrip().endswith("50%"))
+
+    def test_avg_bangers_per_slot_dash_when_no_answers(self):
+        result = StatisticsResult(event_count=1, answered_events=0, avg_per_slot=None)
+
+        text = format_statistics(result)
+
+        chat_table = text.split("```")[1]
+        per_slot_line = next(line for line in chat_table.splitlines() if AVG_PER_SLOT_LABEL in line)
+        tokens = per_slot_line.split()
         self.assertEqual(tokens[-2], "-")
         self.assertEqual(tokens[-1], "-")
 
@@ -579,6 +778,57 @@ class FormatStatisticsTableTest(unittest.TestCase):
         text = format_statistics(result)
 
         self.assertIn("A\\`B\\\\C", text)
+
+    def test_last_name_is_dropped_when_first_names_are_unique(self):
+        result = StatisticsResult(
+            event_count=1,
+            user_rows=[UserStatRow(user=_make_user(1, "Alice", "Andersson"), responses=1)],
+        )
+
+        text = format_statistics(result)
+
+        self.assertIn("Alice".ljust(NAME_WIDTH) + " ", text)
+        self.assertNotIn("Andersson", text)
+
+    def test_colliding_first_names_get_a_last_initial(self):
+        result = StatisticsResult(
+            event_count=1,
+            user_rows=[
+                UserStatRow(user=_make_user(1, "Alice", "Andersson"), responses=2),
+                UserStatRow(user=_make_user(2, "Alice", "Bergman"), responses=1),
+            ],
+        )
+
+        text = format_statistics(result)
+
+        self.assertIn("Alice A.", text)
+        self.assertIn("Alice B.", text)
+
+    def test_colliding_first_name_without_last_name_stays_plain(self):
+        result = StatisticsResult(
+            event_count=1,
+            user_rows=[
+                UserStatRow(user=_make_user(1, "Alice", "Andersson"), responses=2),
+                UserStatRow(user=_make_user(2, "Alice"), responses=1),
+            ],
+        )
+
+        text = format_statistics(result)
+
+        self.assertIn("Alice A.", text)
+        self.assertIn("Alice".ljust(NAME_WIDTH) + " ", text)
+
+    def test_name_disambiguated_even_when_the_colliding_row_is_cut_from_the_table(self):
+        rows = [UserStatRow(user=_make_user(i, f"User{i}"), responses=i + 1) for i in range(MAX_TABLE_ROWS)]
+        rows.append(UserStatRow(user=_make_user(90, "Alice", "Andersson"), responses=100))
+        rows.append(UserStatRow(user=_make_user(91, "Alice", "Bergman"), responses=0))
+        result = StatisticsResult(event_count=1, user_rows=rows)
+
+        text = format_statistics(result)
+
+        # Only the top Alice survives the MAX_TABLE_ROWS cut, but names are resolved before it.
+        self.assertIn("Alice A.", text)
+        self.assertNotIn("Alice B.", text)
 
 
 class RenderStatisticsMessageTest(unittest.TestCase):
