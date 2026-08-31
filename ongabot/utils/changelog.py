@@ -6,9 +6,15 @@ import re
 from pathlib import Path
 from typing import List
 
-from telegram.constants import MessageLimit
+# NOTE: this module must import nothing outside the standard library. scripts/version.py
+# imports it to classify a build, and CI runs that script in a bare checkout with no
+# dependencies installed - a `telegram` import here fails the release workflow.
 
 _logger = logging.getLogger(__name__)
+
+# telegram.constants.MessageLimit.MAX_TEXT_LENGTH, inlined for the reason above. The same
+# figure is MAX_MESSAGE_CHARS in cs2.format.
+MAX_MESSAGE_CHARS = 4096
 
 # In the container: CHANGELOG.md is copied to /ongabot/ (same dir as the code), two levels up from utils/.
 # For local dev outside Docker, override with the CHANGELOG_PATH env var pointing to the repo-root file.
@@ -32,7 +38,7 @@ def is_dev_version(version: str) -> bool:
     return _RELEASE_VERSION_RE.fullmatch(version) is None
 
 
-def split_for_telegram(text: str, limit: int = MessageLimit.MAX_TEXT_LENGTH) -> List[str]:
+def split_for_telegram(text: str, limit: int = MAX_MESSAGE_CHARS) -> List[str]:
     """Split text into chunks that each fit in one Telegram message.
 
     Telegram rejects anything longer than 4096 characters, and several changelog entries

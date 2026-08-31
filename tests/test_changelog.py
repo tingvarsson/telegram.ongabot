@@ -3,9 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from telegram.constants import MessageLimit
-
-from ongabot.utils.changelog import get_changelog, get_changelog_delta, is_dev_version, split_for_telegram
+from ongabot.utils.changelog import (
+    MAX_MESSAGE_CHARS,
+    get_changelog,
+    get_changelog_delta,
+    is_dev_version,
+    split_for_telegram,
+)
 
 SAMPLE = """\
 # Changelog
@@ -205,7 +209,7 @@ class RealChangelogTest(unittest.TestCase):
             entry = get_changelog(version, 1, self.real_path)
             self.assertLessEqual(
                 len(entry),
-                MessageLimit.MAX_TEXT_LENGTH,
+                MAX_MESSAGE_CHARS,
                 f"changelog entry {version} is {len(entry)} chars - trim it",
             )
 
@@ -221,7 +225,7 @@ class SplitForTelegramTest(unittest.TestCase):
 
         self.assertGreater(len(chunks), 1)
         for chunk in chunks:
-            self.assertLessEqual(len(chunk), MessageLimit.MAX_TEXT_LENGTH)
+            self.assertLessEqual(len(chunk), MAX_MESSAGE_CHARS)
 
     def test_splits_on_paragraph_boundaries(self):
         text = "\n\n".join(f"paragraph {i} " + "x" * 100 for i in range(60))
