@@ -20,8 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/statistics` slot popularity rows now merge near-identical times, so a start
   time that drifts between events (e.g. 20.30 and 20.40) is reported as one
   `20.30-20.40` row instead of two half-count rows.
+- `/statistics` streak column is relabelled Response Streak (`RStk`), making it
+  explicit that it counts events answered at all - "No-op" and "Maybe Baby </3"
+  included - rather than events actually played.
+- The ★ next to a voter in the poll status message now shows their played
+  streak instead of their response streak, so the star means showing up.
 
 ### Added
+
+- `/statistics` User Statistics gains a Played Streak column (`PStk`): the
+  number of consecutive most-recent events in which the user picked an actual
+  time slot. Sortable like every other column. A user who answers every poll
+  with "No-op" now has a long Response Streak but a Played Streak of 0.
 
 - `/statistics` Chat Statistics now includes "Average number of Bangers per
   slot" - all slot picks spread over every slot offered, i.e. how many players a

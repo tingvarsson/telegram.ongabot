@@ -2,7 +2,7 @@
 
 import logging
 from datetime import date
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 from telegram import User
 
@@ -45,14 +45,42 @@ class UserData:
         self.poll_answer.update({poll_id: poll_answer})
         _logger.debug("user_data:\n%s", self)
 
-    @log.method
-    def calculate_streak(self, poll_id_to_date: Dict[str, date]) -> int:
-        """Return the number of consecutive most-recent events this user voted in."""
+    def _streak(self, poll_id_to_date: Dict[str, date], participated: Callable[[str], bool]) -> int:
+        """Count consecutive most-recent events (newest first) for which participated() holds.
+
+        Only polls present in poll_id_to_date are considered, so a poll the caller filtered
+        out (e.g. a cancelled event) is skipped rather than breaking the streak.
+        """
         events_by_date = sorted(poll_id_to_date.items(), key=lambda x: x[1], reverse=True)
         streak = 0
         for poll_id, _ in events_by_date:
-            if poll_id in self.poll_answer and self.poll_answer[poll_id]:
-                streak += 1
-            else:
+            if not participated(poll_id):
                 break
+            streak += 1
         return streak
+
+    @log.method
+    def calculate_streak(self, poll_id_to_date: Dict[str, date]) -> int:
+        """Return the number of consecutive most-recent events this user voted in.
+
+        Any non-empty answer counts, including the non-slot No-op and Maybe Baby </3
+        options - this is a response streak. See calculate_played_streak for slot picks only.
+        """
+        return self._streak(poll_id_to_date, lambda poll_id: bool(self.poll_answer.get(poll_id)))
+
+    @log.method
+    def calculate_played_streak(self, poll_id_to_date: Dict[str, date], poll_id_to_num_slots: Dict[str, int]) -> int:
+        """Return the number of consecutive most-recent events this user picked a time slot in.
+
+        A poll's first num_slots options are the time slots; No-op and Maybe Baby </3 are
+        appended after them (see eventcreator._create_poll_options), so an answer counts as
+        played only if it holds an option id below that event's num_slots. A poll missing from
+        poll_id_to_num_slots defaults to 0 slots, i.e. nothing can be confirmed as a slot pick
+        and the streak breaks.
+        """
+
+        def played(poll_id: str) -> bool:
+            num_slots = poll_id_to_num_slots.get(poll_id, 0)
+            return any(option_id < num_slots for option_id in self.poll_answer.get(poll_id, ()))
+
+        return self._streak(poll_id_to_date, played)

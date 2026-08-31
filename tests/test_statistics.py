@@ -50,6 +50,7 @@ def _make_event(
     num_slots: int,
     poll_answers,
     user_streaks=None,
+    user_played_streaks=None,
     cancelled: bool = False,
     slot_texts=None,
 ):
@@ -60,6 +61,7 @@ def _make_event(
     event.cancelled = cancelled
     event.poll_answers = poll_answers
     event.user_streaks = user_streaks or {}
+    event.user_played_streaks = user_played_streaks or {}
     slot_texts = slot_texts or [f"slot{i}" for i in range(num_slots)]
     event.poll = _make_poll(slot_texts + [NO_OP_TEXT, MAYBE_TEXT])
     return event
@@ -466,7 +468,53 @@ class ComputeStatisticsUserRowsTest(unittest.TestCase):
         result = compute_statistics(chat)
         row = _row_for(result, 1)
 
-        self.assertEqual(row.streak, 2)
+        self.assertEqual(row.response_streak, 2)
+
+    def test_played_streak_comes_from_latest_event_reused_in_row(self):
+        alice = _make_user(1, "Alice")
+        answers = {alice: _make_answer([0])}
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers=answers, user_played_streaks={1: 1})
+        e2 = _make_event(date(2026, 1, 8), num_slots=1, poll_answers=answers, user_played_streaks={1: 2})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.played_streak, 2)
+
+    def test_the_two_streaks_are_tracked_independently(self):
+        # Alice answered both events but only played the latest: response streak 2, played 1.
+        alice = _make_user(1, "Alice")
+        answers = {alice: _make_answer([0])}
+        e1 = _make_event(date(2026, 1, 1), num_slots=1, poll_answers=answers)
+        e2 = _make_event(
+            date(2026, 1, 8),
+            num_slots=1,
+            poll_answers=answers,
+            user_streaks={1: 2},
+            user_played_streaks={1: 1},
+        )
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): e1, date(2026, 1, 8): e2}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.response_streak, 2)
+        self.assertEqual(row.played_streak, 1)
+
+    def test_user_absent_from_latest_event_streaks_gets_zero_for_both(self):
+        alice = _make_user(1, "Alice")
+        event = _make_event(date(2026, 1, 1), num_slots=1, poll_answers={alice: _make_answer([0])})
+        chat = MagicMock()
+        chat.events = {date(2026, 1, 1): event}
+
+        result = compute_statistics(chat)
+        row = _row_for(result, 1)
+
+        self.assertEqual(row.response_streak, 0)
+        self.assertEqual(row.played_streak, 0)
 
     def test_no_op_and_maybe_still_tracked_per_row(self):
         alice = _make_user(1, "Alice")
@@ -557,9 +605,22 @@ class SortColumnsTest(unittest.TestCase):
         self.assertEqual(column.button_label, "Played Rate")
         self.assertEqual(column.header, "Play%")
 
-    def test_column_order_starts_resp_resprate_streak_play_playrate(self):
+    def test_resp_streak_column_is_labelled_response_streak(self):
+        column = next(c for c in SORT_COLUMNS if c.key == "resp_streak")
+        self.assertEqual(column.button_label, "Response Streak")
+        self.assertEqual(column.header, "RStk")
+
+    def test_played_streak_column_exists(self):
+        column = next(c for c in SORT_COLUMNS if c.key == "played_streak")
+        self.assertEqual(column.button_label, "Played Streak")
+        self.assertEqual(column.header, "PStk")
+
+    def test_column_order_pairs_the_two_streaks(self):
         keys = [c.key for c in SORT_COLUMNS]
-        self.assertEqual(keys[:5], ["responses", "resp_rate", "streak", "played", "play_rate"])
+        self.assertEqual(
+            keys[:6],
+            ["responses", "resp_rate", "resp_streak", "played_streak", "played", "play_rate"],
+        )
 
 
 class FormatStatisticsTableTest(unittest.TestCase):
@@ -711,8 +772,8 @@ class FormatStatisticsTableTest(unittest.TestCase):
         self.assertGreaterEqual(text.count("```"), 2)
 
     def test_default_sort_is_by_responses_descending(self):
-        alice = UserStatRow(user=_make_user(1, "Alice"), responses=2, streak=1)
-        bob = UserStatRow(user=_make_user(2, "Bob"), responses=5, streak=0)
+        alice = UserStatRow(user=_make_user(1, "Alice"), responses=2, response_streak=1)
+        bob = UserStatRow(user=_make_user(2, "Bob"), responses=5, response_streak=0)
         result = StatisticsResult(event_count=1, user_rows=[alice, bob])
 
         text = format_statistics(result)
@@ -720,17 +781,47 @@ class FormatStatisticsTableTest(unittest.TestCase):
         self.assertLess(text.index("Bob"), text.index("Alice"))
 
     def test_sort_by_param_changes_row_order(self):
-        alice = UserStatRow(user=_make_user(1, "Alice"), responses=2, streak=5)
-        bob = UserStatRow(user=_make_user(2, "Bob"), responses=5, streak=0)
+        alice = UserStatRow(user=_make_user(1, "Alice"), responses=2, response_streak=5)
+        bob = UserStatRow(user=_make_user(2, "Bob"), responses=5, response_streak=0)
         result = StatisticsResult(event_count=1, user_rows=[alice, bob])
 
-        text = format_statistics(result, sort_by="streak")
+        text = format_statistics(result, sort_by="resp_streak")
 
         self.assertLess(text.index("Alice"), text.index("Bob"))
 
+    def test_sort_by_played_streak_orders_by_played_streak(self):
+        alice = UserStatRow(user=_make_user(1, "Alice"), responses=2, response_streak=0, played_streak=5)
+        bob = UserStatRow(user=_make_user(2, "Bob"), responses=5, response_streak=9, played_streak=0)
+        result = StatisticsResult(event_count=1, user_rows=[alice, bob])
+
+        text = format_statistics(result, sort_by="played_streak")
+
+        self.assertLess(text.index("Alice"), text.index("Bob"))
+
+    def test_both_streaks_rendered_in_their_own_cells(self):
+        alice = UserStatRow(user=_make_user(1, "Alice"), responses=2, response_streak=7, played_streak=3)
+        result = StatisticsResult(event_count=1, user_rows=[alice])
+
+        lines = format_statistics(result).splitlines()
+        header = next(line for line in lines if line.startswith("Name"))
+        row = next(line for line in lines if line.startswith("Alice"))
+
+        def cell_under(header_text: str) -> str:
+            """Read the row cell sitting under a column header, columns being fixed-width."""
+            start = header.index(header_text)
+            end = start + len(header_text)
+            return row[start:end].strip()
+
+        self.assertIn("RStk", header)
+        self.assertIn("PStk", header)
+        # RStk sits immediately left of PStk, so the two values appear in that order
+        self.assertLess(header.index("RStk"), header.index("PStk"))
+        self.assertEqual(cell_under("RStk"), "7")
+        self.assertEqual(cell_under("PStk"), "3")
+
     def test_unknown_sort_by_falls_back_to_default(self):
-        alice = UserStatRow(user=_make_user(1, "Alice"), responses=2, streak=5)
-        bob = UserStatRow(user=_make_user(2, "Bob"), responses=5, streak=0)
+        alice = UserStatRow(user=_make_user(1, "Alice"), responses=2, response_streak=5)
+        bob = UserStatRow(user=_make_user(2, "Bob"), responses=5, response_streak=0)
         result = StatisticsResult(event_count=1, user_rows=[alice, bob])
 
         text = format_statistics(result, sort_by="not_a_real_column")
@@ -853,8 +944,13 @@ class BuildSortKeyboardTest(unittest.TestCase):
         self.assertEqual(len(self._all_buttons()), len(SORT_COLUMNS))
 
     def test_callback_data_uses_prefix_and_key(self):
-        streak_button = next(b for b in self._all_buttons() if b.callback_data == f"{CALLBACK_DATA_PREFIX}:streak")
+        streak_button = next(b for b in self._all_buttons() if b.callback_data == f"{CALLBACK_DATA_PREFIX}:resp_streak")
         self.assertIsNotNone(streak_button)
+
+    def test_both_streaks_have_their_own_button(self):
+        callback_data = {b.callback_data for b in self._all_buttons()}
+        self.assertIn(f"{CALLBACK_DATA_PREFIX}:resp_streak", callback_data)
+        self.assertIn(f"{CALLBACK_DATA_PREFIX}:played_streak", callback_data)
 
     def test_all_callback_data_under_64_bytes(self):
         for button in self._all_buttons():
