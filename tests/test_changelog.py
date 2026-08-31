@@ -3,7 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ongabot.utils.changelog import get_changelog, get_changelog_delta, is_dev_version
+from ongabot.utils.changelog import (
+    MAX_MESSAGE_CHARS,
+    get_changelog,
+    get_changelog_delta,
+    is_dev_version,
+    split_for_telegram,
+)
 
 SAMPLE = """\
 # Changelog
@@ -195,6 +201,60 @@ class RealChangelogTest(unittest.TestCase):
         result = get_changelog_delta(None, oldest, self.real_path)
         self.assertNotIn("http", result)
         self.assertNotIn("]: ", result)
+
+    def test_every_entry_fits_in_a_single_telegram_message(self):
+        """A single /changelog entry that needs splitting is an entry nobody will read."""
+        content = self.real_path.read_text(encoding="utf-8")
+        for version in re.findall(r"^## \[(\d+\.\d+\.\d+)\]", content, re.MULTILINE):
+            entry = get_changelog(version, 1, self.real_path)
+            self.assertLessEqual(
+                len(entry),
+                MAX_MESSAGE_CHARS,
+                f"changelog entry {version} is {len(entry)} chars - trim it",
+            )
+
+
+class SplitForTelegramTest(unittest.TestCase):
+    def test_short_text_is_left_alone(self):
+        self.assertEqual(split_for_telegram("short"), ["short"])
+
+    def test_long_text_is_split_into_messages_that_fit(self):
+        text = "\n\n".join(["paragraph " * 20] * 60)
+
+        chunks = split_for_telegram(text)
+
+        self.assertGreater(len(chunks), 1)
+        for chunk in chunks:
+            self.assertLessEqual(len(chunk), MAX_MESSAGE_CHARS)
+
+    def test_splits_on_paragraph_boundaries(self):
+        text = "\n\n".join(f"paragraph {i} " + "x" * 100 for i in range(60))
+
+        chunks = split_for_telegram(text, limit=500)
+
+        for chunk in chunks:
+            self.assertTrue(chunk.startswith("paragraph"), f"chunk starts mid-paragraph: {chunk[:40]!r}")
+
+    def test_falls_back_to_line_breaks_when_there_are_no_blank_lines(self):
+        text = "\n".join("x" * 50 for _ in range(40))
+
+        chunks = split_for_telegram(text, limit=200)
+
+        self.assertGreater(len(chunks), 1)
+        for chunk in chunks:
+            self.assertTrue(all(len(line) == 50 for line in chunk.splitlines()), "a line was cut in half")
+
+    def test_a_single_oversized_paragraph_is_hard_sliced_rather_than_dropped(self):
+        text = "x" * 500
+
+        chunks = split_for_telegram(text, limit=200)
+
+        self.assertEqual("".join(chunks), text)
+
+    def test_nothing_is_lost_in_the_split(self):
+        text = "\n\n".join(f"paragraph {i}" for i in range(500))
+
+        self.assertEqual("\n\n".join(split_for_telegram(text, limit=300)), text)
 
 
 if __name__ == "__main__":

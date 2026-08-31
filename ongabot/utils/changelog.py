@@ -4,8 +4,17 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import List
+
+# NOTE: this module must import nothing outside the standard library. scripts/version.py
+# imports it to classify a build, and CI runs that script in a bare checkout with no
+# dependencies installed - a `telegram` import here fails the release workflow.
 
 _logger = logging.getLogger(__name__)
+
+# telegram.constants.MessageLimit.MAX_TEXT_LENGTH, inlined for the reason above. The same
+# figure is MAX_MESSAGE_CHARS in cs2.format.
+MAX_MESSAGE_CHARS = 4096
 
 # In the container: CHANGELOG.md is copied to /ongabot/ (same dir as the code), two levels up from utils/.
 # For local dev outside Docker, override with the CHANGELOG_PATH env var pointing to the repo-root file.
@@ -27,6 +36,38 @@ _LINK_DEF_RE = re.compile(r"^\[[^\]]+\]:\s+\S+", re.MULTILINE)
 def is_dev_version(version: str) -> bool:
     """Return True if version is a development build (not a clean X.Y.Z release)."""
     return _RELEASE_VERSION_RE.fullmatch(version) is None
+
+
+def split_for_telegram(text: str, limit: int = MAX_MESSAGE_CHARS) -> List[str]:
+    """Split text into chunks that each fit in one Telegram message.
+
+    Telegram rejects anything longer than 4096 characters, and several changelog entries
+    together comfortably exceed that - `/changelog 3` alone is over 4000. Splitting is done
+    on blank lines first, then single newlines, so a chunk boundary never lands mid-sentence.
+    A single paragraph longer than the limit (no newline to break on) is hard-sliced as a
+    last resort rather than dropped.
+    """
+    if len(text) <= limit:
+        return [text]
+
+    chunks: List[str] = []
+    remaining = text
+    while len(remaining) > limit:
+        window = remaining[:limit]
+        # Prefer a paragraph break, then any line break, then give up and cut at the limit.
+        split_at = window.rfind("\n\n")
+        if split_at <= 0:
+            split_at = window.rfind("\n")
+        if split_at <= 0:
+            split_at = limit
+        chunks.append(remaining[:split_at].strip())
+        remaining = remaining[split_at:].lstrip("\n")
+
+    if remaining.strip():
+        chunks.append(remaining.strip())
+
+    _logger.debug("Split %d chars into %d message(s)", len(text), len(chunks))
+    return chunks
 
 
 def _effective_end(content: str) -> int:

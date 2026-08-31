@@ -41,6 +41,33 @@ class VersionScriptCliTest(unittest.TestCase):
         expected = 0 if is_dev_version(__version__) else 1
         self.assertEqual(result.returncode, expected)
 
+    def test_runs_without_the_runtime_dependencies_installed(self):
+        """CI computes the version in a bare checkout with no `pip install`.
+
+        The script reaches ongabot.utils.changelog for is_dev_version, so anything that
+        module imports has to be standard library - a `telegram` import there breaks the
+        release workflow rather than any test.
+        """
+        blocker = (
+            "import sys, runpy\n"
+            "class Blocked:\n"
+            "    def find_spec(self, name, path=None, target=None):\n"
+            "        if name.split('.')[0] in ('telegram', 'httpx'):\n"
+            "            raise ImportError(f'{name} is not installed in this environment')\n"
+            "sys.meta_path.insert(0, Blocked())\n"
+            f"sys.argv = [{str(SCRIPT)!r}, '--base']\n"
+            f"runpy.run_path({str(SCRIPT)!r}, run_name='__main__')\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", blocker],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertRegex(result.stdout.strip(), r"^\d+\.\d+\.\d+$")
+
 
 class VersionScriptUnitTest(unittest.TestCase):
     def test_base_strips_dev_suffix(self):

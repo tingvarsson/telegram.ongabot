@@ -67,14 +67,29 @@ class EventCs2FieldsTest(unittest.TestCase):
         event.__setstate__(_legacy_event_state())
 
         self.assertEqual(event.cs2_played, {})
+        self.assertEqual(event.cs2_message_id, 0)
         self.assertFalse(event.cs2_reported)
 
     def test_keeps_existing_cs2_facts_through_unpickling(self):
         event = Event.__new__(Event)
-        event.__setstate__(_legacy_event_state() | {"cs2_played": {11: True}, "cs2_reported": True})
+        event.__setstate__(
+            _legacy_event_state() | {"cs2_played": {11: True}, "cs2_message_id": 42, "cs2_reported": True}
+        )
 
         self.assertEqual(event.cs2_played, {11: True})
+        self.assertEqual(event.cs2_message_id, 42)
         self.assertTrue(event.cs2_reported)
+
+    def test_live_progress_survives_a_restart_without_finalising_the_results(self):
+        """The sweep must edit the message it already posted rather than post a second one."""
+        event = Event.__new__(Event)
+        event.__setstate__(_legacy_event_state())
+
+        event.update_cs2_progress(42, {11})
+
+        self.assertEqual(event.cs2_message_id, 42)
+        self.assertEqual(event.cs2_played, {11: True})
+        self.assertFalse(event.cs2_reported)
 
     def test_recording_a_session_marks_who_played_and_stops_repeat_reports(self):
         event = Event.__new__(Event)

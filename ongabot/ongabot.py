@@ -9,13 +9,14 @@ from typing import Any, Dict, cast
 from telegram import Bot, BotCommand, LinkPreviewOptions
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, ContextTypes, JobQueue, PicklePersistence
-from telegram.error import TelegramError
+from telegram.error import BadRequest, TelegramError
 
 import eventcreator
 from _version import __version__ as CURRENT_VERSION
 from botdata import BotData
 from cs2.leetify import get_client
-from cs2.report import event_results
+from cs2.report import event_session, render_results
+from event import Event
 from handler import AuthorizationHandler
 from handler import AuthorizeCommandHandler
 from handler import CancelEventCommandHandler
@@ -39,7 +40,7 @@ from handler import UnLinkSteamCommandHandler
 from handler import UpdateEventCommandHandler
 from userdata import UserData
 from utils import log
-from utils.changelog import get_changelog_delta, is_dev_version
+from utils.changelog import get_changelog_delta, is_dev_version, split_for_telegram
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
 from utils.points import render_event_recap_message
 
@@ -50,44 +51,136 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Leetify only has a match once its demo has been processed, which is typically well after
-# the midnight recap. The sweep therefore starts shortly after an event completes and keeps
-# checking until the night's match list stops growing.
-CS2_SWEEP_FIRST = datetime.timedelta(minutes=30)
+# The sweep runs alongside the night itself: it starts when the gaming starts and picks up
+# each match a little after it ends, once Leetify has processed its demo. Results are posted
+# as one message that is edited as the night goes on, rather than a single post the morning
+# after.
 CS2_SWEEP_INTERVAL = datetime.timedelta(minutes=20)
-# Long enough to cover a late night plus slow demo processing; after this the sweep posts
-# whatever it found and stops, so a job never lives forever.
+# How long the match list must stay unchanged before the night counts as over. A match runs
+# ~45 min and the gap to the next one is rarely more than an hour, so this comfortably spans
+# a break between matches without waiting out the full deadline.
+CS2_SWEEP_SETTLE = datetime.timedelta(minutes=90)
+# Measured from the event's start time, so a sweep started at 18:30 gives up at 08:30. Long
+# enough to cover a late night plus slow demo processing; a job never lives forever.
 CS2_SWEEP_GIVE_UP = datetime.timedelta(hours=14)
 
 
-def schedule_cs2_sweep(job_queue: JobQueue, chat_id: int, event_date: datetime.date) -> None:
-    """Start the repeating job that posts CS2 results for a just-completed event."""
+def cs2_sweep_job_name(chat_id: int, event_date: datetime.date) -> str:
+    """Name of the sweep job for one chat's event. Also the guard against scheduling twice."""
+    return f"cs2_sweep_{chat_id}_{event_date}"
+
+
+def schedule_cs2_sweep(
+    job_queue: JobQueue,
+    chat_id: int,
+    event_date: datetime.date,
+    start_time: datetime.time,
+) -> None:
+    """Start the repeating job that posts and updates CS2 results for one event.
+
+    The first pass runs at the event's start time, or immediately if that has already passed -
+    which is what makes the job resumable after a restart mid-evening.
+    """
     if job_queue is None:
         logger.error("No job queue available; CS2 results for %s will not be posted", event_date)
         return
 
+    name = cs2_sweep_job_name(chat_id, event_date)
+    # The hourly scheduler and the event-completion fallback both reach this for the same
+    # event; whichever gets there first owns the sweep.
+    if job_queue.get_jobs_by_name(name):
+        logger.debug("CS2 sweep %s is already scheduled", name)
+        return
+
+    now = datetime.datetime.now()
+    starts_at = datetime.datetime.combine(event_date, start_time)
     job_queue.run_repeating(
         cs2_sweep_callback,
         interval=CS2_SWEEP_INTERVAL,
-        first=CS2_SWEEP_FIRST,
-        name=f"cs2_sweep_{chat_id}_{event_date}",
+        first=max(now, starts_at),
+        name=name,
         chat_id=chat_id,
         data={
             "event_date": event_date,
-            # Match ids seen on the previous pass. Transient job state, never persisted -
-            # two identical passes in a row mean the night has settled.
+            # Match ids seen on the previous pass, and when that set last changed. Transient
+            # job state, never persisted - a long enough quiet spell means the night is over.
             "seen": set(),
-            "deadline": datetime.datetime.now() + CS2_SWEEP_GIVE_UP,
+            "quiet_since": now,
+            "deadline": starts_at + CS2_SWEEP_GIVE_UP,
         },
     )
-    logger.info("Scheduled CS2 results sweep for chat_id=%s event_date=%s", chat_id, event_date)
+    logger.info(
+        "Scheduled CS2 results sweep for chat_id=%s event_date=%s starting %s",
+        chat_id,
+        event_date,
+        max(now, starts_at),
+    )
+
+
+@log.log
+async def schedule_todays_cs2_sweeps_callback(context: CallbackContext) -> None:
+    """Start a CS2 sweep for every chat with an event today.
+
+    Runs hourly, and scheduling is idempotent, so this covers an event created on its own day
+    as well as the daily rollover. Jobs are not persisted - PicklePersistence stores bot_data,
+    not the JobQueue - so the pass right after startup is also what resumes a sweep that a
+    restart killed halfway through the evening.
+    """
+    bot_data: BotData = context.bot_data
+    today = datetime.date.today()
+
+    for chat in bot_data.chats.values():
+        event = chat.get_event_by_date(today)
+        if event is None or event.cancelled or event.cs2_reported:
+            continue
+        schedule_cs2_sweep(context.job_queue, chat.chat_id, today, event.start_time)
+
+
+async def _publish_cs2_results(context: CallbackContext, event: Event, text: str) -> int:
+    """Send the CS2 results message, or edit the one this event already has.
+
+    Returns the message id it wrote to. Raises TelegramError so the caller can decide whether
+    to retry; a message that has been deleted from the chat resets the event to "not posted"
+    and is then sent afresh.
+    """
+    send_args = {
+        "parse_mode": ParseMode.MARKDOWN_V2,
+        # The per-match Leetify links would otherwise each drag in a preview card.
+        "link_preview_options": LinkPreviewOptions(is_disabled=True),
+    }
+
+    if event.cs2_message_id:
+        try:
+            await context.bot.edit_message_text(
+                text,
+                chat_id=event.chat_id,
+                message_id=event.cs2_message_id,
+                **send_args,
+            )
+            return event.cs2_message_id
+        except BadRequest as e:
+            # "Message to edit not found" - somebody deleted it. Anything else (bad markup,
+            # message too long) would fail on a fresh send too, so let it propagate.
+            if "not found" not in str(e).lower():
+                raise
+            logger.warning(
+                "CS2 results message %s is gone from chat_id=%s; posting a new one",
+                event.cs2_message_id,
+                event.chat_id,
+            )
+            event.cs2_message_id = 0
+
+    message = await context.bot.send_message(event.chat_id, text, **send_args)
+    return message.message_id
 
 
 @log.log
 async def cs2_sweep_callback(context: CallbackContext) -> None:
-    """Post the CS2 results for one event, once the night's match list has settled.
+    """Keep one CS2 results message up to date through an event's evening.
 
-    Runs repeatedly and removes itself as soon as it has posted, or once the deadline passes.
+    Posts as soon as the first match shows up on Leetify and edits that same message as each
+    later match lands. Removes itself once the match list has been quiet for CS2_SWEEP_SETTLE,
+    or once the deadline passes.
     """
     job = context.job
     bot_data: BotData = context.bot_data
@@ -103,8 +196,9 @@ async def cs2_sweep_callback(context: CallbackContext) -> None:
         job.schedule_removal()
         return
 
-    expired = datetime.datetime.now() >= data["deadline"]
-    session, text = await event_results(get_client(), chat, event, context.application.user_data)
+    now = datetime.datetime.now()
+    expired = now >= data["deadline"]
+    session = await event_session(get_client(), chat, event, context.application.user_data)
 
     if session is None:
         # Leetify unreachable - retry on the next pass rather than claim nobody played.
@@ -116,38 +210,50 @@ async def cs2_sweep_callback(context: CallbackContext) -> None:
         return
 
     match_ids = {match.id for match in session.matches}
-    settled = bool(match_ids) and match_ids == data["seen"]
-    data["seen"] = match_ids
+    changed = match_ids != data["seen"]
+    if changed:
+        data["seen"] = match_ids
+        data["quiet_since"] = now
 
-    if not settled and not (expired and match_ids):
+    if not match_ids:
+        # Nothing to show yet. Early in the evening this is the normal case.
         if expired:
             logger.info("No CS2 matches found for chat_id=%s on %s; giving up", job.chat_id, event_date)
             job.schedule_removal()
-        else:
-            logger.debug("CS2 sweep for %s still settling: %d match(es) so far", event_date, len(match_ids))
+        return
+
+    # The night is over once no new match has appeared for a while, or once time runs out.
+    final = expired or (now - data["quiet_since"]) >= CS2_SWEEP_SETTLE
+    if not changed and not final:
+        logger.debug("CS2 sweep for %s unchanged: %d match(es) so far", event_date, len(match_ids))
         return
 
     try:
-        await context.bot.send_message(
-            chat.chat_id,
-            text,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            # The per-match Leetify links would otherwise each drag in a preview card.
-            link_preview_options=LinkPreviewOptions(is_disabled=True),
-        )
+        message_id = await _publish_cs2_results(context, event, render_results(session, live=not final))
     except TelegramError as e:
         # Leave the event unreported and the job alive, so the next pass can try again.
-        logger.warning("Failed to send CS2 results for chat_id=%s on %s: %s", job.chat_id, event_date, e)
+        logger.warning("Failed to write CS2 results for chat_id=%s on %s: %s", job.chat_id, event_date, e)
         return
 
-    event.record_cs2_session(session.played_user_ids)
-    job.schedule_removal()
-    logger.info(
-        "Posted CS2 results for chat_id=%s on %s: %d match(es)",
-        job.chat_id,
-        event_date,
-        len(session.matches),
-    )
+    # Remember the message either way, so a restart edits it instead of posting a second one.
+    event.update_cs2_progress(message_id, session.played_user_ids)
+
+    if final:
+        event.record_cs2_session(session.played_user_ids)
+        job.schedule_removal()
+        logger.info(
+            "Finalised CS2 results for chat_id=%s on %s: %d match(es)",
+            job.chat_id,
+            event_date,
+            len(session.matches),
+        )
+    else:
+        logger.info(
+            "Updated live CS2 results for chat_id=%s on %s: %d match(es) so far",
+            job.chat_id,
+            event_date,
+            len(session.matches),
+        )
 
 
 @log.log
@@ -197,9 +303,10 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
                             event.poll_id,
                             e,
                         )
-                    # CS2 results follow separately: Leetify has not processed the night's
-                    # demos yet at the moment this recap goes out.
-                    schedule_cs2_sweep(context.job_queue, chat.chat_id, event.event_date)
+                    # Safety net for an event whose sweep never ran - the bot was down all
+                    # evening, say. Normally the sweep started at the event's start time and
+                    # is either still running or already done, and this is a no-op.
+                    schedule_cs2_sweep(context.job_queue, chat.chat_id, event.event_date, event.start_time)
                 logger.info(
                     "Auto-completed past event poll_id=%s (date=%s) in chat_id=%s",
                     event.poll_id,
@@ -232,13 +339,14 @@ async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, n
     """Send a version-change announcement to all authorized chats."""
     delta = get_changelog_delta(old_version, new_version)
     text = f"ONGAbot updated to v{new_version}!\n\n{delta}"
-    # Truncate to Telegram's 4096-character message limit
-    if len(text) > 4096:
-        text = text[:4090] + "\n..."
+    # An upgrade spanning several releases outgrows Telegram's message limit; send the
+    # announcement as consecutive messages rather than dropping the tail of it.
+    chunks = split_for_telegram(text)
     for chat_id in bot_data.authorized_chats:
         try:
-            await bot.send_message(chat_id=chat_id, text=text)
-            logger.info("Sent version announcement to chat_id=%s", chat_id)
+            for chunk in chunks:
+                await bot.send_message(chat_id=chat_id, text=chunk)
+            logger.info("Sent version announcement to chat_id=%s (%d message(s))", chat_id, len(chunks))
         except TelegramError as e:
             logger.error("Failed to send version announcement to chat_id=%s: %s", chat_id, e)
 
@@ -284,6 +392,16 @@ async def post_init(application: Application) -> None:
     application.job_queue.run_once(complete_past_events_callback, when=5, name="complete_past_events_startup")
     application.job_queue.run_daily(
         complete_past_events_callback, time=datetime.time(0, 0, 0), name="complete_past_events"
+    )
+
+    # Start the CS2 sweep for any event happening today. Hourly rather than daily so it also
+    # catches an event created on the day it happens, and starts right after boot because
+    # jobs live only in memory - a restart would otherwise lose a sweep already in progress.
+    application.job_queue.run_repeating(
+        schedule_todays_cs2_sweeps_callback,
+        interval=datetime.timedelta(hours=1),
+        first=10,
+        name="cs2_sweeps",
     )
 
 
