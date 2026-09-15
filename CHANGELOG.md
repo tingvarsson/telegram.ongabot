@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `pytest` now finds `ongabot/` on its own via `[tool.pytest.ini_options]
+  pythonpath` in `pyproject.toml`, so `python3 -m pytest` works from the repo
+  root without a `PYTHONPATH=` prefix. The Makefile and CI are unaffected; no
+  user-facing effect.
 - CS2 results now follow the night as it happens. The sweep starts at the
   event's start time instead of after midnight, posts as soon as Leetify has
   the first match, and edits that same message as later matches land. It is
