@@ -1,6 +1,12 @@
 [tool.black]
 line-length = 120
 
+# The bot runs with ongabot/ on sys.path and imports by top-level name, e.g.
+# `from chat import Chat`. This mirrors the Makefile's exported PYTHONPATH and
+# setup.cfg's mypy_path, so a bare `pytest` works without an env-var prefix.
+[tool.pytest.ini_options]
+pythonpath = ["ongabot"]
+
 [tool.pylint.design]
 max-args = 10
 max-attributes = 14  # UserStatRow is a flat stats row (one attribute per table column); Event carries the CS2 fields
