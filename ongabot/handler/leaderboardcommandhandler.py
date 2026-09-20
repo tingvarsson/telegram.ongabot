@@ -26,4 +26,5 @@ async def callback(update: Update, context: CallbackContext) -> None:
     chat = context.bot_data.get_chat(chat_id)
 
     text = render_leaderboard_message(chat)
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+    # A leaderboard reads as a standalone report, not an answer to the command message itself.
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2, do_quote=False)

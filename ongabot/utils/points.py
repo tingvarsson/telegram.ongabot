@@ -19,14 +19,14 @@ import logging
 import math
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from telegram import User
 from telegram.helpers import escape_markdown
 
 from chat import Chat
 from event import Event
-from utils.statistics import NAME_WIDTH, NO_OP_TEXT, display_names, format_name_cell, group_slot_texts
+from utils.statistics import NO_OP_TEXT, display_names, format_name_cell, group_slot_texts
 
 _logger = logging.getLogger(__name__)
 
@@ -37,9 +37,10 @@ QUORUM = 5
 FORM_EVENT_COUNT = 20
 
 MAX_LEADERBOARD_ROWS = 10
-MAX_RECAP_ROWS = 5
-FORM_WIDTH = 5
-ALL_WIDTH = 5
+RANK_WIDTH = 2
+TOTAL_WIDTH = 5
+DELTA_WIDTH = 4
+MOVEMENT_WIDTH = 4
 
 POINTS_ANSWERED = 1.0  # answered the poll at all, No-op and Maybe Baby </3 included
 POINTS_NO_OP = 0.5  # extra for an honest No-op: telling the group beats ghosting
@@ -267,14 +268,19 @@ class _Accumulator:
         ]
 
 
-def compute_points(chat: Chat) -> PointsResult:
-    """Compute Banger Points standings from a chat's event history.
+def _events_for(chat: Chat) -> List[Event]:
+    """A chat's non-cancelled events, oldest first - the shared input to every standings view."""
+    return sorted((e for e in chat.events.values() if not e.cancelled), key=lambda e: e.event_date)
 
-    Cancelled events are excluded entirely: from scoring, from the Form window, and from the
-    rarity denominator. Form sums the most recent FORM_EVENT_COUNT events; All-time sums
-    every event.
+
+def _compute_from_events(events: List[Event], chat_id: Optional[int] = None) -> PointsResult:
+    """Compute standings from an explicit, already-filtered/sorted events list.
+
+    Factored out of compute_points so the event recap can call it a second time on a
+    truncated events list - "everyone's standing as of just before this event" - to diff
+    against the full-history result and show what moved. chat_id is for logging only; the
+    "as of before" call has no chat_id of its own that means anything scoped to a sub-slice.
     """
-    events = sorted((e for e in chat.events.values() if not e.cancelled), key=lambda e: e.event_date)
     if not events:
         return PointsResult()
 
@@ -288,7 +294,7 @@ def compute_points(chat: Chat) -> PointsResult:
         _logger.debug(
             "Event %s in chat_id=%s: winning slot %s with V=%s, went_ahead=%s, counts=%s",
             event.event_date,
-            chat.chat_id,
+            chat_id,
             outcome.winning_text,
             outcome.votes,
             outcome.went_ahead,
@@ -299,7 +305,7 @@ def compute_points(chat: Chat) -> PointsResult:
 
     _logger.debug(
         "Computed Banger Points for chat_id=%s: %s events (%s in form window), %s users, rarity=%s",
-        chat.chat_id,
+        chat_id,
         len(events),
         len(events) - form_start,
         len(rows),
@@ -315,29 +321,107 @@ def compute_points(chat: Chat) -> PointsResult:
     )
 
 
-def _ranked(rows: List[PointsRow], limit: int) -> List[PointsRow]:
-    """Top rows by Form, falling back to All-time so a tie on Form is not ordered arbitrarily."""
-    return sorted(rows, key=lambda r: (r.form, r.all_time), reverse=True)[:limit]
+def compute_points(chat: Chat) -> PointsResult:
+    """Compute Banger Points standings from a chat's event history.
+
+    Cancelled events are excluded entirely: from scoring, from the Form window, and from the
+    rarity denominator. Form sums the most recent FORM_EVENT_COUNT events; All-time sums
+    every event.
+    """
+    return _compute_from_events(_events_for(chat), chat_id=chat.chat_id)
+
+
+def _previous_result(chat: Chat, event: Event) -> PointsResult:
+    """Standings as of just before event - the "before" side of the recap's movement diff."""
+    events = [e for e in _events_for(chat) if e.event_date < event.event_date]
+    return _compute_from_events(events, chat_id=chat.chat_id)
+
+
+def _form_key(row: PointsRow) -> Tuple[float, float]:
+    """Form first, All-time as the tie-break so a tie on Form is not ordered arbitrarily."""
+    return (row.form, row.all_time)
+
+
+def _all_time_key(row: PointsRow) -> Tuple[float, float]:
+    """All-time's mirror of _form_key - its own ranking, not a fallback view of Form's."""
+    return (row.all_time, row.form)
+
+
+def _ranks(rows: List[PointsRow], key: Callable[[PointsRow], Tuple[float, float]]) -> Dict[int, int]:
+    """Every row's 1-indexed rank under key, unlimited - the full board a display cap trims from."""
+    ordered = sorted(rows, key=key, reverse=True)
+    return {row.user.id: index + 1 for index, row in enumerate(ordered)}
+
+
+def _format_delta(value: Optional[float]) -> str:
+    """This event's points gained, or "-" for a row that didn't score it."""
+    text = "-" if value is None else f"+{round(value):d}"
+    return text.rjust(DELTA_WIDTH)
+
+
+def _format_movement(current_rank: int, previous_rank: Optional[int]) -> str:
+    """Rank movement since previous_rank: ▲ up, ▼ down, – unchanged, NEW with no prior rank."""
+    if previous_rank is None:
+        return "NEW".rjust(MOVEMENT_WIDTH)
+    delta = previous_rank - current_rank  # a smaller rank number is better, so this is signed "up"
+    if delta > 0:
+        return f"▲{delta}".rjust(MOVEMENT_WIDTH)
+    if delta < 0:
+        return f"▼{-delta}".rjust(MOVEMENT_WIDTH)
+    return "–".rjust(MOVEMENT_WIDTH)
+
+
+def _board_table(
+    rows: List[PointsRow],
+    names: Dict[int, str],
+    key: Callable[[PointsRow], Tuple[float, float]],
+    value_of: Callable[[PointsRow], float],
+    limit: int,
+    previous_ranks: Optional[Dict[int, int]] = None,
+    event_deltas: Optional[Dict[int, float]] = None,
+) -> str:
+    """One board's fenced table: rank/name/total, plus this-event delta and movement when given
+    a previous ranking to diff against - see _previous_result. Without one (a plain /leaderboard
+    call has no "before" state), the table is just rank/name/total.
+    """
+    ranked = sorted(rows, key=key, reverse=True)[:limit]
+    lines = []
+    for rank, row in enumerate(ranked, start=1):
+        total = f"{round(value_of(row)):d}".rjust(TOTAL_WIDTH)
+        line = f"{str(rank).rjust(RANK_WIDTH)} {format_name_cell(names[row.user.id])} {total}"
+        if previous_ranks is not None:
+            delta = event_deltas.get(row.user.id) if event_deltas else None
+            movement = _format_movement(rank, previous_ranks.get(row.user.id))
+            line += f" {_format_delta(delta)} {movement}"
+        lines.append(line)
+    return "```\n" + "\n".join(lines) + "\n```"
 
 
 def format_leaderboard(result: PointsResult) -> str:
-    """Format a PointsResult into the MarkdownV2 message body for /leaderboard."""
+    """Format a PointsResult into the MarkdownV2 message body for /leaderboard.
+
+    Form and All-time are shown as two independently-ranked tables rather than one table with
+    both totals, so a member's position can differ between them - the same shape the post-event
+    recap uses, see format_event_recap.
+    """
     if not result.outcomes:
         return "No event history yet for this chat\\!"
     if not result.rows:
         return "No participation data yet\\."
 
     names = display_names(row.user for row in result.rows)
-    header = "Name".ljust(NAME_WIDTH) + " " + "Form".rjust(FORM_WIDTH) + " " + "All".rjust(ALL_WIDTH)
-    lines = [header]
-    for row in _ranked(result.rows, MAX_LEADERBOARD_ROWS):
-        form = f"{round(row.form):d}".rjust(FORM_WIDTH)
-        all_time = f"{round(row.all_time):d}".rjust(ALL_WIDTH)
-        lines.append(f"{format_name_cell(names[row.user.id])} {form} {all_time}")
-
-    table = "```\n" + "\n".join(lines) + "\n```"
+    form_table = _board_table(result.rows, names, _form_key, lambda r: r.form, MAX_LEADERBOARD_ROWS)
+    all_time_table = _board_table(result.rows, names, _all_time_key, lambda r: r.all_time, MAX_LEADERBOARD_ROWS)
     footer = escape_markdown(f"Form covers the last {result.form_event_count} events.", version=2)
-    return "\n\n".join(["*__Banger Points__*", table, f"_{footer}_"])
+
+    return "\n\n".join(
+        [
+            "*__Banger Points__*",
+            f"*Form*\n{form_table}",
+            f"*All-time*\n{all_time_table}",
+            f"_{footer}_",
+        ]
+    )
 
 
 def _recap_headline(outcome: EventOutcome) -> str:
@@ -352,33 +436,50 @@ def _recap_headline(outcome: EventOutcome) -> str:
     )
 
 
-def format_event_recap(result: PointsResult, event: Event) -> str:
-    """Format the post-event message: what the poll decided, who scored, and the top of the Form table."""
-    scores = result.scores_by_date.get(event.event_date, {})
+def format_event_recap(result: PointsResult, event: Event, previous: Optional[PointsResult] = None) -> str:
+    """Format the post-event message: what the poll decided, then a Form and an All-time
+    leaderboard snapshot - each row showing this event's points gained and the rank movement
+    since previous, the standings as of just before this event (see _previous_result).
+
+    previous defaults to an empty result so a caller probing just the headline/outcome lookup
+    (e.g. an unrecognised event) doesn't need to supply one.
+    """
     outcome = next((o for o in result.outcomes if o.event_date == event.event_date), None)
     if outcome is None:
         return ""
 
+    previous = previous if previous is not None else PointsResult()
+    scores = result.scores_by_date.get(event.event_date, {})
+    event_deltas = {user_id: score.total for user_id, score in scores.items()}
     names = display_names(row.user for row in result.rows)
-    sections = ["*__Banger Points__*", _recap_headline(outcome)]
 
-    if scores:
-        lines = []
-        for user_id, score in sorted(scores.items(), key=lambda item: item[1].total, reverse=True):
-            tags = ", ".join(score.tags)
-            lines.append(f"{format_name_cell(names[user_id])} {round(score.total):4d}  {tags}".rstrip())
-        sections.append("```\n" + "\n".join(lines) + "\n```")
+    form_table = _board_table(
+        result.rows,
+        names,
+        _form_key,
+        lambda r: r.form,
+        MAX_LEADERBOARD_ROWS,
+        previous_ranks=_ranks(previous.rows, _form_key),
+        event_deltas=event_deltas,
+    )
+    all_time_table = _board_table(
+        result.rows,
+        names,
+        _all_time_key,
+        lambda r: r.all_time,
+        MAX_LEADERBOARD_ROWS,
+        previous_ranks=_ranks(previous.rows, _all_time_key),
+        event_deltas=event_deltas,
+    )
 
-    ranked = _ranked(result.rows, MAX_RECAP_ROWS)
-    if ranked:
-        lines = [
-            f"{place}. {format_name_cell(names[row.user.id])} {round(row.form):4d}"
-            for place, row in enumerate(ranked, start=1)
+    return "\n\n".join(
+        [
+            "*__Banger Points__*",
+            _recap_headline(outcome),
+            f"*Form*\n{form_table}",
+            f"*All-time*\n{all_time_table}",
         ]
-        sections.append("*Form*")
-        sections.append("```\n" + "\n".join(lines) + "\n```")
-
-    return "\n\n".join(sections)
+    )
 
 
 def render_leaderboard_message(chat: Chat) -> str:
@@ -393,4 +494,4 @@ def render_event_recap_message(chat: Chat, event: Event) -> str:
     still change this event's points afterwards. /leaderboard recomputes live and is the
     source of truth.
     """
-    return format_event_recap(compute_points(chat), event)
+    return format_event_recap(compute_points(chat), event, _previous_result(chat, event))

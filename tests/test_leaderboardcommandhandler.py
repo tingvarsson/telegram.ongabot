@@ -39,7 +39,7 @@ class LeaderboardCommandHandlerTest(unittest.IsolatedAsyncioTestCase):
         ):
             await callback(update, context)
 
-        update.message.reply_text.assert_awaited_once_with("TEXT", parse_mode=ParseMode.MARKDOWN_V2)
+        update.message.reply_text.assert_awaited_once_with("TEXT", parse_mode=ParseMode.MARKDOWN_V2, do_quote=False)
 
 
 if __name__ == "__main__":

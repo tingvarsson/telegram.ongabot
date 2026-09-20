@@ -3,9 +3,9 @@ from datetime import date, datetime
 
 from telegram.helpers import escape_markdown
 
-from ongabot.cs2.format import ATTRIBUTION, LIVE_NOTE, MAX_MESSAGE_CHARS, format_session
+from ongabot.cs2.format import ATTRIBUTION, CS2_NAME_WIDTH, LIVE_NOTE, MAX_MESSAGE_CHARS, format_session
 from ongabot.cs2.session import Cs2Match, Cs2Session, PlayerLine
-from ongabot.utils.statistics import display_width
+from ongabot.utils.statistics import NAME_WIDTH, display_width
 
 EVENT_DATE = date(2026, 9, 2)
 
@@ -57,9 +57,9 @@ def _match(
         players = [
             _member(11, "tommy", 23, 15, 1.53, 2),
             _member(22, "kalle", 9, 7, 1.29, 1),
-            _stranger("teammate1", team=2),
-            _stranger("enemy1"),
-            _stranger("enemy2"),
+            _stranger("mate1", team=2),
+            _stranger("foe1"),
+            _stranger("foe2"),
         ]
     return Cs2Match(
         id=match_id,
@@ -101,6 +101,32 @@ class HeaderAndSummaryTest(unittest.TestCase):
     def test_summary_omits_overtime_when_there_was_none(self):
         self.assertNotIn("OT", format_session(_session([_match(score=(13, 7))])))
 
+    def test_overtime_is_tallied_per_outcome(self):
+        """A win going to OT must not also mark an untouched loss as OT, and vice versa."""
+        text = format_session(_session([_match(match_id="a", score=(19, 16)), _match(match_id="b", score=(7, 13))]))
+
+        self.assertIn("1W \\(1OT\\)", text)
+        self.assertIn("1L", text)
+        self.assertNotIn("1L \\(", text)
+
+    def test_match_count_is_no_longer_shown(self):
+        self.assertNotIn("2 matches", format_session(_session([_match(match_id="a"), _match(match_id="b")])))
+
+    def test_session_heading_and_record_share_one_line(self):
+        text = format_session(_session([_match(match_id="a"), _match(match_id="b", score=(7, 13))]))
+        line = next(line for line in text.splitlines() if line.startswith("*Session*"))
+
+        self.assertIn("1W", line)
+        self.assertIn("1L", line)
+
+    def test_table_glues_to_its_own_caption_without_a_blank_line(self):
+        """A table's own heading/link sit right next to it; only distinct sections stay spaced."""
+        text = format_session(_session([_match(match_id="a"), _match(match_id="b")]))
+
+        self.assertIn("*Session* 🟩2W\n```", text, "heading+record glue to their own table")
+        self.assertIn("```\n[View on Leetify]", text, "a table glues to its own link")
+        self.assertIn("```\n\n*de\\_mirage", text, "the Session block and the first match stay spaced")
+
 
 class SessionPlayerSummaryTest(unittest.TestCase):
     def test_combines_each_members_stats_across_matches(self):
@@ -138,8 +164,8 @@ class SessionPlayerSummaryTest(unittest.TestCase):
         summary = text.split("*de\\_mirage")[0]
 
         self.assertIn("tommy", summary)
-        self.assertNotIn("enemy1", summary)
-        self.assertNotIn("teammate1", summary)
+        self.assertNotIn("foe1", summary)
+        self.assertNotIn("mate1", summary)
 
     def test_zero_deaths_does_not_divide_by_zero(self):
         session = _session([_match(players=[_member(11, "tommy", 5, 0, 0.0), _member(22, "kalle", 1, 1, 1.0)])])
@@ -151,14 +177,14 @@ class MatchScoreboardTest(unittest.TestCase):
     def test_lists_every_player_in_the_lobby(self):
         text = format_session(_session())
 
-        for name in ("tommy", "kalle", "teammate1", "enemy1", "enemy2"):
+        for name in ("tommy", "kalle", "mate1", "foe1", "foe2"):
             self.assertIn(name, text)
 
     def test_our_side_is_listed_before_the_opposition(self):
         text = format_session(_session())
         block = text.split("*de\\_mirage")[1]
 
-        self.assertLess(block.index("teammate1"), block.index("enemy1"), "our team must come first")
+        self.assertLess(block.index("mate1"), block.index("foe1"), "our team must come first")
 
     def test_no_row_is_marked_since_bold_is_impossible_inside_a_code_block(self):
         """Telegram forbids nesting bold in pre/code, so members are not singled out.
@@ -170,7 +196,7 @@ class MatchScoreboardTest(unittest.TestCase):
         self.assertTrue(all(not row.startswith(("*", "+", ">")) for row in rows), rows)
 
     def test_strangers_are_shown_by_their_ingame_name(self):
-        self.assertIn("enemy1", format_session(_session()))
+        self.assertIn("foe1", format_session(_session()))
 
     def test_heading_shows_the_match_end_time(self):
         self.assertIn("21:02", format_session(_session()))
@@ -240,7 +266,7 @@ class MessageLengthTest(unittest.TestCase):
 
         self.assertIn("CS2 results", text)
         self.assertIn(ATTRIBUTION, text)
-        self.assertIn("12 matches", text, "the summary must still count every match played")
+        self.assertIn("12W", text, "the record must still count every match played, even ones trimmed from view")
 
     def test_a_short_session_is_not_trimmed(self):
         self.assertNotIn("not shown", format_session(self._long_session(2)))
@@ -269,7 +295,7 @@ class MarkdownEscapingTest(unittest.TestCase):
 
 
 class StatColumnsTest(unittest.TestCase):
-    """The per-match board carries K, A, D, K/D, ADR and aces."""
+    """The per-match board carries K, A, D, K/D, ADR and 5K (aces); DMG is not shown."""
 
     def _row(self, name="tommy", **kw):
         session = _session([_match(players=[_member(11, name, 23, 15, 1.53, **kw), _stranger("plain")])])
@@ -285,24 +311,37 @@ class StatColumnsTest(unittest.TestCase):
     def test_shows_aces(self):
         self.assertRegex(self._row(aces=2), r"\s2\s*$")
 
-    def test_shows_total_damage_between_kd_and_adr(self):
-        row = self._row(adr=88.0, rounds=25).split()
-
-        self.assertEqual(row[5], "2200", "DMG is total damage, 88 ADR over 25 rounds")
-        self.assertEqual(row[6], "88", "ADR follows DMG")
-
     def test_shows_kd_ratio_as_leetify_reports_it(self):
         self.assertIn("1.53", self._row())
 
     def test_header_names_every_column(self):
         header = _scoreboard(format_session(_session()))[0]
 
-        self.assertEqual(header.split(), ["Name", "K", "A", "D", "K/D", "DMG", "ADR", "ACE"])
+        self.assertEqual(header.split(), ["Name", "K", "A", "D", "K/D", "ADR", "5K"])
 
     def test_every_scoreboard_row_is_the_same_width(self):
         rows = [r for r in _scoreboard(format_session(_session())) if r.strip() != "--"]
 
         self.assertEqual(len({display_width(r) for r in rows}), 1, rows)
+
+    def test_uses_the_narrower_cs2_name_width_not_the_shared_statistics_width(self):
+        """/statistics and /leaderboard must keep NAME_WIDTH=10; CS2 tables need it narrower."""
+        self.assertLess(CS2_NAME_WIDTH, NAME_WIDTH)
+
+    def test_kd_column_widens_when_a_row_needs_it(self):
+        narrow = format_session(_session([_match(players=[_member(11, "tommy", 23, 15, 1.53), _stranger("plain")])]))
+        wide = format_session(_session([_match(players=[_member(11, "tommy", 25, 2, 12.50), _stranger("plain")])]))
+
+        self.assertGreater(display_width(_scoreboard(wide)[0]), display_width(_scoreboard(narrow)[0]))
+
+    def test_adr_column_widens_when_a_row_needs_it(self):
+        narrow_session = _session([_match(players=[_member(11, "tommy", 23, 15, 1.53, adr=88.4), _stranger("plain")])])
+        wide_session = _session([_match(players=[_member(11, "tommy", 23, 15, 1.53, adr=1234.0), _stranger("plain")])])
+
+        narrow = format_session(narrow_session)
+        wide = format_session(wide_session)
+
+        self.assertGreater(display_width(_scoreboard(wide)[0]), display_width(_scoreboard(narrow)[0]))
 
 
 class SessionAdrTest(unittest.TestCase):
@@ -322,22 +361,10 @@ class SessionAdrTest(unittest.TestCase):
         self.assertIn("92", row)
         self.assertNotIn("55", row)
 
-    def test_session_table_sums_total_damage(self):
-        session = _session(
-            [
-                _match(match_id="a", players=[_member(11, "tommy", 1, 1, 1.0, adr=100.0, rounds=20), _stranger("x")]),
-                _match(match_id="b", players=[_member(11, "tommy", 1, 1, 1.0, adr=50.0, rounds=10), _stranger("y")]),
-            ]
-        )
-
-        row = next(line for line in format_session(session).splitlines() if line.startswith("tommy")).split()
-
-        self.assertEqual(row[6], "2500", "2000 + 500 damage")
-
     def test_session_header_matches_the_board_plus_matches(self):
         header = _scoreboard(format_session(_session()), index=0)[0]
 
-        self.assertEqual(header.split(), ["Name", "M", "K", "A", "D", "K/D", "DMG", "ADR", "ACE"])
+        self.assertEqual(header.split(), ["Name", "M", "K", "A", "D", "K/D", "ADR", "5K"])
 
     def test_session_table_sums_assists_and_aces(self):
         session = _session(

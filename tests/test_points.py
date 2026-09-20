@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 from ongabot.utils.points import (
     FORM_EVENT_COUNT,
     MAX_LEADERBOARD_ROWS,
-    MAX_RECAP_ROWS,
     POINTS_ANSWERED,
     POINTS_BOOTED,
     POINTS_CLUTCH,
@@ -480,21 +479,29 @@ class FormatLeaderboardTest(unittest.TestCase):
 
         self.assertEqual(render_leaderboard_message(chat), "No participation data yet\\.")
 
-    def test_table_has_a_header_and_one_row_per_user(self):
+    def test_shows_a_form_and_an_all_time_board(self):
         text = render_leaderboard_message(self._chat_with(3))
-        table = text.split("```")[1].strip().split("\n")
 
-        self.assertIn("Form", table[0])
-        self.assertIn("All", table[0])
-        self.assertEqual(len(table), 4)  # header plus three users
+        self.assertIn("*Form*", text)
+        self.assertIn("*All-time*", text)
 
-    def test_table_is_truncated_to_the_row_cap(self):
+    def test_each_board_has_one_row_per_user_and_no_header_row(self):
+        text = render_leaderboard_message(self._chat_with(3))
+        form_table = text.split("```")[1].strip().split("\n")
+        all_time_table = text.split("```")[3].strip().split("\n")
+
+        self.assertEqual(len(form_table), 3)
+        self.assertEqual(len(all_time_table), 3)
+
+    def test_each_board_is_truncated_to_the_row_cap(self):
         text = render_leaderboard_message(self._chat_with(MAX_LEADERBOARD_ROWS + 5))
-        table = text.split("```")[1].strip().split("\n")
+        form_table = text.split("```")[1].strip().split("\n")
+        all_time_table = text.split("```")[3].strip().split("\n")
 
-        self.assertEqual(len(table), MAX_LEADERBOARD_ROWS + 1)
+        self.assertEqual(len(form_table), MAX_LEADERBOARD_ROWS)
+        self.assertEqual(len(all_time_table), MAX_LEADERBOARD_ROWS)
 
-    def test_rows_are_ordered_by_form_descending(self):
+    def test_rows_are_ordered_by_their_own_board_descending_and_ranked_from_one(self):
         keen = _make_user(1, "Keen")
         casual = _make_user(2, "Casual")
         chat = _make_chat(
@@ -506,8 +513,26 @@ class FormatLeaderboardTest(unittest.TestCase):
 
         table = render_leaderboard_message(chat).split("```")[1].strip().split("\n")
 
-        self.assertTrue(table[1].startswith("Keen"))
-        self.assertTrue(table[2].startswith("Casual"))
+        self.assertEqual(table[0].split()[:2], ["1", "Keen"])
+        self.assertEqual(table[1].split()[:2], ["2", "Casual"])
+
+    def test_form_and_all_time_boards_rank_independently(self):
+        """A member cold on Form but with a big All-time total can top one board, not the other."""
+        old_timer = _make_user(1, "OldTimer")
+        newcomer = _make_user(2, "Newcomer")
+        # 5 events OldTimer alone answers, all older than the Form window; 20 silent events to
+        # push them out of that window; one final event only Newcomer answers.
+        events = [_make_event(date(2026, 1, day), 5, {old_timer: _make_answer([0])}) for day in range(1, 6)]
+        events += [_make_event(date(2026, 1, 5 + day), 5, {}) for day in range(1, FORM_EVENT_COUNT)]
+        events.append(_make_event(date(2027, 1, 1), 5, {newcomer: _make_answer([0])}))
+        chat = _make_chat(events)
+
+        text = render_leaderboard_message(chat)
+        form_table = text.split("```")[1].strip().split("\n")
+        all_time_table = text.split("```")[3].strip().split("\n")
+
+        self.assertEqual(form_table[0].split()[1], "Newcomer", "OldTimer's only points fell outside the window")
+        self.assertEqual(all_time_table[0].split()[1], "OldTimer", "5 events beats Newcomer's 1")
 
     def test_footer_reports_the_form_window_and_is_escaped(self):
         text = render_leaderboard_message(self._chat_with(2, events=3))
@@ -550,23 +575,65 @@ class FormatEventRecapTest(unittest.TestCase):
 
         self.assertIn("Nobody picked a slot", text)
 
-    def test_lists_scorers_with_reason_tags(self):
+    def test_shows_a_form_and_an_all_time_snapshot(self):
         chat, event = self._chat_and_event(QUORUM)
 
         text = render_event_recap_message(chat, event)
-        scorers = text.split("```")[1]
 
-        self.assertIn("rescue", scorers)
-        self.assertEqual(len(scorers.strip().split("\n")), QUORUM)
+        self.assertIn("*Form*", text)
+        self.assertIn("*All-time*", text)
 
-    def test_form_table_is_truncated_to_the_recap_cap(self):
-        chat, event = self._chat_and_event(MAX_RECAP_ROWS + 3)
+    def test_snapshot_boards_are_capped_and_ranked_from_one(self):
+        chat, event = self._chat_and_event(MAX_LEADERBOARD_ROWS + 3)
 
         text = render_event_recap_message(chat, event)
-        form_table = text.split("```")[3]
+        form_table = text.split("```")[1].strip().split("\n")
 
-        self.assertEqual(len(form_table.strip().split("\n")), MAX_RECAP_ROWS)
-        self.assertTrue(form_table.strip().startswith("1."))
+        self.assertEqual(len(form_table), MAX_LEADERBOARD_ROWS)
+        self.assertEqual(form_table[0].split()[0], "1")
+
+    def test_a_first_ever_event_marks_every_row_new(self):
+        chat, event = self._chat_and_event(QUORUM)
+
+        text = render_event_recap_message(chat, event)
+        form_table = text.split("```")[1]
+
+        self.assertNotIn("▲", form_table)
+        self.assertNotIn("▼", form_table)
+        self.assertIn("NEW", form_table)
+
+    def test_a_later_event_shows_movement_for_returners_and_new_for_first_timers(self):
+        alice = _make_user(1, "Alice")
+        bob = _make_user(2, "Bob")
+        first_event = _make_event(date(2026, 1, 1), 5, {alice: _make_answer([0])})
+        second_event = _make_event(date(2026, 1, 8), 5, {alice: _make_answer([0]), bob: _make_answer([0])})
+        chat = _make_chat([first_event, second_event])
+
+        text = render_event_recap_message(chat, second_event)
+        form_table = text.split("```")[1]
+        alice_row = next(line for line in form_table.splitlines() if "Alice" in line)
+        bob_row = next(line for line in form_table.splitlines() if "Bob" in line)
+
+        self.assertIn("+", form_table, "this event's points-gained should be shown")
+        self.assertNotIn("NEW", alice_row, "Alice already had a previous appearance")
+        self.assertIn("NEW", bob_row, "Bob has no previous-event ranking to compare against")
+
+    def test_a_rank_change_shows_up_and_down_arrows(self):
+        alice = _make_user(1, "Alice")
+        bob = _make_user(2, "Bob")
+        # Event 1: Alice books a slot, Bob only No-ops - Alice ranks above Bob.
+        first_event = _make_event(date(2026, 1, 1), 5, {alice: _make_answer([0]), bob: _make_answer([5])})
+        # Event 2: Bob books every slot and overtakes Alice, who sits this one out.
+        second_event = _make_event(date(2026, 1, 8), 5, {bob: _make_answer([0, 1, 2, 3, 4])})
+        chat = _make_chat([first_event, second_event])
+
+        text = render_event_recap_message(chat, second_event)
+        form_table = text.split("```")[1]
+        bob_row = next(line for line in form_table.splitlines() if "Bob" in line)
+        alice_row = next(line for line in form_table.splitlines() if "Alice" in line)
+
+        self.assertIn("▲1", bob_row)
+        self.assertIn("▼1", alice_row)
 
     def test_unknown_event_renders_nothing(self):
         chat, _event = self._chat_and_event(2)
