@@ -483,7 +483,10 @@ class FormatLeaderboardTest(unittest.TestCase):
         text = render_leaderboard_message(self._chat_with(3))
 
         self.assertIn("*Form*", text)
-        self.assertIn("*All-time*", text)
+        # The hyphen must be escaped - it's literal text, not inside a code/pre entity, and
+        # MarkdownV2 rejects an unescaped "-" there even inside bold.
+        self.assertIn("*All\\-time*", text)
+        self.assertNotIn("*All-time*", text)
 
     def test_each_board_has_one_row_per_user_and_no_header_row(self):
         text = render_leaderboard_message(self._chat_with(3))
@@ -581,7 +584,8 @@ class FormatEventRecapTest(unittest.TestCase):
         text = render_event_recap_message(chat, event)
 
         self.assertIn("*Form*", text)
-        self.assertIn("*All-time*", text)
+        self.assertIn("*All\\-time*", text)
+        self.assertNotIn("*All-time*", text)
 
     def test_snapshot_boards_are_capped_and_ranked_from_one(self):
         chat, event = self._chat_and_event(MAX_LEADERBOARD_ROWS + 3)

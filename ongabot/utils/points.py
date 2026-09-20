@@ -337,6 +337,12 @@ def _previous_result(chat: Chat, event: Event) -> PointsResult:
     return _compute_from_events(events, chat_id=chat.chat_id)
 
 
+# MarkdownV2 requires "-" escaped even inside a bold entity - it is literal text there, not
+# code/pre content, so the ordinary escaping rule still applies.
+_FORM_HEADING = "*Form*"
+_ALL_TIME_HEADING = f"*{escape_markdown('All-time', version=2)}*"
+
+
 def _form_key(row: PointsRow) -> Tuple[float, float]:
     """Form first, All-time as the tie-break so a tie on Form is not ordered arbitrarily."""
     return (row.form, row.all_time)
@@ -417,8 +423,8 @@ def format_leaderboard(result: PointsResult) -> str:
     return "\n\n".join(
         [
             "*__Banger Points__*",
-            f"*Form*\n{form_table}",
-            f"*All-time*\n{all_time_table}",
+            f"{_FORM_HEADING}\n{form_table}",
+            f"{_ALL_TIME_HEADING}\n{all_time_table}",
             f"_{footer}_",
         ]
     )
@@ -476,8 +482,8 @@ def format_event_recap(result: PointsResult, event: Event, previous: Optional[Po
         [
             "*__Banger Points__*",
             _recap_headline(outcome),
-            f"*Form*\n{form_table}",
-            f"*All-time*\n{all_time_table}",
+            f"{_FORM_HEADING}\n{form_table}",
+            f"{_ALL_TIME_HEADING}\n{all_time_table}",
         ]
     )
 
