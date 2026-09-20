@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CS2 results now follow the night as it happens: posted as soon as Leetify has
   the first match and edited as later ones land, marked as updating live until
   90 minutes pass with no new match.
+- CS2 results and Banger Points tables are narrower and tighter, so they stop
+  cutting off on a phone screen and lose the blank lines padding every table.
+  The win/loss record (wins, losses, draws, with overtime broken out per
+  outcome) now sits right under the Session heading with a colour marker.
+- The post-event Banger Points recap is now a Form/All-time leaderboard
+  snapshot: each member's points gained and rank movement, instead of a flat
+  scorer list. `/leaderboard` shows the same Form and All-time boards, and
+  both it and `/cs2` reply without quoting the triggering command.
 - Changelog messages are much smaller and properly formatted: each release is
   one header line with its notes collapsed into a tap-to-expand quote.
 - `pytest` finds `ongabot/` without a `PYTHONPATH=` prefix. No user-facing

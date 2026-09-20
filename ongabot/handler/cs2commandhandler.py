@@ -76,4 +76,6 @@ async def callback(update: Update, context: CallbackContext) -> None:
         parse_mode=ParseMode.MARKDOWN_V2,
         # The per-match Leetify links would otherwise each drag in a preview card.
         link_preview_options=LinkPreviewOptions(is_disabled=True),
+        # A results report reads as a standalone message, not an answer to the command itself.
+        do_quote=False,
     )
