@@ -8,7 +8,9 @@ from ongabot.utils.changelogformat import (
     BULLET,
     CHANGELOG_HEADING,
     EXPANDABLE_MIN_LINES,
+    INDENT,
     NESTED_BULLET,
+    _pack,
     render_changelog_html,
 )
 
@@ -74,6 +76,58 @@ class HierarchyTest(unittest.TestCase):
         (message,) = render_changelog_html(ONE_SECTION)
         self.assertIn("<b>v1.2.0</b>", message)
         self.assertNotIn("<i>v1.2.0</i>", message)
+
+
+class LayoutTest(unittest.TestCase):
+    """Categories are separated and bullets sit under their label."""
+
+    TWO_CATEGORIES = "## [1.0.0] - 2026-01-01\n\n### Added\n\n- New thing\n\n### Fixed\n\n- Old thing\n"
+
+    @staticmethod
+    def _inner(message: str) -> str:
+        """The text between a message's first <blockquote...> and its closing tag."""
+        return message.split("<blockquote", 1)[1].split(">", 1)[1].removesuffix("</blockquote>")
+
+    def _body(self, raw: str) -> List[str]:
+        return self._inner(render_changelog_html(raw)[0]).split("\n")
+
+    def test_a_blank_line_separates_two_categories(self) -> None:
+        lines = self._body(self.TWO_CATEGORIES)
+        self.assertEqual(lines[lines.index("<i>Fixed</i>") - 1], "")
+
+    def test_no_blank_line_before_the_first_category(self) -> None:
+        lines = self._body(self.TWO_CATEGORIES)
+        self.assertEqual(lines[0], "<i>Added</i>")
+
+    def test_bullets_are_indented_under_their_category(self) -> None:
+        lines = self._body(self.TWO_CATEGORIES)
+        self.assertEqual(lines[1], f"{INDENT}{BULLET} New thing")
+
+    def test_nested_bullets_are_indented_one_step_further(self) -> None:
+        raw = "## [1.0.0] - 2026-01-01\n\n### Added\n\n- Outer\n  - Inner\n"
+        lines = self._body(raw)
+        self.assertEqual(lines[1], f"{INDENT}{BULLET} Outer")
+        self.assertEqual(lines[2], f"{INDENT}{INDENT}{NESTED_BULLET} Inner")
+
+    def test_a_single_category_body_has_no_blank_lines(self) -> None:
+        self.assertNotIn("", self._body(ONE_SECTION))
+
+    def test_a_continuation_message_does_not_start_with_a_category_separator(self) -> None:
+        """A split landing on the blank line must not open the next quote on an empty line.
+
+        _pack is driven directly here because the blank line only overflows a message in a
+        one-character window - real changelog text hits a content line first, so sweeping
+        entry sizes never reproduces it. Sweeping the limit shifts the alignment by one each
+        time and is guaranteed to land on it.
+        """
+        body = ["<i>Added</i>", f"{INDENT}{BULLET} " + "a" * 40, "", "<i>Fixed</i>", f"{INDENT}{BULLET} " + "b" * 40]
+        split_seen = False
+        for limit in range(90, 200):
+            messages = _pack([("<b>v1.0.0</b>", body)], limit=limit)
+            split_seen = split_seen or len(messages) > 1
+            for message in messages[1:]:
+                self.assertFalse(self._inner(message).startswith("\n"), f"limit={limit}: {message[:60]!r}")
+        self.assertTrue(split_seen, "never produced a split to check")
 
 
 class HeadlineTest(unittest.TestCase):
@@ -190,7 +244,7 @@ class BulletWrappingTest(unittest.TestCase):
 
     def test_a_wrapped_bullet_occupies_a_single_rendered_line(self) -> None:
         rendered = self._render("- One\n  two\n  three")
-        self.assertEqual(len([line for line in rendered.splitlines() if line.startswith(BULLET)]), 1)
+        self.assertEqual(len([line for line in rendered.splitlines() if line.strip().startswith(BULLET)]), 1)
 
     def test_markup_split_across_a_wrap_is_still_parsed(self) -> None:
         # The source wraps between "**Banger" and "Points**", so bold only resolves after joining.
@@ -199,8 +253,8 @@ class BulletWrappingTest(unittest.TestCase):
 
     def test_nested_bullets_render_indented_with_their_own_marker(self) -> None:
         rendered = self._render("- Outer\n  - Inner one\n  - Inner two")
-        self.assertIn(f"  {NESTED_BULLET} Inner one", rendered)
-        self.assertIn(f"  {NESTED_BULLET} Inner two", rendered)
+        self.assertIn(f"{INDENT}{INDENT}{NESTED_BULLET} Inner one", rendered)
+        self.assertIn(f"{INDENT}{INDENT}{NESTED_BULLET} Inner two", rendered)
 
     def test_a_nested_bullet_does_not_get_folded_into_its_parent(self) -> None:
         rendered = self._render("- Outer\n  - Inner")
@@ -209,7 +263,7 @@ class BulletWrappingTest(unittest.TestCase):
 
     def test_separate_bullets_stay_separate(self) -> None:
         rendered = self._render("- First\n- Second")
-        self.assertEqual(len([line for line in rendered.splitlines() if line.startswith(BULLET)]), 2)
+        self.assertEqual(len([line for line in rendered.splitlines() if line.strip().startswith(BULLET)]), 2)
 
 
 def _section(version: str, bullets: int) -> str:

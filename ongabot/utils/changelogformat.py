@@ -38,6 +38,11 @@ _INLINE_RE = re.compile(
 BULLET = "•"
 NESTED_BULLET = "◦"
 
+# Bullets sit one step in from their category label, so the label reads as the thing they
+# hang off rather than as just another line. Telegram's body font is proportional, so this
+# is a visual nudge, not column alignment - and a wrapped bullet still returns to the margin.
+INDENT = "  "
+
 # Three weights, so a release and a section label never read as one blob: bold+underline for
 # the message heading (as cs2.format and utils.points title their messages), bold for the
 # release, italic for "Added"/"Fixed" inside the quote.
@@ -159,13 +164,18 @@ def _render_body(body_lines: List[str], link_defs: Dict[str, str]) -> List[str]:
 
     Every inline tag opens and closes within a single returned line. That invariant is what
     lets _pack split a long message between lines without ever cutting a tag in half.
+
+    A blank line precedes each category after the first, so "Added" and "Fixed" read as
+    separate groups rather than one run of bullets.
     """
     rendered: List[str] = []
     for kind, indent, text in _fold_lines(body_lines):
         if kind == "heading":
+            if rendered:
+                rendered.append("")
             rendered.append(f"<i>{_escape(text)}</i>")
         elif kind == "bullet":
-            marker = f"  {NESTED_BULLET}" if indent else BULLET
+            marker = f"{INDENT}{INDENT}{NESTED_BULLET}" if indent else f"{INDENT}{BULLET}"
             rendered.append(f"{marker} {_render_inline(text, link_defs)}")
         else:
             rendered.append(_render_inline(text, link_defs))
@@ -313,6 +323,7 @@ def _pack(sections: List[Tuple[str, List[str]]], limit: int = MAX_MESSAGE_CHARS)
     """
     messages: List[str] = []
     buffer = ""  # the message being built; its blockquote is open unless buffer is empty
+    has_body = False  # whether the open blockquote has a body line yet
 
     for header, body in sections:
         tag = _open_tag(body)
@@ -329,13 +340,19 @@ def _pack(sections: List[Tuple[str, List[str]]], limit: int = MAX_MESSAGE_CHARS)
             buffer = ""
             start = header + "\n" + tag
         buffer += start + lines[0]
+        has_body = True
 
         for line in lines[1:]:
-            if len(buffer + "\n" + line + _BLOCKQUOTE_CLOSE) > limit:
+            separator = "\n" if has_body else ""
+            if len(buffer + separator + line + _BLOCKQUOTE_CLOSE) > limit:
                 messages.append(buffer + _BLOCKQUOTE_CLOSE)
-                buffer = tag + line
-            else:
-                buffer += "\n" + line
+                buffer, separator, has_body = tag, "", False
+                if not line:
+                    # A category separator that lands on a message boundary is redundant:
+                    # the break already separates the two categories.
+                    continue
+            buffer += separator + line
+            has_body = has_body or bool(line)
 
     if buffer:
         messages.append(buffer + _BLOCKQUOTE_CLOSE)
