@@ -62,10 +62,6 @@ ACES_WIDTH = 2  # "5K" - a night's multi-kill rounds are never more than two dig
 MATCHES_WIDTH = 2
 TEAM_DIVIDER = "--"
 
-# Win/loss/draw record markers. Draws are rare (competitive only, at 12-12) and, since
-# competitive has no overtime, never carry an OT count - so they get no colour marker either.
-_OUTCOME_MARKERS = {"W": "🟩", "L": "🟥", "D": ""}
-
 
 def _columns(*pairs: Tuple[str, int]) -> str:
     """Join right-aligned cells with a single space, as every table row does."""
@@ -105,9 +101,9 @@ def _kd(kills: int, deaths: int) -> str:
 
 
 def _record_text(session: Cs2Session) -> str:
-    """Win/loss/draw tally with a colour marker and each outcome's own overtime count.
+    """Win/loss/draw tally with each outcome's own overtime count.
 
-    e.g. "🟩2W (1OT) - 🟥3L (2OT)". A zero-count outcome is dropped entirely, and the OT
+    e.g. "2W (1 OT) - 3L (2 OT)". A zero-count outcome is dropped entirely, and the OT
     parenthetical is dropped for any outcome that had none - tracked per outcome rather than
     as one combined total, since "how many of our wins went to OT" and "how many losses did"
     are different questions a reader might ask.
@@ -123,7 +119,7 @@ def _record_text(session: Cs2Session) -> str:
     for key in ("W", "L", "D"):
         if not tally[key]:
             continue
-        clause = f"{_OUTCOME_MARKERS[key]}{tally[key]}{key}"
+        clause = f"{tally[key]}{key}"
         if overtime_tally[key]:
             # A space before OT, so "1OT" doesn't read as "10" at a glance.
             clause += f" ({overtime_tally[key]} OT)"

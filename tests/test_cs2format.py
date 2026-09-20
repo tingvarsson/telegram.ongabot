@@ -123,7 +123,7 @@ class HeaderAndSummaryTest(unittest.TestCase):
         """A table's own heading/link sit right next to it; only distinct sections stay spaced."""
         text = format_session(_session([_match(match_id="a"), _match(match_id="b")]))
 
-        self.assertIn("*Session* 🟩2W\n```", text, "heading+record glue to their own table")
+        self.assertIn("*Session* 2W\n```", text, "heading+record glue to their own table")
         self.assertIn("```\n[View on Leetify]", text, "a table glues to its own link")
         self.assertIn("```\n\n*de\\_mirage", text, "the Session block and the first match stay spaced")
 
