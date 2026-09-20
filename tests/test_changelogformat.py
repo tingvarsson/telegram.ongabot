@@ -10,7 +10,10 @@ from ongabot.utils.changelogformat import (
     EXPANDABLE_MIN_LINES,
     INDENT,
     NESTED_BULLET,
+    _collect_link_defs,
     _pack,
+    _render_body,
+    _split_sections,
     render_changelog_html,
 )
 
@@ -448,9 +451,16 @@ class RealChangelogTest(unittest.TestCase):
         cls.messages = render_changelog_html(cls.raw)
 
     def test_every_release_is_rendered(self) -> None:
-        versions = re.findall(r"^## \[([^\]]+)\]", self.raw, re.MULTILINE)
+        """Every section with actual content must show up - render_changelog_html itself
+        skips an empty one (see its "if body:" check), and freshly cutting a release always
+        leaves [Unreleased] exactly that way until new work lands, so it must be excluded
+        here too rather than asserted on unconditionally.
+        """
+        link_defs = _collect_link_defs(self.raw)
         joined = "\n".join(self.messages)
-        for version in versions:
+        for version, _date, body_lines in _split_sections(self.raw):
+            if not _render_body(body_lines, link_defs):
+                continue
             prefix = "v" if version[0].isdigit() else ""
             self.assertIn(f"<b>{prefix}{version}</b>", joined)
 
