@@ -5,6 +5,7 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest
 
 from ongabot.handler.changelogcommandhandler import callback
+from ongabot.utils.changelogformat import CHANGELOG_HEADING
 
 ENTRY = "## [1.2.0] - 2026-05-24\n\n### Fixed\n\n- Big fix\n"
 
@@ -29,6 +30,25 @@ class ChangelogCommandHandlerTest(unittest.IsolatedAsyncioTestCase):
         with patch("ongabot.handler.changelogcommandhandler.get_changelog", return_value=ENTRY) as gc:
             await callback(update, context)
         self.assertEqual(gc.call_args.args[1], 3)
+
+    async def test_the_reply_does_not_quote_the_command(self):
+        """PTB quotes by default in group chats, which doubles the visual size of the reply."""
+        update, context = self._make([])
+        with patch("ongabot.handler.changelogcommandhandler.get_changelog", return_value=ENTRY):
+            await callback(update, context)
+        self.assertIs(update.message.reply_text.await_args.kwargs["do_quote"], False)
+
+    async def test_the_reply_is_headed_as_the_changelog(self):
+        update, context = self._make([])
+        with patch("ongabot.handler.changelogcommandhandler.get_changelog", return_value=ENTRY):
+            await callback(update, context)
+        self.assertTrue(update.message.reply_text.await_args.args[0].startswith(CHANGELOG_HEADING))
+
+    async def test_the_usage_reply_does_not_quote_either(self):
+        update, context = self._make(["abc"])
+        with patch("ongabot.handler.changelogcommandhandler.get_changelog"):
+            await callback(update, context)
+        self.assertIs(update.message.reply_text.await_args.kwargs["do_quote"], False)
 
     async def test_entry_is_sent_as_html(self):
         update, context = self._make([])

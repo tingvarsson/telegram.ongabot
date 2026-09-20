@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hard-wrapped lines are rejoined so the text wraps to your screen instead of
   to 80 columns. Applies to both `/changelog` and the announcement posted when
   the bot upgrades.
+- `/changelog` replies are headed **Changelog** and no longer quote the command
+  they answer, which in a group chat stacked the quoted `/changelog` on top of
+  every reply. Releases and section labels also now read as separate levels -
+  the release is bold (`v1.7.0`), the section label italic - instead of both
+  being bold and running together, which was worst on `Unreleased`, where
+  there is no date to tell the two lines apart.
 
 ## [1.7.0] - 2026-08-31
 

@@ -9,7 +9,7 @@ from telegram.ext import CallbackContext, CommandHandler
 
 from _version import __version__
 from utils.changelog import get_changelog
-from utils.changelogformat import render_changelog_html, to_plain_text
+from utils.changelogformat import CHANGELOG_HEADING, render_changelog_html, to_plain_text
 from utils.commands import CHANGELOG
 from utils.log import log
 
@@ -19,6 +19,11 @@ _logger = logging.getLogger(__name__)
 # collapsing the body is meant to remove.
 _NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
+# python-telegram-bot quotes the triggering message by default in any non-private chat
+# (Message._do_quote), which stacks the quoted "/changelog" on top of every reply and undoes
+# much of what collapsing the body buys. The heading says what the message is instead.
+_NO_QUOTE = False
+
 
 @log
 async def callback(update: Update, context: CallbackContext) -> None:
@@ -27,23 +32,27 @@ async def callback(update: Update, context: CallbackContext) -> None:
     if context.args:
         arg = context.args[0]
         if not arg.isdigit() or int(arg) < 1:
-            await update.message.reply_text(CHANGELOG.usage)
+            await update.message.reply_text(CHANGELOG.usage, do_quote=_NO_QUOTE)
             return
         count = int(arg)
     entry = get_changelog(__version__, count)
     # Each release renders to a visible header plus a collapsed body. Several entries
     # together exceed Telegram's message limit, which would fail the whole reply rather
     # than truncate it - the renderer splits them into messages that each fit.
-    messages = render_changelog_html(entry)
+    messages = render_changelog_html(entry, headline=CHANGELOG_HEADING)
     _logger.info("Replying with %d changelog entr(ies) in %d message(s)", count, len(messages))
     for message in messages:
         try:
-            await update.message.reply_text(message, parse_mode=ParseMode.HTML, link_preview_options=_NO_PREVIEW)
+            await update.message.reply_text(
+                message, parse_mode=ParseMode.HTML, link_preview_options=_NO_PREVIEW, do_quote=_NO_QUOTE
+            )
         except BadRequest as e:
             # A malformed entity fails the whole message; resend it unformatted rather than
             # leaving the user with nothing.
             _logger.warning("Changelog message rejected as HTML (%s); resending as plain text", e)
-            await update.message.reply_text(to_plain_text(message), link_preview_options=_NO_PREVIEW)
+            await update.message.reply_text(
+                to_plain_text(message), link_preview_options=_NO_PREVIEW, do_quote=_NO_QUOTE
+            )
 
 
 class ChangelogCommandHandler(CommandHandler):

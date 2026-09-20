@@ -6,6 +6,7 @@ from typing import List
 from ongabot.utils.changelog import MAX_MESSAGE_CHARS
 from ongabot.utils.changelogformat import (
     BULLET,
+    CHANGELOG_HEADING,
     EXPANDABLE_MIN_LINES,
     NESTED_BULLET,
     render_changelog_html,
@@ -26,13 +27,13 @@ class RenderStructureTest(unittest.TestCase):
     def test_version_and_date_render_as_a_header_line_outside_the_blockquote(self) -> None:
         (message,) = render_changelog_html(ONE_SECTION)
         head = message.split("<blockquote")[0]
-        self.assertIn("<b>1.2.0</b>", head)
+        self.assertIn("<b>v1.2.0</b>", head)
         self.assertIn("<i>2026-05-24</i>", head)
 
-    def test_subsection_heading_becomes_bold_inside_the_blockquote(self) -> None:
+    def test_subsection_heading_is_rendered_inside_the_blockquote(self) -> None:
         (message,) = render_changelog_html(ONE_SECTION)
         body = message.split(">", 1)[1]
-        self.assertIn("<b>Fixed</b>", body)
+        self.assertIn("<i>Fixed</i>", body)
         self.assertNotIn("###", message)
 
     def test_bullet_marker_replaces_the_markdown_dash(self) -> None:
@@ -49,6 +50,57 @@ class RenderStructureTest(unittest.TestCase):
         (message,) = render_changelog_html("## [Unreleased]\n\n### Added\n\n- Thing\n")
         self.assertIn("<b>Unreleased</b>", message)
         self.assertNotIn("<i></i>", message)
+
+
+class HierarchyTest(unittest.TestCase):
+    """Three distinct weights, so a release and a section label never read as one blob."""
+
+    def test_a_numeric_version_is_prefixed_with_v(self) -> None:
+        (message,) = render_changelog_html(ONE_SECTION)
+        self.assertIn("<b>v1.2.0</b>", message)
+
+    def test_unreleased_is_not_prefixed_with_v(self) -> None:
+        (message,) = render_changelog_html("## [Unreleased]\n\n### Added\n\n- Thing\n")
+        self.assertIn("<b>Unreleased</b>", message)
+        self.assertNotIn("vUnreleased", message)
+
+    def test_section_labels_are_italic_not_bold(self) -> None:
+        # Bold on both the version and the section made "Unreleased / Changed" one blob.
+        (message,) = render_changelog_html(ONE_SECTION)
+        self.assertIn("<i>Fixed</i>", message)
+        self.assertNotIn("<b>Fixed</b>", message)
+
+    def test_the_version_stays_bold(self) -> None:
+        (message,) = render_changelog_html(ONE_SECTION)
+        self.assertIn("<b>v1.2.0</b>", message)
+        self.assertNotIn("<i>v1.2.0</i>", message)
+
+
+class HeadlineTest(unittest.TestCase):
+    """An optional heading leads the first message and is not repeated on the rest."""
+
+    def test_the_headline_leads_the_first_message(self) -> None:
+        messages = render_changelog_html(ONE_SECTION, headline=CHANGELOG_HEADING)
+        self.assertTrue(messages[0].startswith(CHANGELOG_HEADING))
+
+    def test_the_headline_is_not_repeated_on_later_messages(self) -> None:
+        raw = "\n".join(_section(f"1.{n}.0", 40) for n in range(6))
+        messages = render_changelog_html(raw, headline=CHANGELOG_HEADING)
+        self.assertGreater(len(messages), 1)
+        for message in messages[1:]:
+            self.assertNotIn(CHANGELOG_HEADING, message)
+
+    def test_the_headline_never_pushes_a_message_over_the_limit(self) -> None:
+        raw = "\n".join(_section(f"1.{n}.0", 40) for n in range(6))
+        for message in render_changelog_html(raw, headline=CHANGELOG_HEADING):
+            self.assertLessEqual(len(message), MAX_MESSAGE_CHARS)
+
+    def test_no_headline_is_added_when_none_is_asked_for(self) -> None:
+        (message,) = render_changelog_html(ONE_SECTION)
+        self.assertFalse(message.startswith(CHANGELOG_HEADING))
+
+    def test_a_headline_with_no_content_is_still_sent(self) -> None:
+        self.assertEqual(render_changelog_html("", headline=CHANGELOG_HEADING), [CHANGELOG_HEADING])
 
 
 class InlineFormattingTest(unittest.TestCase):
@@ -184,19 +236,19 @@ class MultipleSectionsTest(unittest.TestCase):
     def test_each_version_gets_its_own_header_and_blockquote(self) -> None:
         raw = _section("1.2.0", 2) + "\n" + _section("1.1.0", 2)
         (message,) = render_changelog_html(raw)
-        self.assertIn("<b>1.2.0</b>", message)
-        self.assertIn("<b>1.1.0</b>", message)
+        self.assertIn("<b>v1.2.0</b>", message)
+        self.assertIn("<b>v1.1.0</b>", message)
         self.assertEqual(message.count("</blockquote>"), 2)
 
     def test_sections_keep_their_source_order(self) -> None:
         raw = _section("1.2.0", 2) + "\n" + _section("1.1.0", 2)
         (message,) = render_changelog_html(raw)
-        self.assertLess(message.index("<b>1.2.0</b>"), message.index("<b>1.1.0</b>"))
+        self.assertLess(message.index("<b>v1.2.0</b>"), message.index("<b>v1.1.0</b>"))
 
     def test_a_bullet_never_leaks_into_the_next_section(self) -> None:
         raw = "## [1.2.0] - 2026-01-01\n\n### Added\n\n- Newer\n\n## [1.1.0] - 2026-01-01\n\n### Added\n\n- Older\n"
         (message,) = render_changelog_html(raw)
-        newer_block = message.split("<b>1.1.0</b>")[0]
+        newer_block = message.split("<b>v1.1.0</b>")[0]
         self.assertIn("Newer", newer_block)
         self.assertNotIn("Older", newer_block)
 
@@ -240,7 +292,7 @@ class ChunkingTest(unittest.TestCase):
         messages = render_changelog_html(self._long_raw())
         joined = "\n".join(messages)
         for n in range(6):
-            self.assertIn(f"<b>1.{n}.0</b>", joined)
+            self.assertIn(f"<b>v1.{n}.0</b>", joined)
         self.assertEqual(joined.count("Bullet number 39"), 6)
 
     def test_a_single_oversized_section_is_split_rather_than_dropped(self) -> None:
@@ -286,7 +338,7 @@ class ChunkingTest(unittest.TestCase):
                 self.assertLessEqual(len(message), MAX_MESSAGE_CHARS, f"size={size}")
                 self.assertTrue(_tags_balanced(message), f"size={size}")
             self.assertIn("Bullet number 2", messages[-1])
-            if len(messages) > 1 and messages[-1].startswith("<b>1.0.0</b>"):
+            if len(messages) > 1 and messages[-1].startswith("<b>v1.0.0</b>"):
                 seen_split_at_section_boundary = True
         self.assertTrue(seen_split_at_section_boundary, "never exercised the section-boundary split")
 
@@ -306,7 +358,8 @@ class RealChangelogTest(unittest.TestCase):
         versions = re.findall(r"^## \[([^\]]+)\]", self.raw, re.MULTILINE)
         joined = "\n".join(self.messages)
         for version in versions:
-            self.assertIn(f"<b>{version}</b>", joined)
+            prefix = "v" if version[0].isdigit() else ""
+            self.assertIn(f"<b>{prefix}{version}</b>", joined)
 
     def test_every_message_fits_telegrams_limit(self) -> None:
         for message in self.messages:

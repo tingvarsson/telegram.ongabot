@@ -41,7 +41,7 @@ from handler import UnLinkSteamCommandHandler
 from handler import UpdateEventCommandHandler
 from userdata import UserData
 from utils import log
-from utils.changelog import MAX_MESSAGE_CHARS, get_changelog_delta, is_dev_version
+from utils.changelog import get_changelog_delta, is_dev_version
 from utils.changelogformat import render_changelog_html, to_plain_text
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
 from utils.points import render_event_recap_message
@@ -361,13 +361,8 @@ async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, n
     consecutive messages rather than having its tail dropped.
     """
     delta = get_changelog_delta(old_version, new_version)
-    messages = render_changelog_html(delta)
-
     headline = f"ONGAbot updated to <b>v{html.escape(new_version, quote=False)}</b>!"
-    if messages and len(headline) + 2 + len(messages[0]) <= MAX_MESSAGE_CHARS:
-        messages[0] = f"{headline}\n\n{messages[0]}"
-    else:
-        messages.insert(0, headline)
+    messages = render_changelog_html(delta, headline=headline)
 
     for chat_id in bot_data.authorized_chats:
         try:

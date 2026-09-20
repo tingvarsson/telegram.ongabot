@@ -38,6 +38,11 @@ _INLINE_RE = re.compile(
 BULLET = "•"
 NESTED_BULLET = "◦"
 
+# Three weights, so a release and a section label never read as one blob: bold+underline for
+# the message heading (as cs2.format and utils.points title their messages), bold for the
+# release, italic for "Added"/"Fixed" inside the quote.
+CHANGELOG_HEADING = "<b><u>Changelog</u></b>"
+
 # Telegram collapses an expandable blockquote to a few preview lines. Below this many lines
 # there is nothing worth hiding, and the expand affordance would itself be noise.
 EXPANDABLE_MIN_LINES = 4
@@ -158,7 +163,7 @@ def _render_body(body_lines: List[str], link_defs: Dict[str, str]) -> List[str]:
     rendered: List[str] = []
     for kind, indent, text in _fold_lines(body_lines):
         if kind == "heading":
-            rendered.append(f"<b>{_escape(text)}</b>")
+            rendered.append(f"<i>{_escape(text)}</i>")
         elif kind == "bullet":
             marker = f"  {NESTED_BULLET}" if indent else BULLET
             rendered.append(f"{marker} {_render_inline(text, link_defs)}")
@@ -168,8 +173,13 @@ def _render_body(body_lines: List[str], link_defs: Dict[str, str]) -> List[str]:
 
 
 def _render_header(version: str, date: str | None) -> str:
-    """The one line that stays visible when the body is collapsed."""
-    header = f"<b>{_escape(version)}</b>"
+    """The one line that stays visible when the body is collapsed.
+
+    A numeric version reads as a version rather than a bare number with a "v" in front of it.
+    "Unreleased" is a name, not a number, so it is left alone - "vUnreleased" is nonsense.
+    """
+    label = f"v{version}" if version[:1].isdigit() else version
+    header = f"<b>{_escape(label)}</b>"
     if date:
         header += f" · <i>{_escape(date)}</i>"
     return header
@@ -194,12 +204,16 @@ def _split_sections(raw: str) -> List[Tuple[str, str | None, List[str]]]:
     return sections
 
 
-def render_changelog_html(raw: str) -> List[str]:
+def render_changelog_html(raw: str, headline: str | None = None) -> List[str]:
     """Render raw CHANGELOG.md text into ready-to-send Telegram HTML messages.
 
     Each release becomes a visible header line plus its body in a blockquote, so a chat sees
     one line per release until someone taps it open. Returns one string per message; callers
     send them with parse_mode=HTML.
+
+    headline is pre-rendered HTML that leads the first message - CHANGELOG_HEADING for
+    /changelog, the upgrade notice for the startup announcement. It is never repeated on the
+    later messages of a split reply.
     """
     link_defs = _collect_link_defs(raw)
 
@@ -209,8 +223,17 @@ def render_changelog_html(raw: str) -> List[str]:
         if body:
             rendered.append((_render_header(version, date), body))
 
-    _logger.debug("Rendered %d changelog section(s) from %d chars", len(rendered), len(raw))
-    return _pack(rendered)
+    messages = _pack(rendered)
+    if headline:
+        # A full first message pushes the headline into one of its own rather than over
+        # Telegram's limit. An empty changelog still gets the headline: silence reads as a bug.
+        if messages and len(headline) + 2 + len(messages[0]) <= MAX_MESSAGE_CHARS:
+            messages[0] = f"{headline}\n\n{messages[0]}"
+        else:
+            messages.insert(0, headline)
+
+    _logger.debug("Rendered %d changelog section(s) into %d message(s)", len(rendered), len(messages))
+    return messages
 
 
 def _open_tag(body: List[str]) -> str:
