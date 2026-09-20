@@ -105,7 +105,7 @@ class HeaderAndSummaryTest(unittest.TestCase):
         """A win going to OT must not also mark an untouched loss as OT, and vice versa."""
         text = format_session(_session([_match(match_id="a", score=(19, 16)), _match(match_id="b", score=(7, 13))]))
 
-        self.assertIn("1W \\(1OT\\)", text)
+        self.assertIn("1W \\(1 OT\\)", text)
         self.assertIn("1L", text)
         self.assertNotIn("1L \\(", text)
 

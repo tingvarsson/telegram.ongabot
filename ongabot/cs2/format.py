@@ -125,7 +125,8 @@ def _record_text(session: Cs2Session) -> str:
             continue
         clause = f"{_OUTCOME_MARKERS[key]}{tally[key]}{key}"
         if overtime_tally[key]:
-            clause += f" ({overtime_tally[key]}OT)"
+            # A space before OT, so "1OT" doesn't read as "10" at a glance.
+            clause += f" ({overtime_tally[key]} OT)"
         clauses.append(clause)
     return " - ".join(clauses)
 
