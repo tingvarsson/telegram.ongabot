@@ -12,11 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CS2 results now follow the night as it happens: posted as soon as Leetify has
   the first match and edited as later ones land, marked as updating live until
   90 minutes pass with no new match.
-- Changelog messages are much smaller. Each release is one header line with its
-  notes collapsed into a tap-to-expand quote, the Markdown is rendered instead
-  of printed raw, link previews are off, and `/changelog` no longer quotes the
-  command it answers. Long output is split across messages rather than hitting
-  Telegram's size limit.
+- Changelog messages are much smaller and properly formatted: each release is
+  one header line with its notes collapsed into a tap-to-expand quote.
 - `pytest` finds `ongabot/` without a `PYTHONPATH=` prefix. No user-facing
   effect.
 
