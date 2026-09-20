@@ -3,7 +3,7 @@ from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram.constants import ParseMode
-from telegram.error import TelegramError
+from telegram.error import BadRequest, TelegramError
 
 from ongabot import ongabot
 from ongabot.ongabot import post_init, setup_bot_metadata
@@ -290,6 +290,45 @@ class AnnounceNewVersionTest(unittest.IsolatedAsyncioTestCase):
 
         text = bot.send_message.call_args.kwargs["text"]
         self.assertIn("1.2.0", text)
+
+    async def _announce_with_delta(self, bot):
+        """Announce a real changelog delta - the repo CHANGELOG.md is not readable from here."""
+        bot_data = MagicMock()
+        bot_data.authorized_chats = {101}
+        delta = "## [1.2.0] - 2026-05-24\n\n### Fixed\n\n- Big fix\n"
+        with patch("ongabot.ongabot.get_changelog_delta", return_value=delta):
+            await ongabot._announce_new_version(bot, bot_data, "1.1.0", "1.2.0")
+
+    async def test_announcement_is_sent_as_html(self):
+        bot = AsyncMock()
+        await self._announce_with_delta(bot)
+        self.assertEqual(bot.send_message.call_args.kwargs["parse_mode"], ParseMode.HTML)
+
+    async def test_announcement_collapses_the_changelog_body(self):
+        """The upgrade notice is pushed unprompted to every chat, so it must stay small."""
+        bot = AsyncMock()
+        await self._announce_with_delta(bot)
+        self.assertIn("<blockquote", bot.send_message.call_args.kwargs["text"])
+
+    async def test_announcement_keeps_the_version_line_visible_above_the_blockquote(self):
+        bot = AsyncMock()
+        await self._announce_with_delta(bot)
+        text = bot.send_message.call_args.kwargs["text"]
+        self.assertIn("1.2.0", text.split("<blockquote")[0])
+
+    async def test_announcement_disables_link_previews(self):
+        bot = AsyncMock()
+        await self._announce_with_delta(bot)
+        self.assertTrue(bot.send_message.call_args.kwargs["link_preview_options"].is_disabled)
+
+    async def test_a_rejected_html_announcement_falls_back_to_plain_text(self):
+        bot = AsyncMock()
+        bot.send_message.side_effect = [BadRequest("can't parse entities"), None]
+        await self._announce_with_delta(bot)
+        self.assertEqual(bot.send_message.call_count, 2)
+        self.assertIsNone(bot.send_message.call_args.kwargs.get("parse_mode"))
+        self.assertNotIn("<blockquote", bot.send_message.call_args.kwargs["text"])
+        self.assertIn("Big fix", bot.send_message.call_args.kwargs["text"])
 
     async def test_no_messages_sent_when_no_authorized_chats(self):
         bot = AsyncMock()
