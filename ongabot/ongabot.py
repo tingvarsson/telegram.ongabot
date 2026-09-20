@@ -2,6 +2,7 @@
 """An application that runs a telegram bot called ONGAbot"""
 
 import datetime
+import html
 import logging
 import os
 from typing import Any, Dict, cast
@@ -40,7 +41,8 @@ from handler import UnLinkSteamCommandHandler
 from handler import UpdateEventCommandHandler
 from userdata import UserData
 from utils import log
-from utils.changelog import get_changelog_delta, is_dev_version, split_for_telegram
+from utils.changelog import MAX_MESSAGE_CHARS, get_changelog_delta, is_dev_version
+from utils.changelogformat import render_changelog_html, to_plain_text
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
 from utils.points import render_event_recap_message
 
@@ -63,6 +65,10 @@ CS2_SWEEP_SETTLE = datetime.timedelta(minutes=90)
 # Measured from the event's start time, so a sweep started at 18:30 gives up at 08:30. Long
 # enough to cover a late night plus slow demo processing; a job never lives forever.
 CS2_SWEEP_GIVE_UP = datetime.timedelta(hours=14)
+
+# The changelog is full of GitHub compare links; a preview per message is exactly the noise
+# collapsing the announcement body is meant to remove.
+_NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
 def cs2_sweep_job_name(chat_id: int, event_date: datetime.date) -> str:
@@ -335,18 +341,39 @@ async def setup_bot_metadata(bot: Bot) -> None:
         logger.error("Failed to set bot short description: %s", e)
 
 
+async def _send_announcement_message(bot: Bot, chat_id: int, text: str) -> None:
+    """Send one announcement message, falling back to plain text if Telegram rejects the HTML."""
+    try:
+        await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, link_preview_options=_NO_PREVIEW)
+    except BadRequest as e:
+        # A malformed entity fails the whole message. This one is pushed unprompted on
+        # upgrade, so an unformatted announcement beats a silently missing one.
+        logger.warning("Version announcement rejected as HTML (%s); resending as plain text", e)
+        await bot.send_message(chat_id=chat_id, text=to_plain_text(text), link_preview_options=_NO_PREVIEW)
+
+
 async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, new_version: str) -> None:
-    """Send a version-change announcement to all authorized chats."""
+    """Send a version-change announcement to all authorized chats.
+
+    Each release in the delta renders as a visible header line with its body collapsed, so
+    an upgrade spanning several releases stays a few lines in the chat until someone opens
+    it. An upgrade long enough to outgrow Telegram's message limit is still split across
+    consecutive messages rather than having its tail dropped.
+    """
     delta = get_changelog_delta(old_version, new_version)
-    text = f"ONGAbot updated to v{new_version}!\n\n{delta}"
-    # An upgrade spanning several releases outgrows Telegram's message limit; send the
-    # announcement as consecutive messages rather than dropping the tail of it.
-    chunks = split_for_telegram(text)
+    messages = render_changelog_html(delta)
+
+    headline = f"ONGAbot updated to <b>v{html.escape(new_version, quote=False)}</b>!"
+    if messages and len(headline) + 2 + len(messages[0]) <= MAX_MESSAGE_CHARS:
+        messages[0] = f"{headline}\n\n{messages[0]}"
+    else:
+        messages.insert(0, headline)
+
     for chat_id in bot_data.authorized_chats:
         try:
-            for chunk in chunks:
-                await bot.send_message(chat_id=chat_id, text=chunk)
-            logger.info("Sent version announcement to chat_id=%s (%d message(s))", chat_id, len(chunks))
+            for message in messages:
+                await _send_announcement_message(bot, chat_id, message)
+            logger.info("Sent version announcement to chat_id=%s (%d message(s))", chat_id, len(messages))
         except TelegramError as e:
             logger.error("Failed to send version announcement to chat_id=%s: %s", chat_id, e)
 

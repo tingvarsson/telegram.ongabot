@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Telegram's 4096-character limit, as does the version announcement on upgrade.
   The 1.7.0 entry, which was over that limit, has been cut down to what it
   actually changed for users.
+- Changelog messages are no longer a wall of text. Each release now shows as a
+  single header line with its notes collapsed into a tap-to-expand quote, and
+  the Markdown is rendered properly instead of printed raw - no more literal
+  `###`, `**` and `[text][ref]` markers. Link previews are turned off, and
+  hard-wrapped lines are rejoined so the text wraps to your screen instead of
+  to 80 columns. Applies to both `/changelog` and the announcement posted when
+  the bot upgrades.
 
 ## [1.7.0] - 2026-08-31
 
