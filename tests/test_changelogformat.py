@@ -130,6 +130,45 @@ class LayoutTest(unittest.TestCase):
         self.assertTrue(split_seen, "never produced a split to check")
 
 
+class ReleaseBoundaryTest(unittest.TestCase):
+    """A message break falls between releases; a release is only cut if it cannot fit alone."""
+
+    def test_two_releases_that_do_not_fit_together_get_a_message_each(self) -> None:
+        messages = render_changelog_html(_section("2.0.0", 120) + "\n" + _section("1.0.0", 120))
+        self.assertEqual(len(messages), 2)
+        self.assertTrue(messages[0].startswith("<b>v2.0.0</b>"))
+        self.assertTrue(messages[1].startswith("<b>v1.0.0</b>"))
+
+    def test_a_release_that_fits_in_a_message_is_never_split(self) -> None:
+        """Every message opens on a release header, so no message is a continuation."""
+        for size in range(100, 170):
+            raw = _section("2.0.0", size) + "\n" + _section("1.0.0", size)
+            for message in render_changelog_html(raw):
+                self.assertTrue(message.startswith("<b>v"), f"size={size}: {message[:40]!r}")
+
+    def test_releases_small_enough_still_share_one_message(self) -> None:
+        raw = _section("2.0.0", 2) + "\n" + _section("1.0.0", 2)
+        self.assertEqual(len(render_changelog_html(raw)), 1)
+
+    def test_a_release_too_big_for_one_message_is_still_split(self) -> None:
+        messages = render_changelog_html(_section("9.9.9", 300))
+        self.assertGreater(len(messages), 1)
+        self.assertIn("Bullet number 299", "\n".join(messages))
+
+    def test_an_oversized_release_does_not_share_a_message_with_the_one_before(self) -> None:
+        """A release being split starts cleanly rather than trailing a small one."""
+        messages = render_changelog_html(_section("2.0.0", 3) + "\n" + _section("1.0.0", 300))
+        self.assertTrue(messages[0].startswith("<b>v2.0.0</b>"))
+        self.assertNotIn("v1.0.0", messages[0])
+        self.assertTrue(messages[1].startswith("<b>v1.0.0</b>"))
+
+    def test_no_release_is_lost_when_each_takes_its_own_message(self) -> None:
+        raw = "\n".join(_section(f"1.{n}.0", 120) for n in range(5))
+        joined = "\n".join(render_changelog_html(raw))
+        for n in range(5):
+            self.assertIn(f"<b>v1.{n}.0</b>", joined)
+
+
 class HeadlineTest(unittest.TestCase):
     """An optional heading leads the first message and is not repeated on the rest."""
 

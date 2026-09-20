@@ -314,47 +314,64 @@ def _fit_lines(body: List[str], budget: int) -> List[str]:
     return fitted
 
 
+def _split_section(header: str, tag: str, lines: List[str], limit: int) -> List[str]:
+    """Spread one release that cannot fit a single message across several.
+
+    Each message closes the blockquote and the next reopens it, so no tag spans two
+    messages. Only the first carries the release header; the rest continue it.
+    """
+    messages: List[str] = []
+    buffer = header + "\n" + tag + lines[0]
+    has_body = True  # whether the open blockquote has a body line yet
+
+    for line in lines[1:]:
+        separator = "\n" if has_body else ""
+        if len(buffer + separator + line + _BLOCKQUOTE_CLOSE) > limit:
+            messages.append(buffer + _BLOCKQUOTE_CLOSE)
+            buffer, separator, has_body = tag, "", False
+            if not line:
+                # A category separator that lands on a message boundary is redundant:
+                # the break already separates the two categories.
+                continue
+        buffer += separator + line
+        has_body = has_body or bool(line)
+
+    messages.append(buffer + _BLOCKQUOTE_CLOSE)
+    _logger.info("Release %s needed %d messages on its own", header, len(messages))
+    return messages
+
+
 def _pack(sections: List[Tuple[str, List[str]]], limit: int = MAX_MESSAGE_CHARS) -> List[str]:
     """Lay rendered sections out into messages that each fit Telegram's limit.
 
-    A message boundary closes the blockquote and the next message reopens it, so no tag ever
-    spans two messages. A section header is never stranded at the end of a message: it is
-    always sent with at least the first line of its body.
+    The release is the unit: a message break falls between releases, and one is only cut in
+    half when it cannot fit a message even on its own. Reading a release split across two
+    messages is worse than reading one message that holds fewer of them.
     """
     messages: List[str] = []
-    buffer = ""  # the message being built; its blockquote is open unless buffer is empty
-    has_body = False  # whether the open blockquote has a body line yet
+    buffer = ""  # complete, already-sealed releases waiting to be sent together
 
     for header, body in sections:
         tag = _open_tag(body)
-        # The header always shares a message with the first body line, so it has to come out
-        # of the budget too. Charging every line for it costs a few characters per message
-        # and keeps the bound obviously correct.
+        # The header shares a message with the first body line, so it comes out of the budget
+        # too. Charging every line for it costs a few characters and keeps the bound obvious.
         lines = _fit_lines(body, limit - len(tag) - len(_BLOCKQUOTE_CLOSE) - len(header) - 1)
+        whole = header + "\n" + tag + "\n".join(lines) + _BLOCKQUOTE_CLOSE
 
-        if buffer:
-            buffer += _BLOCKQUOTE_CLOSE  # seal the previous section before starting this one
-        start = ("\n\n" if buffer else "") + header + "\n" + tag
-        if buffer and len(buffer + start + lines[0] + _BLOCKQUOTE_CLOSE) > limit:
-            messages.append(buffer)  # already sealed above
+        if len(whole) > limit:
+            # Too big to keep intact: flush what is buffered so it starts on a clean message.
+            if buffer:
+                messages.append(buffer)
+                buffer = ""
+            messages.extend(_split_section(header, tag, lines, limit))
+            continue
+
+        if buffer and len(buffer) + 2 + len(whole) > limit:
+            messages.append(buffer)
             buffer = ""
-            start = header + "\n" + tag
-        buffer += start + lines[0]
-        has_body = True
-
-        for line in lines[1:]:
-            separator = "\n" if has_body else ""
-            if len(buffer + separator + line + _BLOCKQUOTE_CLOSE) > limit:
-                messages.append(buffer + _BLOCKQUOTE_CLOSE)
-                buffer, separator, has_body = tag, "", False
-                if not line:
-                    # A category separator that lands on a message boundary is redundant:
-                    # the break already separates the two categories.
-                    continue
-            buffer += separator + line
-            has_body = has_body or bool(line)
+        buffer = whole if not buffer else buffer + "\n\n" + whole
 
     if buffer:
-        messages.append(buffer + _BLOCKQUOTE_CLOSE)
+        messages.append(buffer)
     _logger.debug("Packed %d changelog section(s) into %d message(s)", len(sections), len(messages))
     return messages
