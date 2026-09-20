@@ -9,31 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `pytest` now finds `ongabot/` on its own via `[tool.pytest.ini_options]
-  pythonpath` in `pyproject.toml`, so `python3 -m pytest` works from the repo
-  root without a `PYTHONPATH=` prefix. The Makefile and CI are unaffected; no
-  user-facing effect.
-- CS2 results now follow the night as it happens. The sweep starts at the
-  event's start time instead of after midnight, posts as soon as Leetify has
-  the first match, and edits that same message as later matches land. It is
-  marked as updating live until no new match has appeared for 90 minutes.
-- `/changelog` sends long output as several messages instead of failing on
-  Telegram's 4096-character limit, as does the version announcement on upgrade.
-  The 1.7.0 entry, which was over that limit, has been cut down to what it
-  actually changed for users.
-- Changelog messages are no longer a wall of text. Each release now shows as a
-  single header line with its notes collapsed into a tap-to-expand quote, and
-  the Markdown is rendered properly instead of printed raw - no more literal
-  `###`, `**` and `[text][ref]` markers. Link previews are turned off, and
-  hard-wrapped lines are rejoined so the text wraps to your screen instead of
-  to 80 columns. Applies to both `/changelog` and the announcement posted when
-  the bot upgrades.
-- `/changelog` replies are headed **Changelog** and no longer quote the command
-  they answer, which in a group chat stacked the quoted `/changelog` on top of
-  every reply. Releases and section labels also now read as separate levels -
-  the release is bold (`v1.7.0`), the section label italic - instead of both
-  being bold and running together, which was worst on `Unreleased`, where
-  there is no date to tell the two lines apart.
+- CS2 results now follow the night as it happens: posted as soon as Leetify has
+  the first match and edited as later ones land, marked as updating live until
+  90 minutes pass with no new match.
+- Changelog messages are much smaller. Each release is one header line with its
+  notes collapsed into a tap-to-expand quote, the Markdown is rendered instead
+  of printed raw, link previews are off, and `/changelog` no longer quotes the
+  command it answers. Long output is split across messages rather than hitting
+  Telegram's size limit.
+- `pytest` finds `ongabot/` without a `PYTHONPATH=` prefix. No user-facing
+  effect.
 
 ## [1.7.0] - 2026-08-31
 
