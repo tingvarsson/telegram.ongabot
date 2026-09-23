@@ -61,14 +61,14 @@ NEWEVENT = CommandInfo(
 
 CANCELEVENT = CommandInfo(
     command="cancelevent",
-    brief="/cancelevent [target_date=<date|weekday>] - Cancel an active event",
+    brief="/cancelevent [<date|weekday>] - Cancel an active event",
     usage=(
-        "Usage: /cancelevent [target_date=<date|weekday>]\n"
-        "  Specify target_date if multiple events are active.\n"
+        "Usage: /cancelevent [<date|weekday>] (or target_date=<date|weekday>)\n"
+        "  Specify a date if multiple events are active.\n"
         "  Accepts: weekday name (next occurrence), YYYY-MM-DD, or dd.mm.yyyy\n\n"
         "Examples:\n"
         "  /cancelevent\n"
-        "  /cancelevent target_date=wednesday\n"
+        "  /cancelevent wednesday\n"
         "  /cancelevent target_date=2026-05-10"
     ),
     menu_description="Cancel active event [target_date=..]",
@@ -188,16 +188,18 @@ UNLINKSTEAM = CommandInfo(
 
 CS2 = CommandInfo(
     command="cs2",
-    brief="/cs2 [target_date=<date|weekday>] - Show the CS2 results for an event",
+    brief="/cs2 [<date|weekday>] - Show the CS2 results for a date",
     usage=(
-        "Usage: /cs2 [target_date=<date|weekday>]\n"
+        "Usage: /cs2 [<date|weekday>] (or target_date=<date|weekday>)\n"
         "  Defaults to the most recent completed event.\n"
+        "  Works for any date, not just ones with a saved event.\n"
         "  Accepts: weekday name (next occurrence), YYYY-MM-DD, or dd.mm.yyyy\n\n"
         "Examples:\n"
         "  /cs2\n"
+        "  /cs2 2026-09-02\n"
         "  /cs2 target_date=2026-09-02"
     ),
-    menu_description="Show CS2 results for an event [target_date=..]",
+    menu_description="Show CS2 results for a date [target_date=..]",
 )
 
 BOT_SHORT_DESCRIPTION = "ONGAbot - the only bot you'll ever need"

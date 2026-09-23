@@ -5,6 +5,7 @@ in ongabot.py cannot drift apart.
 """
 
 import logging
+from datetime import date
 from typing import Mapping, Optional, Tuple, TYPE_CHECKING
 
 from cs2.format import format_session
@@ -23,10 +24,10 @@ _logger = logging.getLogger(__name__)
 async def event_session(
     client: MatchSource,
     chat: "Chat",
-    event: "Event",
+    event_date: date,
     user_data: Mapping[int, "UserData"],
 ) -> Optional[Cs2Session]:
-    """Fetch the CS2 session for one event, or None when Leetify could not be reached.
+    """Fetch the CS2 session for one date, or None when Leetify could not be reached.
 
     None means "unknown", not "nobody played" - a caller polling through the evening should
     retry rather than report an empty night.
@@ -35,7 +36,7 @@ async def event_session(
     if not links:
         _logger.debug("No linked members in chat_id=%s; nothing to report", chat.chat_id)
 
-    return await build_session(client, event.event_date, links)
+    return await build_session(client, event_date, links)
 
 
 def render_results(session: Cs2Session, live: bool = False) -> str:
@@ -51,15 +52,15 @@ def render_results(session: Cs2Session, live: bool = False) -> str:
 async def event_results(
     client: MatchSource,
     chat: "Chat",
-    event: "Event",
+    event_date: date,
     user_data: Mapping[int, "UserData"],
 ) -> Tuple[Optional[Cs2Session], Optional[str]]:
-    """Fetch and render the CS2 results for one event.
+    """Fetch and render the CS2 results for one date.
 
     Returns (session, message text), or (None, None) when Leetify could not be reached at
     all - the caller should retry rather than report that nobody played.
     """
-    session = await event_session(client, chat, event, user_data)
+    session = await event_session(client, chat, event_date, user_data)
     if session is None:
         return None, None
 
