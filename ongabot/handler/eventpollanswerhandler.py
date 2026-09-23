@@ -5,6 +5,7 @@ import logging
 from telegram import Update
 from telegram.ext import CallbackContext, PollAnswerHandler
 
+from quips import get_quip_pool, select_quip
 from userdata import UserData
 from utils.log import log
 
@@ -43,7 +44,16 @@ async def callback(update: Update, context: CallbackContext) -> None:
     # Empty option_ids means the user retracted his vote, ignore those for now
     if update.poll_answer.option_ids:
         user_name = update.poll_answer.user.name
-        if user_data.get_poll_answer(update.poll_answer.poll_id) is None:
+        # No-op / Maybe Baby: the two sentinel options appended after the real time slots
+        # (see eventcreator._create_poll_options). Called out with a quip here in the chat
+        # autoresponse, rather than in the status message.
+        joke_option_ids = sorted(i for i in update.poll_answer.option_ids if i >= event.num_slots)
+        if joke_option_ids:
+            quip = select_quip(
+                get_quip_pool(), update.poll_answer.poll_id, update.poll_answer.user.id, joke_option_ids[0]
+            )
+            response = f"{user_name} — {quip}"
+        elif user_data.get_poll_answer(update.poll_answer.poll_id) is None:
             response = f"Wow {user_name}, what a great job answering that poll!"
         else:
             response = f"Hmm suspicious, looks like {user_name} changed their vote..."

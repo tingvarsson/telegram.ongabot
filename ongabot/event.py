@@ -10,7 +10,6 @@ from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
 from eventdata import EventData
-from quips import get_quip_pool, select_quip
 from utils import log
 
 _logger = logging.getLogger(__name__)
@@ -212,14 +211,6 @@ class Event:
             message += f"\n*{escape_markdown(option.text, version=2)} \\({option.voter_count}\\)*"
             for user, answer in self.poll_answers.items():
                 if i in answer.option_ids:
-                    if i >= self.num_slots:
-                        # No-op / Maybe Baby: the two sentinel options appended after the
-                        # real time slots (see eventcreator._create_poll_options). Called
-                        # out with a quip instead of a played-streak star.
-                        quip = select_quip(get_quip_pool(), self.poll_id, user.id, i)
-                        escaped_quip = escape_markdown(quip, version=2)
-                        message += f"\n  • {user.mention_markdown_v2()} — {escaped_quip}"
-                        continue
                     # The star is the played streak (consecutive events with an actual slot
                     # pick), not the response streak - showing up is what earns the star.
                     streak = self.user_played_streaks.get(user.id, 0)
