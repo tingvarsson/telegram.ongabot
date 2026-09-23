@@ -118,6 +118,7 @@ class ParseNamedArgsTest(unittest.TestCase):
             ("multiple", ["a=1", "b=2"], {"a": "1", "b": "2"}),
             ("value_with_equals", ["k=v=extra"], {"k": "v=extra"}),
             ("key_case_folded", ["KEY=val"], {"key": "val"}),
+            ("bare_value_single_allowed_key", ["noequalssign"], {"known": "noequalssign"}),
         ]
     )
     def test_parse_named_args_valid(self, _, args, expected):
@@ -126,14 +127,15 @@ class ParseNamedArgsTest(unittest.TestCase):
 
     @parameterized.expand(
         [
-            ("no_equals", ["noequalssign"]),
-            ("unknown_key", ["foo=bar"]),
-            ("empty_key", ["=value"]),
+            ("unknown_key", ["foo=bar"], {"known"}),
+            ("empty_key", ["=value"], {"known"}),
+            ("bare_value_multiple_allowed_keys", ["value"], {"a", "b"}),
+            ("too_many_bare_args", ["one", "two"], {"known"}),
         ]
     )
-    def test_parse_named_args_raises(self, _, args):
+    def test_parse_named_args_raises(self, _, args, allowed_keys):
         with self.assertRaises(ValueError):
-            helper.parse_named_args(args, {"known"})
+            helper.parse_named_args(args, allowed_keys)
 
 
 class ParseEventJobArgsTest(unittest.TestCase):

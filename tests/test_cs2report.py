@@ -68,9 +68,7 @@ class EventResultsTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": _played_match()},
         )
 
-        session, text = await event_results(
-            client, chat, chat.events[date(2026, 9, 2)], _user_data({11: SCOUT, 22: MATE})
-        )
+        session, text = await event_results(client, chat, date(2026, 9, 2), _user_data({11: SCOUT, 22: MATE}))
 
         self.assertEqual(session.played_user_ids, {11, 22})
         self.assertIn("de\\_mirage", text)
@@ -79,7 +77,7 @@ class EventResultsTest(unittest.IsolatedAsyncioTestCase):
     async def test_returns_no_text_when_leetify_is_unreachable(self):
         chat = _chat([_event(date(2026, 9, 2), [THOMAS])])
 
-        session, text = await event_results(FakeClient(), chat, chat.events[date(2026, 9, 2)], _user_data({11: SCOUT}))
+        session, text = await event_results(FakeClient(), chat, date(2026, 9, 2), _user_data({11: SCOUT}))
 
         self.assertIsNone(session)
         self.assertIsNone(text)
@@ -88,7 +86,7 @@ class EventResultsTest(unittest.IsolatedAsyncioTestCase):
         chat = _chat([_event(date(2026, 9, 2), [THOMAS])])
         client = FakeClient(histories={SCOUT: []})
 
-        session, text = await event_results(client, chat, chat.events[date(2026, 9, 2)], _user_data({11: SCOUT}))
+        session, text = await event_results(client, chat, date(2026, 9, 2), _user_data({11: SCOUT}))
 
         self.assertEqual(session.matches, [])
         self.assertIn("No ONGA matches", text)

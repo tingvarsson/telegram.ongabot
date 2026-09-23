@@ -135,8 +135,19 @@ def parse_named_args(args: list[str], allowed_keys: set[str]) -> dict[str, str]:
     """
     Parse a list of key=value argument strings, validating keys against an allowed set.
 
-    Raises ValueError if any arg is not key=value, or if a key is not in allowed_keys.
+    If exactly one key is allowed and a single bare argument (no "=") is given, it is
+    treated as that key's value - e.g. "/cs2 2026-09-02" is equivalent to
+    "/cs2 target_date=2026-09-02". This only applies when there is exactly one allowed
+    key and exactly one argument; with more than one allowed key a bare value would be
+    ambiguous, so key=value is still required.
+
+    Raises ValueError if any arg is not key=value (outside the exception above), or if a
+    key is not in allowed_keys.
     """
+    if len(args) == 1 and len(allowed_keys) == 1 and "=" not in args[0]:
+        (sole_key,) = allowed_keys
+        return {sole_key: args[0]}
+
     result: dict[str, str] = {}
     for arg in args:
         if "=" not in arg:

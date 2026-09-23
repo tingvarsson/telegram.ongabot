@@ -22,8 +22,6 @@ def _make(args=None, events=None):
 
     chat = MagicMock()
     chat.events = {event.event_date: event for event in (events or [_event(date(2026, 9, 2))])}
-    # Mirror the real Chat.get_event_by_date, so "no event on that date" is reachable.
-    chat.get_event_by_date.side_effect = chat.events.get
 
     context = MagicMock()
     context.args = args or []
@@ -48,7 +46,7 @@ class Cs2CommandHandlerTest(unittest.IsolatedAsyncioTestCase):
             await callback(update, context)
 
         self.assertIs(results.await_args.args[1], chat)
-        self.assertEqual(results.await_args.args[2].event_date, date(2026, 9, 2))
+        self.assertEqual(results.await_args.args[2], date(2026, 9, 2))
         update.message.reply_text.assert_awaited_once()
         self.assertEqual(update.message.reply_text.await_args.args, ("RESULTS",))
         kwargs = update.message.reply_text.await_args.kwargs
@@ -65,16 +63,31 @@ class Cs2CommandHandlerTest(unittest.IsolatedAsyncioTestCase):
         ) as results:
             await callback(update, context)
 
-        self.assertEqual(results.await_args.args[2].event_date, date(2026, 8, 26))
+        self.assertEqual(results.await_args.args[2], date(2026, 8, 26))
 
-    async def test_says_so_when_there_is_no_event_for_the_target_date(self):
-        update, context, _chat = _make(args=["target_date=2026-01-01"])
+    async def test_accepts_a_bare_date_without_the_target_date_prefix(self):
+        events = [_event(date(2026, 8, 26)), _event(date(2026, 9, 2))]
+        update, context, _chat = _make(args=["2026-08-26"], events=events)
 
-        with patch("ongabot.handler.cs2commandhandler.event_results", AsyncMock()) as results:
+        with patch(
+            "ongabot.handler.cs2commandhandler.event_results",
+            AsyncMock(return_value=(MagicMock(), "RESULTS")),
+        ) as results:
             await callback(update, context)
 
-        results.assert_not_awaited()
-        self.assertIn("2026-01-01", _reply(update))
+        self.assertEqual(results.await_args.args[2], date(2026, 8, 26))
+
+    async def test_reports_results_for_a_date_with_no_stored_event(self):
+        update, context, _chat = _make(args=["target_date=2026-01-01"])
+
+        with patch(
+            "ongabot.handler.cs2commandhandler.event_results",
+            AsyncMock(return_value=(MagicMock(), "RESULTS")),
+        ) as results:
+            await callback(update, context)
+
+        self.assertEqual(results.await_args.args[2], date(2026, 1, 1))
+        self.assertEqual(_reply(update), "RESULTS")
 
     async def test_shows_usage_for_an_unparseable_target_date(self):
         update, context, _chat = _make(args=["target_date=nonsense"])

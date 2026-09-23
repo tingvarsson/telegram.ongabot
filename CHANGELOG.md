@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   topics it learns the chat likes from the reactions you leave on it. `/topics` shows what
   it's picked up on so far for your chat.
 
+### Changed
+
+- `/cs2` now shows results for any date, not just ones with a saved event.
+- `/cs2` and `/cancelevent` now also accept their date directly, without the
+  `target_date=` prefix (e.g. `/cs2 2026-09-02`).
+
 ## [1.8.0] - 2026-09-20
 
 ### Changed
