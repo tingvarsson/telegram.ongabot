@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The bot now shares a YouTube Short once a day, at a different time each day, picking
+  topics it learns the chat likes from the reactions you leave on it. `/topics` shows what
+  it's picked up on so far for your chat.
+
 ### Changed
 
 - `/cs2` now shows results for any date, not just ones with a saved event.

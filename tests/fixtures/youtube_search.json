@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "id": { "kind": "youtube#video", "videoId": "abc123" },
+      "snippet": { "title": "Insane CS2 Ace Clutch" }
+    },
+    {
+      "id": { "kind": "youtube#video", "videoId": "def456" },
+      "snippet": { "title": "Linux Ricing Tips 2026" }
+    }
+  ]
+}

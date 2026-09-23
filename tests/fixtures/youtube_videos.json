@@ -1,0 +1,14 @@
+{
+  "items": [
+    {
+      "id": "abc123",
+      "snippet": { "title": "Insane CS2 Ace Clutch", "tags": ["cs2", "clutch", "counter-strike"] },
+      "contentDetails": { "duration": "PT47S" }
+    },
+    {
+      "id": "def456",
+      "snippet": { "title": "Linux Ricing Tips 2026", "tags": ["linux", "ricing"] },
+      "contentDetails": { "duration": "PT1M5S" }
+    }
+  ]
+}

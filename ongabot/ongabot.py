@@ -5,9 +5,10 @@ import datetime
 import html
 import logging
 import os
-from typing import Any, Dict, cast
+import random
+from typing import Any, Dict, Tuple, cast
 
-from telegram import Bot, BotCommand, LinkPreviewOptions
+from telegram import Bot, BotCommand, LinkPreviewOptions, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, ContextTypes, JobQueue, PicklePersistence
 from telegram.error import BadRequest, TelegramError
@@ -15,6 +16,7 @@ from telegram.error import BadRequest, TelegramError
 import eventcreator
 from _version import __version__ as CURRENT_VERSION
 from botdata import BotData
+from chat import Chat
 from cs2.leetify import get_client
 from cs2.report import event_session, render_results
 from event import Event
@@ -34,9 +36,11 @@ from handler import NewEventCommandHandler
 from handler import OngaCommandHandler
 from handler import RescheduleCommandHandler
 from handler import ScheduleCommandHandler
+from handler import ShortsReactionHandler
 from handler import StartCommandHandler
 from handler import StatisticsCommandHandler
 from handler import StatisticsSortCallbackHandler
+from handler import TopicsCommandHandler
 from handler import UnLinkSteamCommandHandler
 from handler import UpdateEventCommandHandler
 from userdata import UserData
@@ -44,7 +48,11 @@ from utils import log
 from utils.changelog import get_changelog_delta, is_dev_version
 from utils.changelogformat import render_changelog_html, to_plain_text
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
+from utils.helper import parse_time
 from utils.points import render_event_recap_message
+from youtube import client as youtube_client
+from youtube.selection import pick_short
+from youtube.topics import choose_topic, decay_topic_scores, register_topics
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -140,6 +148,153 @@ async def schedule_todays_cs2_sweeps_callback(context: CallbackContext) -> None:
         if event is None or event.cancelled or event.cs2_reported:
             continue
         schedule_cs2_sweep(context.job_queue, chat.chat_id, today, event.start_time)
+
+
+# The daytime window a chat's daily YouTube Short is randomly posted within, so it doesn't
+# land at the same clock time (or at 3am) every day.
+DEFAULT_SHORTS_WINDOW_START = datetime.time(10, 0)
+DEFAULT_SHORTS_WINDOW_END = datetime.time(20, 0)
+
+
+def _parse_window_time(env_var: str, default: datetime.time) -> datetime.time:
+    raw = os.getenv(env_var)
+    if not raw:
+        return default
+    try:
+        return parse_time(raw)
+    except ValueError:
+        logger.warning("Ignoring malformed %s=%r; using %s", env_var, raw, default)
+        return default
+
+
+def shorts_window() -> Tuple[datetime.time, datetime.time]:
+    """The daytime window (start, end) a chat's daily Short is randomly posted within.
+
+    YOUTUBE_SHORTS_WINDOW_START/_END override the defaults, each as "HH:MM". Read on every
+    call, like cs2.session.min_members, so a change takes effect on the next scheduling pass
+    without a restart. Falls back to the defaults, with a warning, when the configured window
+    is inverted or empty - an overnight window isn't supported, and a silently empty window
+    would otherwise never post anything.
+    """
+    start = _parse_window_time("YOUTUBE_SHORTS_WINDOW_START", DEFAULT_SHORTS_WINDOW_START)
+    end = _parse_window_time("YOUTUBE_SHORTS_WINDOW_END", DEFAULT_SHORTS_WINDOW_END)
+    if start >= end:
+        logger.warning(
+            "YOUTUBE_SHORTS_WINDOW_START=%s is not before YOUTUBE_SHORTS_WINDOW_END=%s; using the defaults",
+            start,
+            end,
+        )
+        return DEFAULT_SHORTS_WINDOW_START, DEFAULT_SHORTS_WINDOW_END
+    return start, end
+
+
+def shorts_job_name(chat_id: int, post_date: datetime.date) -> str:
+    """Name of today's Short-posting job for one chat. Also the guard against double-scheduling."""
+    return f"youtube_short_{chat_id}_{post_date}"
+
+
+def schedule_todays_short(job_queue: JobQueue, chat: Chat, today: datetime.date, now: datetime.datetime) -> None:
+    """Pick a random time left in today's window and schedule this chat's post.
+
+    A no-op when the chat already posted today, a job for today is already scheduled, or the
+    window has already closed for today - the last case means a chat with no window left
+    simply waits for tomorrow's pass rather than posting outside its configured hours.
+    """
+    if chat.last_shorts_posted_date == today:
+        return
+
+    name = shorts_job_name(chat.chat_id, today)
+    if job_queue.get_jobs_by_name(name):
+        logger.debug("Shorts post %s is already scheduled", name)
+        return
+
+    window_start, window_end = shorts_window()
+    window_end_dt = datetime.datetime.combine(today, window_end)
+    if now >= window_end_dt:
+        logger.debug("Shorts window for chat_id=%s closed for %s; nothing scheduled", chat.chat_id, today)
+        return
+
+    window_start_dt = max(now, datetime.datetime.combine(today, window_start))
+    span = max((window_end_dt - window_start_dt).total_seconds(), 0.0)
+    post_at = window_start_dt + datetime.timedelta(seconds=random.uniform(0, span))
+    job_queue.run_once(post_shorts_callback, when=post_at, chat_id=chat.chat_id, name=name)
+    logger.info(
+        "Scheduled YouTube Short for chat_id=%s at %s (window %s-%s)",
+        chat.chat_id,
+        post_at,
+        window_start,
+        window_end,
+    )
+
+
+@log.log
+async def schedule_todays_shorts_callback(context: CallbackContext) -> None:
+    """Re-derive and (re-)schedule today's Short for every authorized chat, hourly.
+
+    Jobs aren't persisted - PicklePersistence stores bot_data, not the JobQueue - so this is
+    also what resumes a lost post-time choice after a restart: a restart before the chosen
+    time re-rolls a fresh random time rather than resuming the exact original pick, the same
+    trade-off schedule_todays_cs2_sweeps_callback accepts.
+    """
+    bot_data: BotData = context.bot_data
+    now = datetime.datetime.now()
+    for chat_id in bot_data.authorized_chats:
+        schedule_todays_short(context.job_queue, bot_data.get_chat(chat_id), now.date(), now)
+
+
+@log.log
+async def post_shorts_callback(context: CallbackContext) -> None:
+    """Post one YouTube Short to a chat, topic chosen from its learned per-chat preferences.
+
+    Tries a second topic if the first yields nothing (an empty search or an all-duplicate
+    result is not unusual for a niche topic). If still nothing, the chat is left unposted for
+    today so the next hourly re-derivation pass retries later in the window, rather than
+    losing the day's post to one bad search.
+    """
+    job = context.job
+    bot_data: BotData = context.bot_data
+    chat = bot_data.get_chat(job.chat_id)
+    if chat.last_shorts_posted_date == datetime.date.today():
+        return
+
+    client = youtube_client.get_client()
+    topic = choose_topic(chat.topic_scores)
+    used_topic = topic
+    video = await pick_short(client, chat, topic)
+    if video is None:
+        # Exclude the topic already tried, so a coin-flip re-draw can't waste the retry on
+        # the same topic - and skip the retry entirely when it's the only one tracked.
+        remaining_scores = {t: s for t, s in chat.topic_scores.items() if t != topic}
+        if remaining_scores:
+            used_topic = choose_topic(remaining_scores)
+            video = await pick_short(client, chat, used_topic)
+    if video is None:
+        logger.warning("No eligible Short found for chat_id=%s (topic=%s); skipping today", job.chat_id, used_topic)
+        return
+
+    try:
+        message = await context.bot.send_message(chat.chat_id, video.url)
+    except TelegramError as e:
+        logger.error("Failed to post YouTube Short to chat_id=%s: %s", job.chat_id, e)
+        return
+
+    chat.record_shorts_post(message.message_id, video, datetime.datetime.now())
+    register_topics(chat.topic_scores, video.topics)
+    logger.info(
+        "Posted YouTube Short to chat_id=%s: video_id=%s chosen_topic=%s extracted_topics=%s",
+        job.chat_id,
+        video.video_id,
+        used_topic,
+        video.topics,
+    )
+
+
+@log.log
+async def decay_shorts_topic_scores_callback(context: CallbackContext) -> None:
+    """Nightly pull every chat's topic scores a little toward neutral."""
+    bot_data: BotData = context.bot_data
+    for chat in bot_data.chats.values():
+        decay_topic_scores(chat.topic_scores)
 
 
 async def _publish_cs2_results(context: CallbackContext, event: Event, text: str) -> int:
@@ -426,6 +581,18 @@ async def post_init(application: Application) -> None:
         name="cs2_sweeps",
     )
 
+    # Same reasoning as the CS2 sweep above: hourly re-derivation both catches a chat
+    # authorized partway through the day and resumes a lost post-time choice after a restart.
+    application.job_queue.run_repeating(
+        schedule_todays_shorts_callback,
+        interval=datetime.timedelta(hours=1),
+        first=15,
+        name="youtube_shorts_schedule",
+    )
+    application.job_queue.run_daily(
+        decay_shorts_topic_scores_callback, time=datetime.time(0, 10, 0), name="decay_shorts_topic_scores"
+    )
+
 
 async def error(update: object, context: CallbackContext) -> None:
     """Log Errors caused by Updates."""
@@ -476,10 +643,13 @@ def main() -> None:
     application.add_handler(Cs2CommandHandler())
     application.add_handler(LinkSteamCommandHandler())
     application.add_handler(UnLinkSteamCommandHandler())
+    application.add_handler(TopicsCommandHandler())
+    application.add_handler(ShortsReactionHandler())
     application.add_error_handler(error)
 
-    # Start the bot
-    application.run_polling()
+    # Start the bot. message_reaction is opt-in and not delivered by default - without
+    # allowed_updates, ShortsReactionHandler would silently never fire.
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 """This module contains the Chat class."""
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Callable, Dict, Optional, cast
 
 from telegram import Message
@@ -11,8 +11,13 @@ from telegram.ext import JobQueue
 from event import Event, parse_event_date_from_poll_question
 from eventjob import EventJob
 from utils import log
+from youtube.selection import PostedShort, SelectedVideo
+from youtube.topics import seed_topic_scores
 
 _logger = logging.getLogger(__name__)
+
+# How long a posted Short is remembered for dedup and reaction attribution.
+SHORTS_HISTORY_DAYS = 30
 
 
 class Chat:
@@ -28,6 +33,10 @@ class Chat:
         _poll_id_index: secondary index mapping poll_id to event_date for O(1) lookup
         event_job: EventJob if there is one scheduled for the chat, otherwise None
         pinned_polls: dict of pinned event poll messages indexed on poll_id
+        topic_scores: learned per-chat preference score for each YouTube Short topic
+        recent_video_ids: video_id -> date posted, for the daily-Short dedup window
+        posted_shorts: message_id -> PostedShort, for attributing a reaction back to topics
+        last_shorts_posted_date: date the daily YouTube Short was last posted, if ever
     """
 
     def __init__(self, chat_id: int) -> None:
@@ -36,6 +45,10 @@ class Chat:
         self._poll_id_index: Dict[str, date] = {}
         self.event_job: Optional[EventJob] = None
         self.pinned_polls: Dict[str, Message] = {}
+        self.topic_scores: Dict[str, float] = seed_topic_scores()
+        self.recent_video_ids: Dict[str, date] = {}
+        self.posted_shorts: Dict[int, PostedShort] = {}
+        self.last_shorts_posted_date: Optional[date] = None
 
     def __setstate__(self, state: dict) -> None:
         self.__dict__.update(state)
@@ -96,8 +109,21 @@ class Chat:
         if not hasattr(self, "_poll_id_index") or not self._poll_id_index:
             self._poll_id_index = {e.poll_id: e.event_date for e in self.events.values()}
 
+        self._backfill_shorts_state()
+
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
+
+    def _backfill_shorts_state(self) -> None:
+        """Default the daily-YouTube-Short state introduced after this pickle was written."""
+        if not hasattr(self, "topic_scores"):
+            self.topic_scores = seed_topic_scores()
+        if not hasattr(self, "recent_video_ids"):
+            self.recent_video_ids = {}
+        if not hasattr(self, "posted_shorts"):
+            self.posted_shorts = {}
+        if not hasattr(self, "last_shorts_posted_date"):
+            self.last_shorts_posted_date = None
 
     def _recover_sentinel_dates(self) -> None:
         """Retroactively recover real dates for events saved with sentinel dates.
@@ -217,6 +243,24 @@ class Chat:
                 poll_id,
             )
         del self.pinned_polls[poll_id]
+
+    def is_recently_posted(self, video_id: str) -> bool:
+        """True when video_id was posted as this chat's daily Short within SHORTS_HISTORY_DAYS."""
+        return video_id in self.recent_video_ids
+
+    @log.method
+    def record_shorts_post(self, message_id: int, video: SelectedVideo, posted_at: datetime) -> None:
+        """Remember a posted Short for dedup and later reaction attribution."""
+        self.recent_video_ids[video.video_id] = posted_at.date()
+        self.posted_shorts[message_id] = PostedShort(video.video_id, video.topics, posted_at)
+        self.last_shorts_posted_date = posted_at.date()
+        self._prune_shorts_history(posted_at.date())
+
+    def _prune_shorts_history(self, today: date) -> None:
+        """Drop dedup/attribution entries older than SHORTS_HISTORY_DAYS, so both stay bounded."""
+        cutoff = today - timedelta(days=SHORTS_HISTORY_DAYS)
+        self.recent_video_ids = {v: d for v, d in self.recent_video_ids.items() if d >= cutoff}
+        self.posted_shorts = {m: p for m, p in self.posted_shorts.items() if p.posted_at.date() >= cutoff}
 
     @log.method
     def set_event_job(self, event_job: EventJob) -> bool:
