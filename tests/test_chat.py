@@ -1,10 +1,11 @@
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock
 
-from ongabot.chat import Chat
+from ongabot.chat import SHORTS_HISTORY_DAYS, Chat
 from ongabot.event import Event
 from ongabot.eventdata import EventData
+from ongabot.youtube.selection import SelectedVideo
 
 
 def _make_event(poll_id: str, event_date: date, completed: bool = False, cancelled: bool = False):
@@ -304,6 +305,94 @@ class ChatSetStateRetroactiveMigrationTest(unittest.TestCase):
         )
         self.assertIn(date(2026, 6, 4), chat.events)
         self.assertIs(chat.events[date(2026, 6, 4)], event)
+
+
+def _video(video_id: str, topics=(), title="A Short"):
+    return SelectedVideo(
+        video_id=video_id, title=title, url=f"https://www.youtube.com/shorts/{video_id}", topics=topics
+    )
+
+
+class ChatShortsStateTest(unittest.TestCase):
+    def setUp(self):
+        self.chat = Chat(chat_id=1)
+
+    def test_new_chat_seeds_topic_scores(self):
+        self.assertEqual(set(self.chat.topic_scores), {"counter-strike", "linux"})
+
+    def test_new_chat_has_no_shorts_history(self):
+        self.assertEqual(self.chat.recent_video_ids, {})
+        self.assertEqual(self.chat.posted_shorts, {})
+        self.assertIsNone(self.chat.last_shorts_posted_date)
+
+
+class ChatRecordShortsPostTest(unittest.TestCase):
+    def setUp(self):
+        self.chat = Chat(chat_id=1)
+
+    def test_updates_all_three_collections(self):
+        video = _video("abc", topics=("linux",))
+        posted_at = datetime(2026, 9, 1, 12, 0)
+
+        self.chat.record_shorts_post(42, video, posted_at)
+
+        self.assertEqual(self.chat.recent_video_ids["abc"], date(2026, 9, 1))
+        self.assertEqual(self.chat.posted_shorts[42].video_id, "abc")
+        self.assertEqual(self.chat.posted_shorts[42].topics, ("linux",))
+        self.assertEqual(self.chat.last_shorts_posted_date, date(2026, 9, 1))
+
+    def test_is_recently_posted_true_for_a_tracked_video(self):
+        self.chat.record_shorts_post(1, _video("abc"), datetime(2026, 9, 1))
+
+        self.assertTrue(self.chat.is_recently_posted("abc"))
+
+    def test_is_recently_posted_false_for_an_unknown_video(self):
+        self.assertFalse(self.chat.is_recently_posted("xyz"))
+
+    def test_prunes_entries_older_than_the_history_window(self):
+        self.chat.record_shorts_post(1, _video("old"), datetime(2026, 1, 1))
+        self.chat.record_shorts_post(2, _video("new"), datetime(2026, 1, 1) + timedelta(days=SHORTS_HISTORY_DAYS + 1))
+
+        self.assertNotIn("old", self.chat.recent_video_ids)
+        self.assertNotIn(1, self.chat.posted_shorts)
+        self.assertIn("new", self.chat.recent_video_ids)
+        self.assertIn(2, self.chat.posted_shorts)
+
+
+class ChatSetStateShortsMigrationTest(unittest.TestCase):
+    def test_backfills_shorts_fields_missing_from_an_old_pickle(self):
+        chat = Chat.__new__(Chat)
+        chat.__setstate__(
+            {
+                "chat_id": 1,
+                "events": {},
+                "event_job": None,
+                "pinned_polls": {},
+            }
+        )
+
+        self.assertEqual(set(chat.topic_scores), {"counter-strike", "linux"})
+        self.assertEqual(chat.recent_video_ids, {})
+        self.assertEqual(chat.posted_shorts, {})
+        self.assertIsNone(chat.last_shorts_posted_date)
+
+    def test_does_not_overwrite_existing_shorts_state(self):
+        chat = Chat.__new__(Chat)
+        chat.__setstate__(
+            {
+                "chat_id": 1,
+                "events": {},
+                "event_job": None,
+                "pinned_polls": {},
+                "topic_scores": {"speedrun": 5.0},
+                "recent_video_ids": {"abc": date(2026, 1, 1)},
+                "posted_shorts": {},
+                "last_shorts_posted_date": date(2026, 1, 1),
+            }
+        )
+
+        self.assertEqual(chat.topic_scores, {"speedrun": 5.0})
+        self.assertEqual(chat.last_shorts_posted_date, date(2026, 1, 1))
 
 
 if __name__ == "__main__":

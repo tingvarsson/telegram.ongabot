@@ -200,6 +200,13 @@ CS2 = CommandInfo(
     menu_description="Show CS2 results for an event [target_date=..]",
 )
 
+TOPICS = CommandInfo(
+    command="topics",
+    brief="/topics - Show this chat's learned YouTube Short topic preferences",
+    usage="/topics",
+    menu_description="Show learned YouTube Short topic preferences",
+)
+
 BOT_SHORT_DESCRIPTION = "ONGAbot - the only bot you'll ever need"
 
 BOT_DESCRIPTION = (
@@ -224,6 +231,7 @@ ALL_COMMANDS = [
     STATISTICS,
     LEADERBOARD,
     CS2,
+    TOPICS,
     LINKSTEAM,
     UNLINKSTEAM,
 ]

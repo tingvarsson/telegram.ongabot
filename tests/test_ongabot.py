@@ -185,7 +185,8 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
         # Should not raise
         await post_init(application)
 
-        # Event cleanup (startup + daily) and the hourly CS2 sweep scheduler are all registered.
+        # Event cleanup (startup + daily), the hourly CS2 sweep scheduler, the hourly Shorts
+        # scheduler, and the nightly topic-score decay are all registered.
         scheduled = [
             call.kwargs["name"]
             for calls in (
@@ -197,7 +198,13 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertEqual(
             sorted(scheduled),
-            ["complete_past_events", "complete_past_events_startup", "cs2_sweeps"],
+            [
+                "complete_past_events",
+                "complete_past_events_startup",
+                "cs2_sweeps",
+                "decay_shorts_topic_scores",
+                "youtube_shorts_schedule",
+            ],
         )
 
 
