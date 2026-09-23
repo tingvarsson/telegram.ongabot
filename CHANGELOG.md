@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-23
+
 ### Added
 
 - The bot now shares a YouTube Short once a day, at a different time each day, picking
@@ -256,7 +258,8 @@ No user-facing changes (version bump only).
 
 Initial release — basic Telegram bot for recurring event polls in group chats.
 
-[Unreleased]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.5.0...v1.6.0
