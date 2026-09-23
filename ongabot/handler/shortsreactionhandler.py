@@ -39,10 +39,21 @@ async def callback(update: Update, context: CallbackContext) -> None:
     posted = chat.posted_shorts.get(reaction.message_id)
     if posted is None:
         # A reaction on some other message, or one old enough to have aged out of history.
+        _logger.debug(
+            "chat_id=%s: reaction on message_id=%s is not a tracked Short; ignoring",
+            chat.chat_id,
+            reaction.message_id,
+        )
         return
 
     delta = reaction_score_delta(reaction.old_reaction, reaction.new_reaction)
     if delta == 0.0:
+        _logger.debug(
+            "chat_id=%s: reaction on message_id=%s (video_id=%s) nets to no score change; ignoring",
+            chat.chat_id,
+            reaction.message_id,
+            posted.video_id,
+        )
         return
 
     apply_reaction(chat.topic_scores, posted.topics, delta)

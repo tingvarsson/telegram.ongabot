@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 from telegram import ReactionTypeEmoji
 from telegram.constants import ReactionEmoji
 
+from ongabot.handler import shortsreactionhandler
 from ongabot.handler.shortsreactionhandler import callback
 from ongabot.youtube.selection import PostedShort
 
@@ -88,6 +89,26 @@ class ShortsReactionHandlerTest(unittest.IsolatedAsyncioTestCase):
         await callback(update, context)
 
         context.bot_data.get_chat.assert_not_called()
+
+    async def test_logs_when_the_reacted_message_is_not_a_tracked_short(self):
+        chat = _chat(posted_shorts={}, topic_scores={"linux": 1.0})
+        update = MagicMock(message_reaction=_reaction(message_id=999, new=(THUMBS_UP,)))
+
+        with self.assertLogs(shortsreactionhandler._logger, level="DEBUG") as logs:
+            await callback(update, _context(chat))
+
+        self.assertTrue(any("999" in line for line in logs.output))
+
+    async def test_logs_when_the_reaction_emoji_is_unmapped(self):
+        posted = PostedShort(video_id="abc", topics=("linux",), posted_at=MagicMock())
+        chat = _chat(posted_shorts={42: posted}, topic_scores={"linux": 1.0})
+        clown = ReactionTypeEmoji(emoji="\U0001f921")
+        update = MagicMock(message_reaction=_reaction(new=(clown,)))
+
+        with self.assertLogs(shortsreactionhandler._logger, level="DEBUG") as logs:
+            await callback(update, _context(chat))
+
+        self.assertTrue(any("abc" in line for line in logs.output))
 
 
 if __name__ == "__main__":
