@@ -10,7 +10,7 @@ from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
 from eventdata import EventData
-from quips import MAYBE_BABY_QUIPS, NO_OP_QUIPS, select_quip
+from quips import get_quip_pool, select_quip
 from utils import log
 
 _logger = logging.getLogger(__name__)
@@ -216,8 +216,7 @@ class Event:
                         # No-op / Maybe Baby: the two sentinel options appended after the
                         # real time slots (see eventcreator._create_poll_options). Called
                         # out with a quip instead of a played-streak star.
-                        quips = NO_OP_QUIPS if i == self.num_slots else MAYBE_BABY_QUIPS
-                        quip = select_quip(quips, self.poll_id, user.id, i)
+                        quip = select_quip(get_quip_pool(), self.poll_id, user.id, i)
                         escaped_quip = escape_markdown(quip, version=2)
                         message += f"\n  • {user.mention_markdown_v2()} — {escaped_quip}"
                         continue

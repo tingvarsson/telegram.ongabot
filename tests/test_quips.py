@@ -1,6 +1,8 @@
 import unittest
+from unittest.mock import AsyncMock
 
-from ongabot.quips import select_quip
+from ongabot import quips
+from ongabot.quips import FALLBACK_QUIPS, get_quip_pool, refresh_quip_pool, select_quip
 
 
 class SelectQuipTest(unittest.TestCase):
@@ -33,6 +35,45 @@ class SelectQuipTest(unittest.TestCase):
         maybe_baby = select_quip(quips, poll_id="p1", user_id=42, option_index=2)
 
         self.assertNotEqual(no_op, maybe_baby)
+
+
+class QuipPoolTest(unittest.IsolatedAsyncioTestCase):
+    """The pool is fetched dynamically from JokeAPI, not hard-coded - see refresh_quip_pool."""
+
+    def setUp(self):
+        quips._pool = []
+
+    def tearDown(self):
+        quips._pool = []
+
+    def test_pool_falls_back_to_the_static_list_when_never_refreshed(self):
+        self.assertEqual(get_quip_pool(), FALLBACK_QUIPS)
+
+    async def test_refresh_replaces_the_pool_with_freshly_fetched_jokes(self):
+        client = AsyncMock()
+        client.fetch_jokes.return_value = ["Fresh joke one.", "Fresh joke two."]
+
+        await refresh_quip_pool(client)
+
+        self.assertEqual(get_quip_pool(), ["Fresh joke one.", "Fresh joke two."])
+
+    async def test_refresh_keeps_the_existing_pool_when_the_fetch_fails(self):
+        quips._pool = ["Previously fetched joke."]
+        client = AsyncMock()
+        client.fetch_jokes.return_value = None
+
+        await refresh_quip_pool(client)
+
+        self.assertEqual(get_quip_pool(), ["Previously fetched joke."])
+
+    async def test_refresh_keeps_the_existing_pool_when_the_fetch_returns_nothing(self):
+        quips._pool = ["Previously fetched joke."]
+        client = AsyncMock()
+        client.fetch_jokes.return_value = []
+
+        await refresh_quip_pool(client)
+
+        self.assertEqual(get_quip_pool(), ["Previously fetched joke."])
 
 
 if __name__ == "__main__":

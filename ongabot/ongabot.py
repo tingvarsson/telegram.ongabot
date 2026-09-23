@@ -43,6 +43,8 @@ from handler import StatisticsSortCallbackHandler
 from handler import TopicsCommandHandler
 from handler import UnLinkSteamCommandHandler
 from handler import UpdateEventCommandHandler
+from jokes import get_client as get_joke_client
+from quips import refresh_quip_pool
 from userdata import UserData
 from utils import log
 from utils.changelog import get_changelog_delta, is_dev_version
@@ -295,6 +297,15 @@ async def decay_shorts_topic_scores_callback(context: CallbackContext) -> None:
     bot_data: BotData = context.bot_data
     for chat in bot_data.chats.values():
         decay_topic_scores(chat.topic_scores)
+
+
+@log.log
+async def refresh_quip_pool_callback(context: CallbackContext) -> None:  # pylint: disable=unused-argument
+    """Periodically refresh the dynamic No-op/Maybe-Baby quip pool from JokeAPI.
+
+    Takes no per-chat state, but job_queue always passes a CallbackContext.
+    """
+    await refresh_quip_pool(get_joke_client())
 
 
 async def _publish_cs2_results(context: CallbackContext, event: Event, text: str) -> int:
@@ -591,6 +602,16 @@ async def post_init(application: Application) -> None:
     )
     application.job_queue.run_daily(
         decay_shorts_topic_scores_callback, time=datetime.time(0, 10, 0), name="decay_shorts_topic_scores"
+    )
+
+    # Keeps the No-op/Maybe-Baby quip pool dynamic rather than a fixed list. Every 6 hours is
+    # plenty for a joke pool; starts right after boot so a restart doesn't leave the fallback
+    # list in place for hours.
+    application.job_queue.run_repeating(
+        refresh_quip_pool_callback,
+        interval=datetime.timedelta(hours=6),
+        first=20,
+        name="quip_pool_refresh",
     )
 
 
