@@ -3,9 +3,11 @@ from datetime import date, time
 from unittest.mock import MagicMock
 
 from telegram import User
+from telegram.helpers import escape_markdown
 
 from ongabot.event import Event
 from ongabot.eventdata import EventData
+from ongabot.quips import NO_OP_QUIPS, MAYBE_BABY_QUIPS
 
 
 def _make_old_state(poll_question: str, poll_id: str = "test_poll_id") -> dict:
@@ -129,6 +131,65 @@ def _make_event_with_answer(user: User, option_ids) -> Event:
     answer.option_ids = tuple(option_ids)
     event.poll_answers = {user: answer}
     return event
+
+
+def _make_event_with_joke_answer(user: User, option_index: int, num_slots: int = 1) -> Event:
+    """Build an event whose poll has num_slots real options plus the two sentinel
+    joke options (No-op, Maybe Baby </3), answered by a single user at option_index."""
+    poll = MagicMock()
+    poll.id = "p1"
+    poll.total_voter_count = 1
+    poll.options = [MagicMock(text=f"opt{i}", voter_count=0) for i in range(num_slots + 2)]
+    event = Event(chat_id=1, poll=poll, data=EventData(date(2026, 6, 3), time(18, 30), num_slots))
+    answer = MagicMock()
+    answer.option_ids = (option_index,)
+    event.poll_answers = {user: answer}
+    return event
+
+
+class EventStatusMessageJokeCalloutTest(unittest.TestCase):
+    """Voting for a sentinel joke option (No-op, Maybe Baby) earns a quip callout."""
+
+    def setUp(self):
+        self.user = User(id=42, first_name="Alice", is_bot=False)
+
+    def test_no_op_voter_gets_a_no_op_quip(self):
+        event = _make_event_with_joke_answer(self.user, option_index=1, num_slots=1)
+
+        message = event._create_status_message_text(5)
+
+        self.assertTrue(
+            any(escape_markdown(quip, version=2) in message for quip in NO_OP_QUIPS),
+            msg=message,
+        )
+
+    def test_maybe_baby_voter_gets_a_maybe_baby_quip(self):
+        event = _make_event_with_joke_answer(self.user, option_index=2, num_slots=1)
+
+        message = event._create_status_message_text(5)
+
+        self.assertTrue(
+            any(escape_markdown(quip, version=2) in message for quip in MAYBE_BABY_QUIPS),
+            msg=message,
+        )
+
+    def test_real_slot_voter_gets_no_quip(self):
+        event = _make_event_with_joke_answer(self.user, option_index=0, num_slots=1)
+        event.user_played_streaks = {42: 3}
+
+        message = event._create_status_message_text(5)
+
+        self.assertNotIn("—", message)
+        for quip in NO_OP_QUIPS + MAYBE_BABY_QUIPS:
+            self.assertNotIn(escape_markdown(quip, version=2), message)
+
+    def test_quip_is_stable_across_repeated_renders(self):
+        event = _make_event_with_joke_answer(self.user, option_index=1, num_slots=1)
+
+        first = event._create_status_message_text(5)
+        second = event._create_status_message_text(5)
+
+        self.assertEqual(first, second)
 
 
 class EventStatusMessageStarTest(unittest.TestCase):
