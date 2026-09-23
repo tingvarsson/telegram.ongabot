@@ -1,8 +1,9 @@
 import unittest
 from datetime import date
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from ongabot.handler.eventpollanswerhandler import callback
+from ongabot.quips import select_quip
 from ongabot.userdata import UserData
 
 
@@ -61,9 +62,10 @@ class EventPollAnswerStreakTest(unittest.IsolatedAsyncioTestCase):
         update.poll_answer.user.name = "Alice"
         return update
 
-    def _make_event(self, chat_id=1):
+    def _make_event(self, chat_id=1, num_slots=5):
         event = MagicMock()
         event.chat_id = chat_id
+        event.num_slots = num_slots
         event.user_streaks = {}
         event.user_played_streaks = {}
         return event
@@ -168,9 +170,10 @@ class EventPollAnswerPlayedStreakTest(unittest.IsolatedAsyncioTestCase):
         update.poll_answer.user.name = "Alice"
         return update
 
-    def _make_event(self, chat_id=1):
+    def _make_event(self, chat_id=1, num_slots=5):
         event = MagicMock()
         event.chat_id = chat_id
+        event.num_slots = num_slots
         event.user_streaks = {}
         event.user_played_streaks = {}
         return event
@@ -248,6 +251,78 @@ class EventPollAnswerPlayedStreakTest(unittest.IsolatedAsyncioTestCase):
         await callback(self._make_update("poll1", user_id=5), context)
 
         self.assertIn(5, played_at_call_time)
+
+
+class EventPollAnswerJokeResponseTest(unittest.IsolatedAsyncioTestCase):
+    """No-op/Maybe-Baby votes get a quip in the chat autoresponse, replacing the generic
+    "great job" / "changed their vote" message - not shown in the status message."""
+
+    def setUp(self):
+        self.pool = [f"quip {i}" for i in range(20)]
+        patcher = patch("ongabot.handler.eventpollanswerhandler.get_quip_pool", return_value=self.pool)
+        self.addCleanup(patcher.stop)
+        patcher.start()
+
+    def _make_update(self, poll_id, user_id, option_ids, user_name="Alice"):
+        update = MagicMock()
+        update.poll_answer.poll_id = poll_id
+        update.poll_answer.option_ids = option_ids
+        update.poll_answer.user.id = user_id
+        update.poll_answer.user.name = user_name
+        return update
+
+    def _make_event(self, chat_id=1, num_slots=5):
+        event = MagicMock()
+        event.chat_id = chat_id
+        event.num_slots = num_slots
+        event.user_streaks = {}
+        event.user_played_streaks = {}
+        return event
+
+    async def test_no_op_vote_gets_a_quip_response(self):
+        user_data = UserData()
+        event = self._make_event()
+        context = _make_context(user_data, event, {date(2026, 1, 8): _make_event_mock("poll1", date(2026, 1, 8))})
+
+        # 5 slots means option id 5 is No-op.
+        await callback(self._make_update("poll1", user_id=42, option_ids=(5,)), context)
+
+        expected_quip = select_quip(self.pool, "poll1", 42, 5)
+        context.bot.send_message.assert_called_once_with(event.chat_id, f"Alice — {expected_quip}")
+
+    async def test_maybe_baby_vote_gets_a_quip_response(self):
+        user_data = UserData()
+        event = self._make_event()
+        context = _make_context(user_data, event, {date(2026, 1, 8): _make_event_mock("poll1", date(2026, 1, 8))})
+
+        # 5 slots means option id 6 is Maybe Baby.
+        await callback(self._make_update("poll1", user_id=42, option_ids=(6,)), context)
+
+        expected_quip = select_quip(self.pool, "poll1", 42, 6)
+        context.bot.send_message.assert_called_once_with(event.chat_id, f"Alice — {expected_quip}")
+
+    async def test_real_slot_first_vote_keeps_the_generic_message(self):
+        user_data = UserData()
+        event = self._make_event()
+        context = _make_context(user_data, event, {date(2026, 1, 8): _make_event_mock("poll1", date(2026, 1, 8))})
+
+        await callback(self._make_update("poll1", user_id=42, option_ids=(0,)), context)
+
+        context.bot.send_message.assert_called_once_with(
+            event.chat_id, "Wow Alice, what a great job answering that poll!"
+        )
+
+    async def test_real_slot_changed_vote_keeps_the_generic_message(self):
+        user_data = UserData()
+        user_data.set_poll_answer("poll1", (0,))
+        event = self._make_event()
+        context = _make_context(user_data, event, {date(2026, 1, 8): _make_event_mock("poll1", date(2026, 1, 8))})
+
+        await callback(self._make_update("poll1", user_id=42, option_ids=(1,)), context)
+
+        context.bot.send_message.assert_called_once_with(
+            event.chat_id, "Hmm suspicious, looks like Alice changed their vote..."
+        )
 
 
 if __name__ == "__main__":

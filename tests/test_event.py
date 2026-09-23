@@ -1,13 +1,11 @@
 import unittest
 from datetime import date, time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from telegram import User
-from telegram.helpers import escape_markdown
 
 from ongabot.event import Event
 from ongabot.eventdata import EventData
-from ongabot.quips import select_quip
 
 
 def _make_old_state(poll_question: str, poll_id: str = "test_poll_id") -> dict:
@@ -147,65 +145,28 @@ def _make_event_with_joke_answer(user: User, option_index: int, num_slots: int =
     return event
 
 
-class EventStatusMessageJokeCalloutTest(unittest.TestCase):
-    """Voting for a sentinel joke option (No-op, Maybe Baby) earns a quip callout.
-
-    The pool itself is dynamic (see test_quips.py) - these tests pin the pool
-    Event._create_status_message_text actually sees to a known list, via the same
-    get_quip_pool reference ongabot.event imports, so the rendered message is deterministic
-    without caring where the pool's contents came from.
-    """
+class EventStatusMessageJokeOptionTest(unittest.TestCase):
+    """No-op/Maybe-Baby votes render like any other option in the status message - the quip
+    callout lives in the chat autoresponse instead (see test_eventpollanswerhandler.py)."""
 
     def setUp(self):
         self.user = User(id=42, first_name="Alice", is_bot=False)
-        self.pool = [f"quip {i}" for i in range(20)]
-        patcher = patch("ongabot.event.get_quip_pool", return_value=self.pool)
-        self.addCleanup(patcher.stop)
-        patcher.start()
 
-    def test_no_op_voter_gets_a_quip_from_the_pool(self):
+    def test_no_op_voter_shows_a_plain_mention_with_no_quip(self):
         event = _make_event_with_joke_answer(self.user, option_index=1, num_slots=1)
 
         message = event._create_status_message_text(5)
 
-        self.assertTrue(any(escape_markdown(quip, version=2) in message for quip in self.pool), msg=message)
+        self.assertIn("[Alice](tg://user?id=42)", message)
+        self.assertNotIn("—", message)
 
-    def test_maybe_baby_voter_gets_a_quip_from_the_pool(self):
+    def test_maybe_baby_voter_shows_a_plain_mention_with_no_quip(self):
         event = _make_event_with_joke_answer(self.user, option_index=2, num_slots=1)
 
         message = event._create_status_message_text(5)
 
-        self.assertTrue(any(escape_markdown(quip, version=2) in message for quip in self.pool), msg=message)
-
-    def test_no_op_and_maybe_baby_votes_by_the_same_user_get_different_quips(self):
-        event = _make_event_with_joke_answer(self.user, option_index=1, num_slots=1)
-        event.poll_answers[self.user].option_ids = (1, 2)
-
-        message = event._create_status_message_text(5)
-
-        no_op_quip = select_quip(self.pool, event.poll_id, self.user.id, 1)
-        maybe_baby_quip = select_quip(self.pool, event.poll_id, self.user.id, 2)
-        self.assertNotEqual(no_op_quip, maybe_baby_quip)
-        self.assertIn(escape_markdown(no_op_quip, version=2), message)
-        self.assertIn(escape_markdown(maybe_baby_quip, version=2), message)
-
-    def test_real_slot_voter_gets_no_quip(self):
-        event = _make_event_with_joke_answer(self.user, option_index=0, num_slots=1)
-        event.user_played_streaks = {42: 3}
-
-        message = event._create_status_message_text(5)
-
+        self.assertIn("[Alice](tg://user?id=42)", message)
         self.assertNotIn("—", message)
-        for quip in self.pool:
-            self.assertNotIn(escape_markdown(quip, version=2), message)
-
-    def test_quip_is_stable_across_repeated_renders(self):
-        event = _make_event_with_joke_answer(self.user, option_index=1, num_slots=1)
-
-        first = event._create_status_message_text(5)
-        second = event._create_status_message_text(5)
-
-        self.assertEqual(first, second)
 
 
 class EventStatusMessageStarTest(unittest.TestCase):
