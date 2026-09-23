@@ -204,7 +204,7 @@ async def cs2_sweep_callback(context: CallbackContext) -> None:
 
     now = datetime.datetime.now()
     expired = now >= data["deadline"]
-    session = await event_session(get_client(), chat, event, context.application.user_data)
+    session = await event_session(get_client(), chat, event_date, context.application.user_data)
 
     if session is None:
         # Leetify unreachable - retry on the next pass rather than claim nobody played.

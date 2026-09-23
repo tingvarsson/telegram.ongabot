@@ -24,7 +24,7 @@ class CancelEventCommandHandler(CommandHandler):
 
 @log
 async def callback(update: Update, context: CallbackContext) -> None:
-    """Cancel active event as result of command /cancelevent [target_date=<val>]"""
+    """Cancel active event as result of command /cancelevent [<date>|target_date=<date>]"""
     if update.effective_chat is None or update.message is None:
         _logger.warning("Received /cancelevent command with no effective chat or message.")
         return
@@ -70,7 +70,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
         return
 
     if len(candidates) > 1:
-        lines = ["Multiple active events match. Be more specific using target_date=:"]
+        lines = ["Multiple active events match. Be more specific: /cancelevent <date> (or target_date=<date>):"]
         for candidate in sorted(candidates, key=lambda c: (c.event_date, c.start_time)):
             lines.append(f"  • {candidate.event_date} {candidate.start_time.strftime('%H:%M')}")
         lines.append(f"\n{CANCELEVENT.usage}")
