@@ -52,6 +52,18 @@ class ShortsWindowConfigTest(unittest.TestCase):
 
         self.assertEqual(ongabot.shorts_window()[0], time(10, 0))
 
+    def test_falls_back_to_defaults_when_the_window_is_inverted(self):
+        os.environ["YOUTUBE_SHORTS_WINDOW_START"] = "20:00"
+        os.environ["YOUTUBE_SHORTS_WINDOW_END"] = "10:00"
+
+        self.assertEqual(ongabot.shorts_window(), (time(10, 0), time(20, 0)))
+
+    def test_falls_back_to_defaults_when_the_window_is_zero_width(self):
+        os.environ["YOUTUBE_SHORTS_WINDOW_START"] = "12:00"
+        os.environ["YOUTUBE_SHORTS_WINDOW_END"] = "12:00"
+
+        self.assertEqual(ongabot.shorts_window(), (time(10, 0), time(20, 0)))
+
 
 class ShortsJobNameTest(unittest.TestCase):
     def test_includes_chat_id_and_date(self):
@@ -194,24 +206,66 @@ class PostShortsCallbackTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_retries_with_a_second_topic_when_the_first_yields_nothing(self):
         context, chat = _post_context()
+        chat.topic_scores = {"linux": 3.0, "counter-strike": 1.0}
         video = _video()
 
-        with patch("ongabot.ongabot.choose_topic", side_effect=["linux", "counter-strike"]):
+        with patch("ongabot.ongabot.choose_topic", side_effect=["linux", "counter-strike"]) as choose:
             with patch("ongabot.ongabot.pick_short", AsyncMock(side_effect=[None, video])) as pick:
                 await ongabot.post_shorts_callback(context)
 
         self.assertEqual(pick.await_count, 2)
         context.bot.send_message.assert_awaited_once_with(CHAT_ID, video.url)
+        # The fallback draw must exclude the topic that was already tried and failed.
+        second_call_scores = choose.call_args_list[1].args[0]
+        self.assertNotIn("linux", second_call_scores)
+
+    async def test_does_not_retry_when_the_chat_has_only_one_topic(self):
+        """Excluding the already-tried topic would leave nothing to draw from."""
+        context, chat = _post_context()
+        chat.topic_scores = {"linux": 3.0}
+
+        with patch("ongabot.ongabot.choose_topic", return_value="linux") as choose:
+            with patch("ongabot.ongabot.pick_short", AsyncMock(return_value=None)) as pick:
+                await ongabot.post_shorts_callback(context)
+
+        choose.assert_called_once()
+        pick.assert_awaited_once()
+        context.bot.send_message.assert_not_awaited()
 
     async def test_no_eligible_video_leaves_chat_unposted_for_a_later_retry(self):
         context, chat = _post_context()
+        chat.topic_scores = {"linux": 3.0, "counter-strike": 1.0}
 
-        with patch("ongabot.ongabot.choose_topic", side_effect=["linux", "linux"]):
+        with patch("ongabot.ongabot.choose_topic", side_effect=["linux", "counter-strike"]):
             with patch("ongabot.ongabot.pick_short", AsyncMock(return_value=None)):
                 await ongabot.post_shorts_callback(context)
 
         context.bot.send_message.assert_not_awaited()
         chat.record_shorts_post.assert_not_called()
+
+    async def test_success_log_names_the_topic_that_actually_produced_the_video(self):
+        context, chat = _post_context()
+        chat.topic_scores = {"linux": 3.0, "counter-strike": 1.0}
+        video = _video()
+
+        with patch("ongabot.ongabot.choose_topic", side_effect=["linux", "counter-strike"]):
+            with patch("ongabot.ongabot.pick_short", AsyncMock(side_effect=[None, video])):
+                with self.assertLogs(ongabot.logger, level="INFO") as logs:
+                    await ongabot.post_shorts_callback(context)
+
+        posted_log = next(line for line in logs.output if "Posted YouTube Short" in line)
+        self.assertIn("counter-strike", posted_log)
+
+    async def test_failure_log_names_the_topic_that_actually_failed(self):
+        context, chat = _post_context()
+        chat.topic_scores = {"linux": 3.0, "counter-strike": 1.0}
+
+        with patch("ongabot.ongabot.choose_topic", side_effect=["linux", "counter-strike"]):
+            with patch("ongabot.ongabot.pick_short", AsyncMock(return_value=None)):
+                with self.assertLogs(ongabot.logger, level="WARNING") as logs:
+                    await ongabot.post_shorts_callback(context)
+
+        self.assertTrue(any("counter-strike" in line for line in logs.output))
 
     async def test_failed_send_does_not_record_the_post(self):
         context, chat = _post_context()

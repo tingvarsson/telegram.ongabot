@@ -48,6 +48,7 @@ from utils import log
 from utils.changelog import get_changelog_delta, is_dev_version
 from utils.changelogformat import render_changelog_html, to_plain_text
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
+from utils.helper import parse_time
 from utils.points import render_event_recap_message
 from youtube import client as youtube_client
 from youtube.selection import pick_short
@@ -160,9 +161,8 @@ def _parse_window_time(env_var: str, default: datetime.time) -> datetime.time:
     if not raw:
         return default
     try:
-        hour, minute = raw.split(":")
-        return datetime.time(int(hour), int(minute))
-    except (ValueError, TypeError):
+        return parse_time(raw)
+    except ValueError:
         logger.warning("Ignoring malformed %s=%r; using %s", env_var, raw, default)
         return default
 
@@ -172,12 +172,20 @@ def shorts_window() -> Tuple[datetime.time, datetime.time]:
 
     YOUTUBE_SHORTS_WINDOW_START/_END override the defaults, each as "HH:MM". Read on every
     call, like cs2.session.min_members, so a change takes effect on the next scheduling pass
-    without a restart.
+    without a restart. Falls back to the defaults, with a warning, when the configured window
+    is inverted or empty - an overnight window isn't supported, and a silently empty window
+    would otherwise never post anything.
     """
-    return (
-        _parse_window_time("YOUTUBE_SHORTS_WINDOW_START", DEFAULT_SHORTS_WINDOW_START),
-        _parse_window_time("YOUTUBE_SHORTS_WINDOW_END", DEFAULT_SHORTS_WINDOW_END),
-    )
+    start = _parse_window_time("YOUTUBE_SHORTS_WINDOW_START", DEFAULT_SHORTS_WINDOW_START)
+    end = _parse_window_time("YOUTUBE_SHORTS_WINDOW_END", DEFAULT_SHORTS_WINDOW_END)
+    if start >= end:
+        logger.warning(
+            "YOUTUBE_SHORTS_WINDOW_START=%s is not before YOUTUBE_SHORTS_WINDOW_END=%s; using the defaults",
+            start,
+            end,
+        )
+        return DEFAULT_SHORTS_WINDOW_START, DEFAULT_SHORTS_WINDOW_END
+    return start, end
 
 
 def shorts_job_name(chat_id: int, post_date: datetime.date) -> str:
@@ -251,13 +259,17 @@ async def post_shorts_callback(context: CallbackContext) -> None:
 
     client = youtube_client.get_client()
     topic = choose_topic(chat.topic_scores)
+    used_topic = topic
     video = await pick_short(client, chat, topic)
     if video is None:
-        fallback_topic = choose_topic(chat.topic_scores)
-        if fallback_topic != topic:
-            video = await pick_short(client, chat, fallback_topic)
+        # Exclude the topic already tried, so a coin-flip re-draw can't waste the retry on
+        # the same topic - and skip the retry entirely when it's the only one tracked.
+        remaining_scores = {t: s for t, s in chat.topic_scores.items() if t != topic}
+        if remaining_scores:
+            used_topic = choose_topic(remaining_scores)
+            video = await pick_short(client, chat, used_topic)
     if video is None:
-        logger.warning("No eligible Short found for chat_id=%s (topic=%s); skipping today", job.chat_id, topic)
+        logger.warning("No eligible Short found for chat_id=%s (topic=%s); skipping today", job.chat_id, used_topic)
         return
 
     try:
@@ -272,7 +284,7 @@ async def post_shorts_callback(context: CallbackContext) -> None:
         "Posted YouTube Short to chat_id=%s: video_id=%s chosen_topic=%s extracted_topics=%s",
         job.chat_id,
         video.video_id,
-        topic,
+        used_topic,
         video.topics,
     )
 
