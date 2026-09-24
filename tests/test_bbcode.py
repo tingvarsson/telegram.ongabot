@@ -59,6 +59,15 @@ class InlineTagTest(unittest.TestCase):
     def test_image_is_dropped(self) -> None:
         self.assertEqual(render_bbcode_to_lines("[img]https://example.com/x.png[/img]"), [])
 
+    def test_image_with_attributes_is_dropped(self) -> None:
+        self.assertEqual(render_bbcode_to_lines('[p]A [img src="{STEAM_CLAN_IMAGE}/x.png"][/img] B[/p]'), ["A B"])
+
+    def test_video_with_attributes_is_dropped(self) -> None:
+        contents = (
+            '[video webm="https://x/a.webm" mp4="https://x/a.mp4" poster="https://x/a.png" autoplay="true"][/video]'
+        )
+        self.assertEqual(render_bbcode_to_lines(f"[p]Before[/p]{contents}[p]After[/p]"), ["Before", "After"])
+
     def test_image_dropped_but_surrounding_text_kept(self) -> None:
         self.assertEqual(render_bbcode_to_lines("See: [img]https://x/y.png[/img] above"), ["See: above"])
 
@@ -126,6 +135,17 @@ class HeadingTest(unittest.TestCase):
     def test_escaped_brackets_elsewhere_stay_literal_and_are_not_tags(self) -> None:
         self.assertEqual(render_bbcode_to_lines(r"[p]Use \[b] for bold[/p]"), ["Use [b] for bold"])
 
+    def test_a_paragraph_that_starts_bracketed_and_ends_in_a_tag_is_not_a_heading(self) -> None:
+        contents = r"[p]\[Inferno] Fixed a boost spot, see [url=https://x]details[/url][/p]"
+        self.assertEqual(
+            render_bbcode_to_lines(contents),
+            ['[Inferno] Fixed a boost spot, see <a href="https://x">details</a>'],
+        )
+
+    def test_a_bullet_with_no_text_does_not_leak_its_marker(self) -> None:
+        contents = r"[list][*][img]a.png[/img][/*][/list][p]\[ MAPS ][/p]"
+        self.assertEqual(render_bbcode_to_lines(contents), ["<i>MAPS</i>"])
+
 
 class EscapingTest(unittest.TestCase):
     def test_literal_angle_brackets_are_escaped(self) -> None:
@@ -175,7 +195,7 @@ class RealPayloadTest(unittest.TestCase):
             self.assertTrue(lines, item["gid"])
             for line in lines:
                 self.assertTrue(_tags_balanced(line), f"{item['gid']}: {line!r}")
-                for marker in ("[p]", "[/p]", "[list]", "[*]", "[/*]", "[url", "[img", "\\["):
+                for marker in ("[p]", "[/p]", "[list]", "[*]", "[/*]", "[url", "[img", "[video", "\\["):
                     self.assertNotIn(marker, line, f"{item['gid']}: {line!r}")
 
     def test_only_telegram_supported_tags_are_emitted(self) -> None:

@@ -37,12 +37,14 @@ _ESC_CLOSE = ""
 _BLOCK_RE = re.compile(r"\[(/?)(p|\*|list|olist|h[1-3])\]|\n", re.IGNORECASE)
 
 # A paragraph that is nothing but "[ NAME ]" (escaped open bracket; Valve leaves the close
-# bracket unescaped) is a section heading.
-_BRACKET_HEADING_RE = re.compile(f"^{_ESC_OPEN}\\s*(.+?)\\s*[\\]{_ESC_CLOSE}]$")
+# bracket unescaped) is a section heading. The name itself may hold no bracket, so a line like
+# "\[Inferno] Fixed ... [/url]" is not mistaken for one by pairing with a tag's "]".
+_BRACKET_HEADING_RE = re.compile(f"^{_ESC_OPEN}\\s*([^\\[\\]{_ESC_OPEN}{_ESC_CLOSE}]+?)\\s*[\\]{_ESC_CLOSE}]$")
 
 # Not feasible to show inside a Telegram blockquote, and the image rarely matters to the
 # patch-note text - dropped before whitespace is collapsed, so no double space is left behind.
-_IMG_RE = re.compile(r"\[img\].*?\[/img\]", re.IGNORECASE | re.DOTALL)
+# Both "[img]url[/img]" and the newer editor's '[img src="..."][/img]'.
+_IMG_RE = re.compile(r"\[img(?:[= ][^\]]*)?\].*?\[/img\]", re.IGNORECASE | re.DOTALL)
 
 # One pass over a line's inline markup. [code]/[noparse] come first in the alternation so
 # markup inside them stays literal text, as in utils.changelogformat: Telegram forbids nesting
@@ -57,10 +59,12 @@ _INLINE_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
-# Whatever "[tag]", "[/tag]" or "[tag=attr]" is left after the pass above: a tag this module
-# does not know, or a known one _INLINE_RE could not pair (e.g. unclosed). Stripped rather
-# than escaped, so a malformed post reads as its text rather than as raw markup.
-_UNKNOWN_TAG_RE = re.compile(r"\[/?[a-zA-Z][a-zA-Z0-9_]*(?:=[^\]]*)?\]")
+# Whatever tag is left after the pass above - "[tag]", "[/tag]", "[tag=attr]", or one with
+# space-separated attributes such as '[video webm="..." mp4="..."]': a tag this module does
+# not know, or a known one _INLINE_RE could not pair (e.g. unclosed). Stripped rather than
+# escaped, so a malformed post reads as its text rather than as raw markup. Valve escapes a
+# literal bracket as "\[", so bracketed prose is not expected to be caught by this.
+_UNKNOWN_TAG_RE = re.compile(r"\[/?[a-zA-Z][a-zA-Z0-9_]*(?:[= ][^\]]*)?\]")
 
 
 def _escape(text: str) -> str:
@@ -127,6 +131,10 @@ class _LineBuilder:
         depth = max(self.list_depth, 1)
         self._bullet_prefix = f"{BULLET} " if depth == 1 else f"{'  ' * (depth - 1)}{NESTED_BULLET} "
 
+    def end_bullet(self) -> None:
+        """Drop an unused bullet marker, so an empty bullet cannot mark the line after it."""
+        self._bullet_prefix = None
+
     def flush(self) -> None:
         """Emit the buffered text as one line, if there is any."""
         raw = " ".join(_IMG_RE.sub("", self._buffer).split())
@@ -178,10 +186,13 @@ def render_bbcode_to_lines(contents: str) -> List[str]:
 
         closing, name = bool(match.group(1)), match.group(2).lower()
         if name in ("list", "olist"):
+            builder.end_bullet()
             # Clamped: a stray [/list] in a malformed post must not push later lists negative.
             builder.list_depth = max(builder.list_depth - 1, 0) if closing else builder.list_depth + 1
         elif name == "*":
-            if not closing:
+            if closing:
+                builder.end_bullet()
+            else:
                 builder.start_bullet()
         elif name != "p":
             builder.in_heading = not closing
