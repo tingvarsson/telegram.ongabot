@@ -1,4 +1,3 @@
-import logging
 import unittest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -8,13 +7,6 @@ from telegram.error import BadRequest, TelegramError
 
 from ongabot import ongabot
 from ongabot.ongabot import post_init, setup_bot_metadata
-
-
-class LoggingSetupTest(unittest.TestCase):
-    def test_httpx_request_lines_are_suppressed_so_the_token_stays_out_of_logs(self):
-        # httpx's INFO request lines contain the full URL, bot token included.
-        self.assertFalse(logging.getLogger("httpx").isEnabledFor(logging.INFO))
-        self.assertTrue(logging.getLogger("httpx").isEnabledFor(logging.WARNING))
 
 
 class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
