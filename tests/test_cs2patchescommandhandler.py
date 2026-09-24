@@ -70,6 +70,35 @@ class TurnOnTest(_HandlerTestCase):
         _update, context, _client, _send = await self._run(["on"], fetched=[_item("1", "Patch", 1_000)])
         self.assertIsNone(context.bot_data.cs2_patchnotes_seen_gids)
 
+    async def test_leaves_a_patch_the_sweep_has_not_announced_yet_to_the_sweep(self) -> None:
+        # Posting it here too would give this chat the same patch twice once the sweep runs.
+        update, context = _make(["on"])
+        context.bot_data.cs2_patchnotes_seen_gids = {"1"}
+        client = MagicMock()
+        client.get_cs2_patch_notes = AsyncMock(
+            return_value=[_item("2", "Unannounced", 2_000), _item("1", "Old", 1_000)]
+        )
+        send = AsyncMock()
+        with patch(f"{MODULE}.get_steam_news_client", return_value=client), patch(
+            f"{MODULE}.send_html_with_fallback", send
+        ):
+            await callback(update, context)
+        send.assert_not_awaited()
+        self.assertTrue(context.bot_data.is_subscribed_to_cs2_patchnotes(CHAT_ID))
+        self.assertEqual(context.bot_data.cs2_patchnotes_seen_gids, {"1"})
+
+    async def test_posts_a_latest_patch_the_sweep_already_announced(self) -> None:
+        update, context = _make(["on"])
+        context.bot_data.cs2_patchnotes_seen_gids = {"1", "2"}
+        client = MagicMock()
+        client.get_cs2_patch_notes = AsyncMock(return_value=[_item("2", "Announced", 2_000), _item("1", "Old", 1_000)])
+        send = AsyncMock()
+        with patch(f"{MODULE}.get_steam_news_client", return_value=client), patch(
+            f"{MODULE}.send_html_with_fallback", send
+        ):
+            await callback(update, context)
+        self.assertIn("Announced", "".join(call.args[2] for call in send.await_args_list))
+
     async def test_steam_unreachable_still_subscribes_and_posts_nothing(self) -> None:
         update, context, _client, send = await self._run(["on"], fetched=None)
         self.assertTrue(context.bot_data.is_subscribed_to_cs2_patchnotes(CHAT_ID))

@@ -72,6 +72,19 @@ class AnnounceCs2PatchNotesTest(unittest.IsolatedAsyncioTestCase):
             await ongabot._announce_cs2_patch_notes(AsyncMock(), bot_data, [_item("1")])
         self.assertIn(202, _sent_chats(sender))
 
+    async def test_a_subscription_change_mid_broadcast_does_not_break_it(self) -> None:
+        # /cs2patches can run while the job awaits a send; the set must not change under the loop.
+        bot_data = BotData()
+        bot_data.cs2_patchnotes_subscribers = {101, 202}
+
+        async def send(_bot, _chat_id, _text):
+            bot_data.subscribe_to_cs2_patchnotes(303)
+
+        sender = AsyncMock(side_effect=send)
+        with patch("ongabot.ongabot.send_html_with_fallback", sender):
+            await ongabot._announce_cs2_patch_notes(AsyncMock(), bot_data, [_item("1")])
+        self.assertEqual(_sent_chats(sender), {101, 202})
+
 
 class Cs2PatchNotesSweepTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:

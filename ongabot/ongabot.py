@@ -336,7 +336,8 @@ def cs2_patchnotes_poll_interval() -> datetime.timedelta:
 async def _announce_cs2_patch_notes(bot: Bot, bot_data: BotData, items: List[SteamNewsItem]) -> None:
     """Send new CS2 patch notes to every subscribed chat, in the order given."""
     messages = render_patch_notes_html(items)
-    for chat_id in bot_data.cs2_patchnotes_subscribers:
+    # A snapshot: /cs2patches can change the set while this awaits a send.
+    for chat_id in list(bot_data.cs2_patchnotes_subscribers):
         try:
             for message in messages:
                 await send_html_with_fallback(bot, chat_id, message)

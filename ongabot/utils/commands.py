@@ -207,7 +207,7 @@ CS2PATCHES = CommandInfo(
     brief="/cs2patches on|off - Post CS2 patch notes in this chat as Valve releases them",
     usage=(
         "Usage: /cs2patches on|off\n"
-        "  on: post each new CS2 patch note in this chat, starting with the latest one now\n"
+        "  on: post each new CS2 patch note in this chat, starting with the latest one\n"
         "  off: stop posting CS2 patch notes in this chat"
     ),
     menu_description="Post CS2 patch notes here [on|off]",
