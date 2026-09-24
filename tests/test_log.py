@@ -1,4 +1,6 @@
 import inspect
+import io
+import logging
 import unittest
 
 from ongabot.utils import log
@@ -114,6 +116,58 @@ class LogMethodAsyncExecutionTest(unittest.IsolatedAsyncioTestCase):
         result = await MyClass().my_method()
         self.assertEqual(result, 99)
         self.assertEqual(side_effects, ["ran"])
+
+
+FAKE_TOKEN = "123456789:" + "A" * 35
+
+
+class TokenRedactionTest(unittest.TestCase):
+    def setUp(self):
+        # A private logger tree: the handler sits on the parent, records come from a child,
+        # the same shape as python-telegram-bot's loggers propagating to the root handler.
+        self.stream = io.StringIO()
+        self.handler = logging.StreamHandler(self.stream)
+        self.handler.setFormatter(logging.Formatter("%(name)s %(message)s"))
+        self.handler.addFilter(log.TokenRedactingFilter())
+        self.parent = logging.getLogger("redaction-test")
+        self.parent.addHandler(self.handler)
+        self.parent.setLevel(logging.DEBUG)
+        self.parent.propagate = False
+        self.child = logging.getLogger("redaction-test.telegram.ext.ExtBot")
+
+    def tearDown(self):
+        self.parent.removeHandler(self.handler)
+
+    def test_token_in_a_formatted_argument_is_masked(self):
+        self.child.debug("Set Bot API URL: %s", f"https://api.telegram.org/bot{FAKE_TOKEN}")
+        output = self.stream.getvalue()
+        self.assertNotIn(FAKE_TOKEN, output)
+        self.assertIn(f"https://api.telegram.org/bot{log.TOKEN_PLACEHOLDER}", output)
+
+    def test_token_in_a_traceback_is_masked(self):
+        try:
+            raise RuntimeError(f"404 for url 'https://api.telegram.org/bot{FAKE_TOKEN}/getMe'")
+        except RuntimeError:
+            self.child.exception("request failed")
+        output = self.stream.getvalue()
+        self.assertNotIn(FAKE_TOKEN, output)
+        self.assertIn("RuntimeError", output)
+
+    def test_messages_without_a_token_are_left_alone(self):
+        self.child.info("chat_id=%s joined at %s", -1001345767319, "18:30:00")
+        self.assertEqual(
+            self.stream.getvalue(), "redaction-test.telegram.ext.ExtBot chat_id=-1001345767319 joined at 18:30:00\n"
+        )
+
+    def test_install_adds_the_filter_to_every_root_handler(self):
+        root = logging.getLogger()
+        handler = logging.NullHandler()
+        root.addHandler(handler)
+        try:
+            log.redact_tokens_in_logs()
+            self.assertTrue(any(isinstance(f, log.TokenRedactingFilter) for f in handler.filters))
+        finally:
+            root.removeHandler(handler)
 
 
 if __name__ == "__main__":

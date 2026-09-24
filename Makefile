@@ -7,17 +7,15 @@ BLACK:=black
 PYTEST:=pytest
 MYPY:=mypy
 
--include .env
 DOCKER_IMAGE=tingvarsson/telegram.ongabot:latest
 VENV_PATH=venv
+# Dev bot for run/stop/docker-run: a file name in .env.d/ (e.g. ongadev2). Empty picks one automatically.
+BOT ?=
+DEVBOT = $(PYTHON) scripts/devbot.py
 
 export PYTHONPATH=$PYTHONPATH:./ongabot
 
-.PHONY: venv install run lint pep8 mypy black-check check black test clean docker-build docker-run release post-release
-
-.env:
-	@echo "Error: .env not found. Copy .env.example and fill in your values: cp .env.example .env"
-	@exit 1
+.PHONY: venv install run stop status lint pep8 mypy black-check check black test clean docker-build docker-run release post-release
 
 venv:
 	$(PYTHON) -m venv $(VENV_PATH)
@@ -27,9 +25,14 @@ install:
 	$(PIP) install -r requirements.txt
 	$(PIP) install -r requirements-dev.txt
 
-run: .env
-	set -a && . ./.env && set +a && \
-	CHANGELOG_PATH=$${CHANGELOG_PATH:-$(CURDIR)/CHANGELOG.md} $(PYTHON) ongabot/ongabot.py
+run:
+	$(DEVBOT) run $(if $(BOT),--bot $(BOT))
+
+stop:
+	$(DEVBOT) stop $(if $(BOT),--bot $(BOT))
+
+status:
+	$(DEVBOT) status
 
 lint:
 	$(PYLINT) ongabot
@@ -49,7 +52,7 @@ black:
 	$(BLACK) .
 
 test:
-	$(PYTEST) -v --cov=ongabot --cov-report=term-missing --cov-fail-under=88
+	$(PYTEST) -v --cov=ongabot --cov-report=term-missing --cov-fail-under=89
 
 clean:
 	rm -rf $(VENV_PATH)
@@ -59,9 +62,10 @@ clean:
 docker-build:
 	$(DOCKER) build . -f Dockerfile -t $(DOCKER_IMAGE)
 
-docker-run: .env
+docker-run:
 	touch ongabot.db
-	$(DOCKER) run --rm --env-file .env -v $(CURDIR)/ongabot.db:/ongabot/ongabot.db -it $(DOCKER_IMAGE)
+	ENV_FILE=$$($(DEVBOT) env-file $(if $(BOT),--bot $(BOT))) && \
+	$(DOCKER) run --rm --env-file "$$ENV_FILE" -v $(CURDIR)/ongabot.db:/ongabot/ongabot.db -it $(DOCKER_IMAGE)
 
 release: check test
 	bump-my-version bump $(PART) && \
