@@ -65,6 +65,9 @@ logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
+# httpx logs every request at INFO as "HTTP Request: POST https://api.telegram.org/bot<TOKEN>/...",
+# which would put the bot token in every log line. Its warnings and errors still come through.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 

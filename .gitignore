@@ -83,6 +83,9 @@ celerybeat-schedule
 
 # Environments
 .env
+# Per-bot dev env files (.env.ongadev1, .env.ongadev2) hold tokens too; only the template is tracked.
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -109,3 +112,5 @@ venv.bak/
 
 # ongabot specific
 ongabot.db
+# Database snapshots, e.g. a prod backup copied in to seed dev databases
+ongabot.db.*

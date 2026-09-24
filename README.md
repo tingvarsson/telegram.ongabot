@@ -6,12 +6,16 @@ Built on [python-telegram-bot](https://github.com/python-telegram-bot/python-tel
 
 ## Setup
 
-Copy `.env.example` to `.env` and fill in your Telegram bot token to avoid having to provide env var on the command line:
+Local runs use one of two dev bots, each with its own env file in the main checkout:
+`.env.ongadev1` and `.env.ongadev2`. Create them from the template, each with that bot's token:
 
 ```bash
-cp .env.example .env
-# edit .env and set API_TOKEN=your_token
+cp .env.example .env.ongadev1
+cp .env.example .env.ongadev2
+# edit each file and set API_TOKEN to that bot's token
 ```
+
+Give each bot its own test group, so their commands and scheduled posts don't mix.
 
 ### Local Python environment
 
@@ -23,6 +27,18 @@ source venv/bin/activate
 make install
 make run
 ```
+
+`make run` works from the main checkout and from any git worktree. It picks a dev bot and
+prints which one it started (`ongadev1 → <branch>`):
+
+- Re-running it restarts the bot this checkout used last, so it stays in the same test group.
+- Otherwise it takes the first free bot. Two branches can be tested side by side.
+- If both bots are in use by other checkouts, it fails and says which branches hold them.
+- `make run BOT=ongadev2` picks a bot explicitly and stops whatever is running on it.
+- `make status` shows which branch each bot is running, and `make stop` stops this checkout's bot.
+
+A worktree gets its own `ongabot.db`, seeded from the newest `ongabot.db*` in the main
+checkout, so a branch never modifies the main dev database.
 
 ### Docker
 
