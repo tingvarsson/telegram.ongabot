@@ -9,8 +9,9 @@ from telegram.ext import CallbackContext, CommandHandler
 
 from _version import __version__
 from utils.changelog import get_changelog
-from utils.changelogformat import CHANGELOG_HEADING, render_changelog_html, to_plain_text
+from utils.changelogformat import CHANGELOG_HEADING, render_changelog_html
 from utils.commands import CHANGELOG
+from utils.htmlblocks import to_plain_text
 from utils.log import log
 
 _logger = logging.getLogger(__name__)

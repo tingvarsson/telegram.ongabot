@@ -48,9 +48,10 @@ from quips import refresh_quip_pool
 from userdata import UserData
 from utils import log
 from utils.changelog import get_changelog_delta, is_dev_version
-from utils.changelogformat import render_changelog_html, to_plain_text
+from utils.changelogformat import render_changelog_html
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
 from utils.helper import parse_time
+from utils.htmlblocks import send_html_with_fallback
 from utils.points import render_event_recap_message
 from youtube import client as youtube_client
 from youtube.selection import pick_short
@@ -75,10 +76,6 @@ CS2_SWEEP_SETTLE = datetime.timedelta(minutes=90)
 # Measured from the event's start time, so a sweep started at 18:30 gives up at 08:30. Long
 # enough to cover a late night plus slow demo processing; a job never lives forever.
 CS2_SWEEP_GIVE_UP = datetime.timedelta(hours=14)
-
-# The changelog is full of GitHub compare links; a preview per message is exactly the noise
-# collapsing the announcement body is meant to remove.
-_NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
 def cs2_sweep_job_name(chat_id: int, event_date: datetime.date) -> str:
@@ -507,17 +504,6 @@ async def setup_bot_metadata(bot: Bot) -> None:
         logger.error("Failed to set bot short description: %s", e)
 
 
-async def _send_announcement_message(bot: Bot, chat_id: int, text: str) -> None:
-    """Send one announcement message, falling back to plain text if Telegram rejects the HTML."""
-    try:
-        await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, link_preview_options=_NO_PREVIEW)
-    except BadRequest as e:
-        # A malformed entity fails the whole message. This one is pushed unprompted on
-        # upgrade, so an unformatted announcement beats a silently missing one.
-        logger.warning("Version announcement rejected as HTML (%s); resending as plain text", e)
-        await bot.send_message(chat_id=chat_id, text=to_plain_text(text), link_preview_options=_NO_PREVIEW)
-
-
 async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, new_version: str) -> None:
     """Send a version-change announcement to all authorized chats.
 
@@ -533,7 +519,7 @@ async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, n
     for chat_id in bot_data.authorized_chats:
         try:
             for message in messages:
-                await _send_announcement_message(bot, chat_id, message)
+                await send_html_with_fallback(bot, chat_id, message)
             logger.info("Sent version announcement to chat_id=%s (%d message(s))", chat_id, len(messages))
         except TelegramError as e:
             logger.error("Failed to send version announcement to chat_id=%s: %s", chat_id, e)

@@ -1,7 +1,9 @@
 """Render CHANGELOG.md sections into the Telegram HTML ONGAbot posts.
 
 Keeps utils.changelog as the pure source-slicing module; this one is purely presentation.
-Like that module, it imports nothing outside the standard library.
+The "header + expandable blockquote + split without cutting a tag in half" mechanics are
+generic, not changelog-specific, and live in utils.htmlblocks - this module builds on that
+rather than duplicating it.
 """
 
 import html
@@ -10,6 +12,7 @@ import re
 from typing import Dict, List, Tuple
 
 from utils.changelog import MAX_MESSAGE_CHARS
+from utils.htmlblocks import pack_sections
 
 _logger = logging.getLogger(__name__)
 
@@ -48,18 +51,6 @@ INDENT = "  "
 # release, italic for "Added"/"Fixed" inside the quote.
 CHANGELOG_HEADING = "<b><u>Changelog</u></b>"
 
-# Telegram collapses an expandable blockquote to a few preview lines. Below this many lines
-# there is nothing worth hiding, and the expand affordance would itself be noise.
-EXPANDABLE_MIN_LINES = 4
-
-_BLOCKQUOTE_CLOSE = "</blockquote>"
-
-# Longest named/numeric entity html.escape can emit ("&quot;"), plus room to spare.
-_MAX_ENTITY_LEN = 10
-
-_TAG_NAME_RE = re.compile(r"</?(\w+)")
-_TAG_RE = re.compile(r"<[^>]+>")
-
 
 def _escape(text: str) -> str:
     """Escape text content for Telegram HTML.
@@ -69,16 +60,6 @@ def _escape(text: str) -> str:
     characters where one will do, and a changelog is full of them.
     """
     return html.escape(text, quote=False)
-
-
-def to_plain_text(message: str) -> str:
-    """Strip the HTML back out of a rendered message.
-
-    Telegram rejects a whole message if any entity is malformed, so a send site that gets a
-    BadRequest resends this instead: the reader still gets the content, just without the
-    formatting. Better an ugly changelog than none.
-    """
-    return html.unescape(_TAG_RE.sub("", message))
 
 
 def _render_inline(text: str, link_defs: Dict[str, str]) -> str:
@@ -233,7 +214,7 @@ def render_changelog_html(raw: str, headline: str | None = None) -> List[str]:
         if body:
             rendered.append((_render_header(version, date), body))
 
-    messages = _pack(rendered)
+    messages = pack_sections(rendered)
     if headline:
         # A full first message pushes the headline into one of its own rather than over
         # Telegram's limit. An empty changelog still gets the headline: silence reads as a bug.
@@ -243,135 +224,4 @@ def render_changelog_html(raw: str, headline: str | None = None) -> List[str]:
             messages.insert(0, headline)
 
     _logger.debug("Rendered %d changelog section(s) into %d message(s)", len(rendered), len(messages))
-    return messages
-
-
-def _open_tag(body: List[str]) -> str:
-    """The blockquote opening tag for a body, expandable only when long enough to matter."""
-    return "<blockquote expandable>" if len(body) >= EXPANDABLE_MIN_LINES else "<blockquote>"
-
-
-def _next_token(line: str, start: int) -> Tuple[str, int]:
-    """Return the next indivisible unit of a rendered line: a tag, an entity, or a character.
-
-    Splitting anywhere else would cut "<code>" or "&amp;" in half and Telegram would reject
-    the whole message.
-    """
-    if line[start] == "<":
-        stop = line.find(">", start) + 1
-        if stop > 0:
-            return line[start:stop], stop
-    elif line[start] == "&":
-        stop = line.find(";", start) + 1
-        if 0 < stop - start <= _MAX_ENTITY_LEN:
-            return line[start:stop], stop
-    return line[start], start + 1
-
-
-def _closing_tags(stack: List[str]) -> str:
-    """Closing tags for every currently open tag, innermost first."""
-    names = [match.group(1) for match in (_TAG_NAME_RE.match(tag) for tag in reversed(stack)) if match]
-    return "".join(f"</{name}>" for name in names)
-
-
-def _split_long_line(line: str, budget: int) -> List[str]:
-    """Cut one rendered line that cannot fit a message, keeping every tag balanced.
-
-    Only reachable from a pathological changelog entry - a single bullet over ~4000
-    characters - but the alternative is Telegram rejecting the message outright.
-    """
-    pieces: List[str] = []
-    stack: List[str] = []  # open tags, innermost last
-    current = ""
-    index = 0
-    while index < len(line):
-        token, index = _next_token(line, index)
-        closing = _closing_tags(stack)
-        reopen = "".join(stack)
-        # The second clause guarantees progress: never flush a piece that is only reopened
-        # tags, or a budget smaller than those tags would loop forever.
-        if len(current) + len(token) + len(closing) > budget and len(current) > len(reopen):
-            pieces.append(current + closing)
-            current = reopen
-        current += token
-        if token.startswith("</"):
-            if stack:
-                stack.pop()
-        elif token.startswith("<"):
-            stack.append(token)
-
-    if current:
-        pieces.append(current + _closing_tags(stack))
-    _logger.warning("Hard-split an oversized changelog line into %d pieces", len(pieces))
-    return pieces
-
-
-def _fit_lines(body: List[str], budget: int) -> List[str]:
-    """Body lines, with any line too long for a message of its own split up first."""
-    fitted: List[str] = []
-    for line in body:
-        fitted.extend([line] if len(line) <= budget else _split_long_line(line, budget))
-    return fitted
-
-
-def _split_section(header: str, tag: str, lines: List[str], limit: int) -> List[str]:
-    """Spread one release that cannot fit a single message across several.
-
-    Each message closes the blockquote and the next reopens it, so no tag spans two
-    messages. Only the first carries the release header; the rest continue it.
-    """
-    messages: List[str] = []
-    buffer = header + "\n" + tag + lines[0]
-    has_body = True  # whether the open blockquote has a body line yet
-
-    for line in lines[1:]:
-        separator = "\n" if has_body else ""
-        if len(buffer + separator + line + _BLOCKQUOTE_CLOSE) > limit:
-            messages.append(buffer + _BLOCKQUOTE_CLOSE)
-            buffer, separator, has_body = tag, "", False
-            if not line:
-                # A category separator that lands on a message boundary is redundant:
-                # the break already separates the two categories.
-                continue
-        buffer += separator + line
-        has_body = has_body or bool(line)
-
-    messages.append(buffer + _BLOCKQUOTE_CLOSE)
-    _logger.info("Release %s needed %d messages on its own", header, len(messages))
-    return messages
-
-
-def _pack(sections: List[Tuple[str, List[str]]], limit: int = MAX_MESSAGE_CHARS) -> List[str]:
-    """Lay rendered sections out into messages that each fit Telegram's limit.
-
-    The release is the unit: a message break falls between releases, and one is only cut in
-    half when it cannot fit a message even on its own. Reading a release split across two
-    messages is worse than reading one message that holds fewer of them.
-    """
-    messages: List[str] = []
-    buffer = ""  # complete, already-sealed releases waiting to be sent together
-
-    for header, body in sections:
-        tag = _open_tag(body)
-        # The header shares a message with the first body line, so it comes out of the budget
-        # too. Charging every line for it costs a few characters and keeps the bound obvious.
-        lines = _fit_lines(body, limit - len(tag) - len(_BLOCKQUOTE_CLOSE) - len(header) - 1)
-        whole = header + "\n" + tag + "\n".join(lines) + _BLOCKQUOTE_CLOSE
-
-        if len(whole) > limit:
-            # Too big to keep intact: flush what is buffered so it starts on a clean message.
-            if buffer:
-                messages.append(buffer)
-                buffer = ""
-            messages.extend(_split_section(header, tag, lines, limit))
-            continue
-
-        if buffer and len(buffer) + 2 + len(whole) > limit:
-            messages.append(buffer)
-            buffer = ""
-        buffer = whole if not buffer else buffer + "\n\n" + whole
-
-    if buffer:
-        messages.append(buffer)
-    _logger.debug("Packed %d changelog section(s) into %d message(s)", len(sections), len(messages))
     return messages

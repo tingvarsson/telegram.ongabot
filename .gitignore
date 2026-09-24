@@ -109,3 +109,6 @@ venv.bak/
 
 # ongabot specific
 ongabot.db
+
+# Claude Code scratch workspace (task ledgers, briefs, review packages)
+.superpowers/
