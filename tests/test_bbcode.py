@@ -147,6 +147,9 @@ class UnknownAndMalformedTagTest(unittest.TestCase):
     def test_unknown_tag_with_attribute_is_stripped(self) -> None:
         self.assertEqual(render_bbcode_to_lines("[color=red]warning[/color]"), ["warning"])
 
+    def test_a_line_of_only_unknown_tags_leaves_no_blank_line(self) -> None:
+        self.assertEqual(render_bbcode_to_lines("[p]One[/p][hr][/hr][p]Two[/p]"), ["One", "Two"])
+
     def test_unclosed_tag_does_not_raise_and_keeps_text(self) -> None:
         self.assertEqual(render_bbcode_to_lines("[b]unclosed bold"), ["unclosed bold"])
 
