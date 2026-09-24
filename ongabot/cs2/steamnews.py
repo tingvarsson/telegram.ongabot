@@ -101,7 +101,7 @@ class SteamNewsClient:
         url = f"{self._base_url}{path}"
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
-                response = await self._http().get(url, params=params, timeout=TIMEOUT_SECONDS)
+                response = await self._http().get(url, params=params)
             except httpx.HTTPError as e:
                 _logger.warning("Steam news request failed (attempt %d): %s", attempt, e)
                 continue

@@ -21,7 +21,11 @@ FULL_NOTES_LABEL = "Full notes on Steam"
 
 
 def _render_header(item: SteamNewsItem) -> str:
-    """The one line that stays visible when the body is collapsed."""
+    """The one line that stays visible when the body is collapsed.
+
+    The date is in the server's local time, like event dates and the Shorts window: the bot
+    runs in the group's timezone, so a late-evening patch shows the date the group saw it.
+    """
     posted = datetime.date.fromtimestamp(item.date).isoformat()
     return f"<b>{html.escape(item.title, quote=False)}</b> · <i>{posted}</i>"
 

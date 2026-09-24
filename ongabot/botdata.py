@@ -92,8 +92,11 @@ class BotData:
 
     @log.method
     def deauthorize_chat(self, chat_id: int) -> None:
-        """Remove a chat from the set of authorized chats"""
+        """Remove a chat from the set of authorized chats, and from everything it opted in to"""
         self.authorized_chats.discard(chat_id)
+        # A deauthorized chat cannot run /cs2patches off any more, so it must not keep getting
+        # patch notes; re-authorizing it needs /cs2patches on again.
+        self.unsubscribe_from_cs2_patchnotes(chat_id)
         _logger.info("Deauthorized chat_id=%s", chat_id)
 
     @log.method

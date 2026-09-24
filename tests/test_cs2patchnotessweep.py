@@ -4,7 +4,7 @@ import unittest
 from typing import List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram.error import TelegramError
+from telegram.error import ChatMigrated, Forbidden, TelegramError
 
 from ongabot import ongabot
 from ongabot.botdata import BotData
@@ -51,39 +51,44 @@ class PollIntervalTest(unittest.TestCase):
 
 
 class AnnounceCs2PatchNotesTest(unittest.IsolatedAsyncioTestCase):
-    async def test_sends_to_every_subscriber(self) -> None:
-        bot_data = BotData()
-        bot_data.cs2_patchnotes_subscribers = {101, 202}
-        send = AsyncMock()
-        with patch("ongabot.ongabot.send_html_with_fallback", send):
-            await ongabot._announce_cs2_patch_notes(AsyncMock(), bot_data, [_item("1")])
-        self.assertEqual(_sent_chats(send), {101, 202})
+    def setUp(self) -> None:
+        self.bot_data = BotData()
+        self.bot_data.cs2_patchnotes_subscribers = {101, 202}
 
-    async def test_one_failing_chat_does_not_stop_the_others(self) -> None:
-        bot_data = BotData()
-        bot_data.cs2_patchnotes_subscribers = {101, 202}
+    async def _announce(self, send) -> AsyncMock:
+        sender = AsyncMock(side_effect=send)
+        with patch("ongabot.ongabot.send_html_with_fallback", sender):
+            await ongabot._announce_cs2_patch_notes(AsyncMock(), self.bot_data, [_item("1")], [101, 202])
+        return sender
 
+    async def test_sends_to_every_recipient(self) -> None:
+        sender = await self._announce(None)
+        self.assertEqual(_sent_chats(sender), {101, 202})
+
+    async def test_one_failing_chat_does_not_stop_the_others_and_stays_subscribed(self) -> None:
         async def send(_bot, chat_id, _text):
             if chat_id == 101:
-                raise TelegramError("bot was kicked")
+                raise TelegramError("timed out")
 
-        sender = AsyncMock(side_effect=send)
-        with patch("ongabot.ongabot.send_html_with_fallback", sender):
-            await ongabot._announce_cs2_patch_notes(AsyncMock(), bot_data, [_item("1")])
+        sender = await self._announce(send)
         self.assertIn(202, _sent_chats(sender))
+        self.assertTrue(self.bot_data.is_subscribed_to_cs2_patchnotes(101))
 
-    async def test_a_subscription_change_mid_broadcast_does_not_break_it(self) -> None:
-        # /cs2patches can run while the job awaits a send; the set must not change under the loop.
-        bot_data = BotData()
-        bot_data.cs2_patchnotes_subscribers = {101, 202}
+    async def test_a_chat_that_blocked_or_removed_the_bot_is_unsubscribed(self) -> None:
+        async def send(_bot, chat_id, _text):
+            if chat_id == 101:
+                raise Forbidden("bot was kicked from the group chat")
 
-        async def send(_bot, _chat_id, _text):
-            bot_data.subscribe_to_cs2_patchnotes(303)
+        await self._announce(send)
+        self.assertEqual(self.bot_data.cs2_patchnotes_subscribers, {202})
 
-        sender = AsyncMock(side_effect=send)
-        with patch("ongabot.ongabot.send_html_with_fallback", sender):
-            await ongabot._announce_cs2_patch_notes(AsyncMock(), bot_data, [_item("1")])
-        self.assertEqual(_sent_chats(sender), {101, 202})
+    async def test_a_chat_that_migrated_is_unsubscribed(self) -> None:
+        async def send(_bot, chat_id, _text):
+            if chat_id == 101:
+                raise ChatMigrated(-100999)
+
+        await self._announce(send)
+        self.assertEqual(self.bot_data.cs2_patchnotes_subscribers, {202})
 
 
 class Cs2PatchNotesSweepTest(unittest.IsolatedAsyncioTestCase):
@@ -91,18 +96,38 @@ class Cs2PatchNotesSweepTest(unittest.IsolatedAsyncioTestCase):
         self.bot_data = BotData()
         self.bot_data.cs2_patchnotes_subscribers = {101}
 
-    async def _sweep(self, fetched: Optional[List[SteamNewsItem]]) -> AsyncMock:
+    async def _sweep(self, fetched: Optional[List[SteamNewsItem]], send_side_effect=None) -> AsyncMock:
         context = MagicMock()
         context.bot = AsyncMock()
         context.bot_data = self.bot_data
         client = MagicMock()
         client.get_cs2_patch_notes = AsyncMock(return_value=fetched)
-        send = AsyncMock()
+        send = AsyncMock(side_effect=send_side_effect)
         with patch("ongabot.ongabot.get_steam_news_client", return_value=client), patch(
             "ongabot.ongabot.send_html_with_fallback", send
         ):
             await ongabot.cs2_patchnotes_sweep_callback(context)
         return send
+
+    async def test_new_patches_are_marked_seen_before_the_first_send(self) -> None:
+        # /cs2patches on decides from `seen` whether this broadcast will reach it; see the handler.
+        self.bot_data.cs2_patchnotes_seen_gids = {"a"}
+        seen_during_send: List[bool] = []
+
+        async def send(_bot, _chat_id, _text):
+            seen_during_send.append("b" in self.bot_data.cs2_patchnotes_seen_gids)
+
+        await self._sweep([_item("b", date=2), _item("a", date=1)], send)
+        self.assertEqual(seen_during_send, [True])
+
+    async def test_a_chat_subscribing_mid_broadcast_is_left_to_its_own_command(self) -> None:
+        self.bot_data.cs2_patchnotes_seen_gids = {"a"}
+
+        async def send(_bot, _chat_id, _text):
+            self.bot_data.subscribe_to_cs2_patchnotes(303)
+
+        send_mock = await self._sweep([_item("b", date=2), _item("a", date=1)], send)
+        self.assertEqual(_sent_chats(send_mock), {101})
 
     async def test_first_fetch_records_the_feed_without_announcing(self) -> None:
         send = await self._sweep([_item("b", date=2), _item("a", date=1)])

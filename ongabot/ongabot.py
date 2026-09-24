@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Tuple, cast
 from telegram import Bot, BotCommand, LinkPreviewOptions, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, ContextTypes, JobQueue, PicklePersistence
-from telegram.error import BadRequest, TelegramError
+from telegram.error import BadRequest, ChatMigrated, Forbidden, TelegramError
 
 import eventcreator
 from _version import __version__ as CURRENT_VERSION
@@ -333,15 +333,23 @@ def cs2_patchnotes_poll_interval() -> datetime.timedelta:
     return datetime.timedelta(minutes=minutes)
 
 
-async def _announce_cs2_patch_notes(bot: Bot, bot_data: BotData, items: List[SteamNewsItem]) -> None:
-    """Send new CS2 patch notes to every subscribed chat, in the order given."""
+async def _announce_cs2_patch_notes(
+    bot: Bot, bot_data: BotData, items: List[SteamNewsItem], chat_ids: List[int]
+) -> None:
+    """Send CS2 patch notes, in the order given, to each of chat_ids.
+
+    A chat the bot can no longer post to - removed, blocked, or migrated to a supergroup under
+    a new id - is unsubscribed rather than failing on every patch from now on.
+    """
     messages = render_patch_notes_html(items)
-    # A snapshot: /cs2patches can change the set while this awaits a send.
-    for chat_id in list(bot_data.cs2_patchnotes_subscribers):
+    for chat_id in chat_ids:
         try:
             for message in messages:
                 await send_html_with_fallback(bot, chat_id, message)
             logger.info("Sent %d CS2 patch note(s) to chat_id=%s (%d message(s))", len(items), chat_id, len(messages))
+        except (Forbidden, ChatMigrated) as e:
+            logger.warning("Unsubscribing chat_id=%s from CS2 patch notes, bot can no longer post: %s", chat_id, e)
+            bot_data.unsubscribe_from_cs2_patchnotes(chat_id)
         except TelegramError as e:
             logger.error("Failed to send CS2 patch notes to chat_id=%s: %s", chat_id, e)
 
@@ -376,9 +384,14 @@ async def cs2_patchnotes_sweep_callback(context: CallbackContext) -> None:
         return
 
     logger.info("Found %d new CS2 patch note(s): %s", len(new_items), [item.gid for item in new_items])
-    if bot_data.cs2_patchnotes_subscribers:
-        await _announce_cs2_patch_notes(context.bot, bot_data, new_items)
+    # Marking the patches seen and fixing who receives them happen together, with no await in
+    # between, so /cs2patches on can tell from `seen` alone whether this broadcast includes its
+    # chat: a chat that subscribes after this point is not in `recipients`, and finds the
+    # patch already in `seen` - which is how its own command knows to post it.
     seen.update(item.gid for item in new_items)
+    recipients = list(bot_data.cs2_patchnotes_subscribers)
+    if recipients:
+        await _announce_cs2_patch_notes(context.bot, bot_data, new_items, recipients)
 
 
 async def _publish_cs2_results(context: CallbackContext, event: Event, text: str) -> int:

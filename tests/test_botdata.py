@@ -64,6 +64,14 @@ class BotDataCs2PatchnotesSubscriptionTest(unittest.TestCase):
         bd.subscribe_to_cs2_patchnotes(101)
         self.assertEqual(bd.cs2_patchnotes_subscribers, {101})
 
+    def test_deauthorizing_a_chat_unsubscribes_it(self):
+        # A deauthorized chat can no longer run /cs2patches off, so it must stop getting posts.
+        bd = BotData()
+        bd.authorize_chat(101)
+        bd.subscribe_to_cs2_patchnotes(101)
+        bd.deauthorize_chat(101)
+        self.assertFalse(bd.is_subscribed_to_cs2_patchnotes(101))
+
     def test_unsubscribing_a_chat_that_never_subscribed_is_a_no_op(self):
         bd = BotData()
         bd.unsubscribe_from_cs2_patchnotes(101)
