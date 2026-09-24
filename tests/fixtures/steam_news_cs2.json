@@ -1,0 +1,102 @@
+{
+  "appnews": {
+    "appid": 730,
+    "newsitems": [
+      {
+        "gid": "1844751498219795",
+        "title": "Counter-Strike 2 Update",
+        "url": "https://steamstore-a.akamaihd.net/news/externalpost/steam_community_announcements/1844751498219795",
+        "is_external_url": true,
+        "author": "jo",
+        "contents": "[p]\\[ RUSH ][/p][list][*][p]Increased the maximum countdown-after-elimination time from 7 seconds to 14 seconds on end rooms and Convoy.[/p][/*][*][p]The countdown-after-elimination time does not activate in cases where an entire team dies to suicides, team kills, and/or disconnects.[/p][/*][*][p]Warmup time once all players have connected, freeze time, and technical timeout time are all reduced.[/p][/*][*][p]Various gap fixes and clipping adjustments.[/p][/*][/list][p][/p][p]\\[ CROSSHAIR ][/p][list][*][p]Some additional information about the new crosshair system:[/p][list][*][p]The new crosshair thickness and length units are in pixels. In the past, the values were defined with an arbitrary scale and converted to pixels based on display resolution so the same value would result in different pixel counts at different resolutions. With the new settings, if you want a 1-pixel wide crosshair with a bar length of 8 pixels and a gap of 4 pixels, then you would set: thickness = 1, length = 8, and gap = 4. [/p][/*][*][p]Please be aware that the new crosshair system automatically rescales pixel counts when the display resolution changes. For example, if a crosshair was configured at display resolution 1280x720 with a thickness of 2 pixels and then the display resolution changes to 2560x1440, it will now automatically rescale the thickness to 4 pixels so that it remains proportionally the same as when it was configured.[/p][/*][/list][/*][/list][list][*][p]Added option to draw half-outlines. This will only draw the top-left portions of the outline for a crosshair.[/p][/*][*][p]Fixed a bug preventing 0 gap width from being respected.[/p][/*][*][p]Added a static square crosshair style[/p][/*][*][p]Reduced the minimum dynamic spread distance to 64 pixels. The new dynamic crosshair styles will show you the real weapon spread and inaccuracy and the 'Dynamic Spread Limit' setting is a limit on how far the crosshair will spread at maximum inaccuracy and spread. There is a baseline spread distance of 64 pixels which covers the weapons with the largest spread so that players can better understand how accurate they actually are with their equipped weapon.[/p][/*][/list][p][/p][p]\\[ MISC ][/p][list][*][p]Fixed a case where left-handed viewmodels would animate incorrectly while silent reloading.[/p][/*][*][p]Fixed a case where thirdperson player models would animate too fast while silent reloading.[/p][/*][*][p]Fixed a case where firstperson Dual Berettas would animate incorrectly while reloading.[/p][/*][*][p]Clan tags now appear in death notices.[/p][/*][/list]",
+        "feedlabel": "Community Announcements",
+        "date": 1790204844,
+        "feedname": "steam_community_announcements",
+        "feed_type": 1,
+        "appid": 730,
+        "tags": [
+          "patchnotes"
+        ]
+      },
+      {
+        "gid": "1844751498218029",
+        "title": "Counter-Strike 2 adds an intense fast-paced 3v3 'Rush' game mode",
+        "url": "https://steamstore-a.akamaihd.net/news/externalpost/GamingOnLinux/1844751498218029",
+        "is_external_url": true,
+        "author": "",
+        "contents": "This new Rush mode might be my favourite way to play Counter-Strike 2, giving you a faster-paced experience with shorter matches.<p><img src=\"https://www.gamingonlinux.com/uploads/articles/tagline_images/558215747id29826gol.webp\" alt /></p><p>Read the full article here: https://www.gamingonlinux.com/2026/09/counter-strike-2-adds-an-intense-fast-paced-3v3-rush-game-mode/</p>",
+        "feedlabel": "GamingOnLinux",
+        "date": 1790159109,
+        "feedname": "GamingOnLinux",
+        "feed_type": 0,
+        "appid": 730
+      },
+      {
+        "gid": "1844751498216926",
+        "title": "Rush Hour",
+        "url": "https://steamstore-a.akamaihd.net/news/externalpost/steam_community_announcements/1844751498216926",
+        "is_external_url": true,
+        "author": "brianlev",
+        "contents": "[video webm=\"https://clan.fastly.steamstatic.com/images/3381077/7aba6949917c9a837b3ef43fff369ea019bea6b6.webm\" mp4=\"https://clan.fastly.steamstatic.com/images/3381077/c3484d6cdc68181fdc58a543cc746baea975c2de.mp4\" poster=\"https://clan.fastly.steamstatic.com/images/3381077/f020505dfd64884805558c64ec15691154469e0a.png\" autoplay=\"true\" controls=\"false\"][/video]\nPut your foot on the gas and floor it. Welcome to Rush, a new fast-paced 3v3 queued mode for CS2. Experience the push and pull as you advance through a gauntlet of randomly-selected battle arenas, and dominate your opponent to win the match!\n\nMake the most of your limited budget and precious time to clear the objective. Control the tower when you eliminate the enemy team (or time expires) to win the round.\n\n[img]https://clan.fastly.steamstatic.com/images/3381077/4ccfe4f44119ac6ddd5cd39d24c907dd11f4c70a.png[/img]\nRun the gauntlet of battle arenas to capture the enemy castle and win the match. The battle arenas are randomly selected each time you play, so no two matches are the same.\n\nKeep track of your wins and compete for bragging rights with the Rush friends leaderboard!\n\n[h3]Pick, Pick Pick, Pick[/h3]\n[video webm=\"https://clan.fastly.steamstatic.com/images/3381077/332c9f95f6e825649d2db55d15bff8a7d7c7b82a.webm\" mp4=\"https://clan.fastly.steamstatic.com/images/3381077/a26282d4460f972b036a9873a3f1ed5a98fe989a.mp4\" poster=\"https://clan.fastly.steamstatic.com/images/3381077/ab74e99b6fa25b35a355bc110a65e81906b3b22f.png\" autoplay=\"true\" controls=\"false\"][/video]\nWe think that if you spend a lot of time developing strategies on a map, you should have a chance to benefit from that investment. So today we're changing the process for getting into a map in Premier--instead of banning down to a single map, teams will vote to pick two maps each. After all four maps are picked, a single map will be randomly selected and the match will begin.\n\n[h3]Change You Can See[/h3]\n[video webm=\"https://clan.fastly.steamstatic.com/images/3381077/5341ed2d42a633c39e6aedb7342f26f3db78a418.webm\" mp4=\"https://clan.fastly.steamstatic.com/images/3381077/6f5bc36b20be7f069115b6bb1ea22e75ed4734e4.mp4\" poster=\"https://clan.fastly.steamstatic.com/images/3381077/924591876f9ac3a56b658770ca6945b6fa9096c7.png\" autoplay=\"true\" controls=\"false\"][/video]\nToday's update also includes several quality of life improvements, starting with blood and bullet impact visiblity. Blood is now much more bloody, and bullet impacts are far more impacty.\n\n[img]https://clan.fastly.steamstatic.com/images/3381077/22559f46380abfdad669fbbebfb02f50149fb1a2.png[/img]\nBut wait, there's more! Crosshairs have gotten a significant upgrade with new shapes and other features, so check out the new Crosshair/Scopes settings and create the custom crosshair of your dreams. Also, Clan Tags are back! Select one of your Steam Groups in your player profile and you'll see your clan tag appear next to your name wherever you play.\n\n[h3]Change You Can't See (or Hear)[/h3]\nThere are some gameplay adjustments in today's update to add a bit of stealth to your game-time decisions. Reloading can now be performed silently (by holding the reload key), but with a cost--silent reloads take quite a bit longer. And for those of you who love scoping your scoped weapons, you'll now be perfectly silent when you unscope, as nature intended.\n\n[h3]Starjunk 95[/h3]\n[img]https://clan.fastly.steamstatic.com/images/3381077/602718694f8ef8a7d4adce9f2db208286af6b37f.png[/img]\nThere's a new Music Kit in town, featuring the sounds of Starjunk 95. Experience music from the grooviest station in the galaxy, available now!",
+        "feedlabel": "Community Announcements",
+        "date": 1790120317,
+        "feedname": "steam_community_announcements",
+        "feed_type": 1,
+        "appid": 730
+      },
+      {
+        "gid": "1840944183775194",
+        "title": "Counter-Strike 2 Update",
+        "url": "https://steamstore-a.akamaihd.net/news/externalpost/steam_community_announcements/1840944183775194",
+        "is_external_url": true,
+        "author": "tomd",
+        "contents": "[p]\\[ MAPS ][/p][p]Fachwerk[/p][list][*][p]Updated to the latest version from the Community Workshop ([url=\"https://steamcommunity.com/sharedfiles/filedetails/changelog/3442040035\"]Update Notes[/url])[/p][/*][/list][p]Shelter[/p][list][*][p]Updated to the latest version from the Community Workshop ([url=\"https://steamcommunity.com/sharedfiles/filedetails/changelog/3737179295\"]Update Notes[/url])[/p][/*][/list]",
+        "feedlabel": "Community Announcements",
+        "date": 1786575047,
+        "feedname": "steam_community_announcements",
+        "feed_type": 1,
+        "appid": 730,
+        "tags": [
+          "patchnotes"
+        ]
+      },
+      {
+        "gid": "1838407329258098",
+        "title": "Call II Arms-ory",
+        "url": "https://steamstore-a.akamaihd.net/news/externalpost/steam_community_announcements/1838407329258098",
+        "is_external_url": true,
+        "author": "COMPLEX",
+        "contents": "Last week we released new weapon and sticker collections from our previous [url=https://store.steampowered.com/news/app/730/view/500591777095353663]Call to Arms-ory[/url]. Congratulations to the artists who had their items included!\n\nNow that these items are available, we're looking for new items for one new weapon collection:\n    \n - Fairy Tales\n    \nAnd two new sticker collections:\n\n- Cryptids\n- Pop Art\n\nTo submit weapon finishes and stickers to this Call to Arms, select the appropriate option using the Counter-Strike 2 Workshop Tool:\n\n[img]https://clan.fastly.steamstatic.com/images/3381077/a81bfcc2c8c1dccad0505d7aced8c7091a808283.png[/img]\nIn order to have your items included in these new collections, you must agree to [url=https://steamcommunity.com/workshop/workshoplegalagreement/?appid=730&snr=1_2108_9__2107]Counter-Strike 2's Supplemental terms[/url].\n\nWe're excited to see your take on the categories above!",
+        "feedlabel": "Community Announcements",
+        "date": 1784245194,
+        "feedname": "steam_community_announcements",
+        "feed_type": 1,
+        "appid": 730,
+        "tags": [
+          "hide_store",
+          "hide_library_overview",
+          "patchnotes",
+          "workshop",
+          "hide_library_detail"
+        ]
+      },
+      {
+        "gid": "1833334318567523",
+        "title": "Counter-Strike 2 Update",
+        "url": "https://steamstore-a.akamaihd.net/news/externalpost/steam_community_announcements/1833334318567523",
+        "is_external_url": true,
+        "author": "Vitaliy",
+        "contents": "[p]\\[ MAPS ][/p][p]Cache[/p][list][*][p]Adjusted player and grenade collision.[/p][/*][*][p]Adjusted material blending to improve accuracy of footstep sounds.[/p][/*][*][p]Fixed several gaps reported by players.[/p][/*][/list][p]Ancient[/p][list][*][p]Fixed a gap in the wall.[/p][/*][/list]",
+        "feedlabel": "Community Announcements",
+        "date": 1779318374,
+        "feedname": "steam_community_announcements",
+        "feed_type": 1,
+        "appid": 730,
+        "tags": [
+          "patchnotes"
+        ]
+      }
+    ],
+    "count": 6
+  }
+}

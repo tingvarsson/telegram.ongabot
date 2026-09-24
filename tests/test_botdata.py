@@ -31,6 +31,52 @@ class BotDataSetStateTest(unittest.TestCase):
         bd.__setstate__({"chats": {}})
         self.assertEqual(bd.authorized_chats, set())
 
+    def test_migration_adds_cs2_patchnotes_state_when_missing(self):
+        bd = BotData.__new__(BotData)
+        bd.__setstate__({"chats": {}, "authorized_chats": set(), "last_known_version": "1.9.0"})
+        self.assertEqual(bd.cs2_patchnotes_subscribers, set())
+        # Unprimed, not empty: the first poll must record the feed, not announce all of it.
+        self.assertIsNone(bd.cs2_patchnotes_seen_gids)
+
+    def test_migration_preserves_existing_cs2_patchnotes_state(self):
+        bd = BotData.__new__(BotData)
+        bd.__setstate__({"chats": {}, "cs2_patchnotes_subscribers": {101}, "cs2_patchnotes_seen_gids": {"g1"}})
+        self.assertEqual(bd.cs2_patchnotes_subscribers, {101})
+        self.assertEqual(bd.cs2_patchnotes_seen_gids, {"g1"})
+
+
+class BotDataCs2PatchnotesSubscriptionTest(unittest.TestCase):
+    def test_new_bot_data_has_no_subscribers_and_is_unprimed(self):
+        bd = BotData()
+        self.assertEqual(bd.cs2_patchnotes_subscribers, set())
+        self.assertIsNone(bd.cs2_patchnotes_seen_gids)
+
+    def test_subscribe_then_unsubscribe(self):
+        bd = BotData()
+        bd.subscribe_to_cs2_patchnotes(101)
+        self.assertTrue(bd.is_subscribed_to_cs2_patchnotes(101))
+        bd.unsubscribe_from_cs2_patchnotes(101)
+        self.assertFalse(bd.is_subscribed_to_cs2_patchnotes(101))
+
+    def test_subscribing_twice_is_idempotent(self):
+        bd = BotData()
+        bd.subscribe_to_cs2_patchnotes(101)
+        bd.subscribe_to_cs2_patchnotes(101)
+        self.assertEqual(bd.cs2_patchnotes_subscribers, {101})
+
+    def test_deauthorizing_a_chat_unsubscribes_it(self):
+        # A deauthorized chat can no longer run /cs2patches off, so it must stop getting posts.
+        bd = BotData()
+        bd.authorize_chat(101)
+        bd.subscribe_to_cs2_patchnotes(101)
+        bd.deauthorize_chat(101)
+        self.assertFalse(bd.is_subscribed_to_cs2_patchnotes(101))
+
+    def test_unsubscribing_a_chat_that_never_subscribed_is_a_no_op(self):
+        bd = BotData()
+        bd.unsubscribe_from_cs2_patchnotes(101)
+        self.assertEqual(bd.cs2_patchnotes_subscribers, set())
+
 
 if __name__ == "__main__":
     unittest.main()

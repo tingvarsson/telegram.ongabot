@@ -202,6 +202,17 @@ CS2 = CommandInfo(
     menu_description="Show CS2 results for a date [target_date=..]",
 )
 
+CS2PATCHES = CommandInfo(
+    command="cs2patches",
+    brief="/cs2patches on|off - Post CS2 patch notes in this chat as Valve releases them",
+    usage=(
+        "Usage: /cs2patches on|off\n"
+        "  on: post each new CS2 patch note in this chat, starting with the latest one\n"
+        "  off: stop posting CS2 patch notes in this chat"
+    ),
+    menu_description="Post CS2 patch notes here [on|off]",
+)
+
 TOPICS = CommandInfo(
     command="topics",
     brief="/topics - Show this chat's learned YouTube Short topic preferences",
@@ -233,6 +244,7 @@ ALL_COMMANDS = [
     STATISTICS,
     LEADERBOARD,
     CS2,
+    CS2PATCHES,
     TOPICS,
     LINKSTEAM,
     UNLINKSTEAM,

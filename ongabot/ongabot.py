@@ -6,25 +6,29 @@ import html
 import logging
 import os
 import random
-from typing import Any, Dict, Tuple, cast
+from typing import Any, Dict, List, Tuple, cast
 
 from telegram import Bot, BotCommand, LinkPreviewOptions, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, ContextTypes, JobQueue, PicklePersistence
-from telegram.error import BadRequest, TelegramError
+from telegram.error import BadRequest, ChatMigrated, Forbidden, TelegramError
 
 import eventcreator
 from _version import __version__ as CURRENT_VERSION
 from botdata import BotData
 from chat import Chat
 from cs2.leetify import get_client
+from cs2.patchnotesformat import render_patch_notes_html
 from cs2.report import event_session, render_results
+from cs2.steamnews import SteamNewsItem
+from cs2.steamnews import get_client as get_steam_news_client
 from event import Event
 from handler import AuthorizationHandler
 from handler import AuthorizeCommandHandler
 from handler import CancelEventCommandHandler
 from handler import ChangelogCommandHandler
 from handler import Cs2CommandHandler
+from handler import Cs2PatchesCommandHandler
 from handler import DeAuthorizeCommandHandler
 from handler import DeScheduleCommandHandler
 from handler import EventPollAnswerHandler
@@ -48,9 +52,10 @@ from quips import refresh_quip_pool
 from userdata import UserData
 from utils import log
 from utils.changelog import get_changelog_delta, is_dev_version
-from utils.changelogformat import render_changelog_html, to_plain_text
+from utils.changelogformat import render_changelog_html
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
 from utils.helper import parse_time
+from utils.htmlblocks import send_html_with_fallback
 from utils.points import render_event_recap_message
 from youtube import client as youtube_client
 from youtube.selection import pick_short
@@ -75,10 +80,6 @@ CS2_SWEEP_SETTLE = datetime.timedelta(minutes=90)
 # Measured from the event's start time, so a sweep started at 18:30 gives up at 08:30. Long
 # enough to cover a late night plus slow demo processing; a job never lives forever.
 CS2_SWEEP_GIVE_UP = datetime.timedelta(hours=14)
-
-# The changelog is full of GitHub compare links; a preview per message is exactly the noise
-# collapsing the announcement body is meant to remove.
-_NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
 def cs2_sweep_job_name(chat_id: int, event_date: datetime.date) -> str:
@@ -308,6 +309,91 @@ async def refresh_quip_pool_callback(context: CallbackContext) -> None:  # pylin
     await refresh_quip_pool(get_joke_client())
 
 
+DEFAULT_CS2_PATCHNOTES_POLL_MINUTES = 20
+
+
+def cs2_patchnotes_poll_interval() -> datetime.timedelta:
+    """How often to poll Steam for new CS2 patch notes.
+
+    CS2_PATCHNOTES_POLL_MINUTES overrides the default. Read once, when the job is registered
+    at startup, so a change needs a restart - unlike shorts_window, the interval of a running
+    repeating job cannot change under it.
+    """
+    default = datetime.timedelta(minutes=DEFAULT_CS2_PATCHNOTES_POLL_MINUTES)
+    raw = os.getenv("CS2_PATCHNOTES_POLL_MINUTES")
+    if not raw:
+        return default
+    try:
+        minutes = int(raw)
+    except ValueError:
+        minutes = 0
+    if minutes <= 0:
+        logger.warning("Ignoring malformed CS2_PATCHNOTES_POLL_MINUTES=%r; using %s", raw, default)
+        return default
+    return datetime.timedelta(minutes=minutes)
+
+
+async def _announce_cs2_patch_notes(
+    bot: Bot, bot_data: BotData, items: List[SteamNewsItem], chat_ids: List[int]
+) -> None:
+    """Send CS2 patch notes, in the order given, to each of chat_ids.
+
+    A chat the bot can no longer post to - removed, blocked, or migrated to a supergroup under
+    a new id - is unsubscribed rather than failing on every patch from now on.
+    """
+    messages = render_patch_notes_html(items)
+    for chat_id in chat_ids:
+        try:
+            for message in messages:
+                await send_html_with_fallback(bot, chat_id, message)
+            logger.info("Sent %d CS2 patch note(s) to chat_id=%s (%d message(s))", len(items), chat_id, len(messages))
+        except (Forbidden, ChatMigrated) as e:
+            logger.warning("Unsubscribing chat_id=%s from CS2 patch notes, bot can no longer post: %s", chat_id, e)
+            bot_data.unsubscribe_from_cs2_patchnotes(chat_id)
+        except TelegramError as e:
+            logger.error("Failed to send CS2 patch notes to chat_id=%s: %s", chat_id, e)
+
+
+@log.log
+async def cs2_patchnotes_sweep_callback(context: CallbackContext) -> None:
+    """Poll Steam for CS2 patch notes and announce any not seen before to subscribed chats.
+
+    The first successful poll only records what Steam lists, so neither a fresh deployment
+    nor an upgrade floods the chats with weeks of old patches. After that, patches that
+    appeared since the last poll are announced oldest first. An unreachable feed changes
+    nothing and is retried on the next poll.
+    """
+    bot_data: BotData = context.bot_data
+    items = await get_steam_news_client().get_cs2_patch_notes()
+    if items is None:
+        return
+
+    seen = bot_data.cs2_patchnotes_seen_gids
+    if seen is None:
+        # An empty feed is left unprimed: priming on it would make the next real fetch
+        # announce everything.
+        if items:
+            bot_data.cs2_patchnotes_seen_gids = {item.gid for item in items}
+            logger.info("Started tracking CS2 patch notes: %d already published, none announced", len(items))
+        return
+
+    # gid is only an identity; Steam's publish date is what orders patches.
+    new_items = sorted((item for item in items if item.gid not in seen), key=lambda item: item.date)
+    if not new_items:
+        logger.debug("No new CS2 patch notes among %d listed", len(items))
+        return
+
+    logger.info("Found %d new CS2 patch note(s): %s", len(new_items), [item.gid for item in new_items])
+    # Marking the patches seen and fixing who receives them happen together, with no await in
+    # between, so /cs2patches on can tell from `seen` alone whether this broadcast includes its
+    # chat: a chat that subscribes after this point is not in `recipients`, and finds the
+    # patch already in `seen` - which is how its own command knows to post it.
+    seen.update(item.gid for item in new_items)
+    recipients = list(bot_data.cs2_patchnotes_subscribers)
+    if recipients:
+        await _announce_cs2_patch_notes(context.bot, bot_data, new_items, recipients)
+
+
 async def _publish_cs2_results(context: CallbackContext, event: Event, text: str) -> int:
     """Send the CS2 results message, or edit the one this event already has.
 
@@ -507,17 +593,6 @@ async def setup_bot_metadata(bot: Bot) -> None:
         logger.error("Failed to set bot short description: %s", e)
 
 
-async def _send_announcement_message(bot: Bot, chat_id: int, text: str) -> None:
-    """Send one announcement message, falling back to plain text if Telegram rejects the HTML."""
-    try:
-        await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, link_preview_options=_NO_PREVIEW)
-    except BadRequest as e:
-        # A malformed entity fails the whole message. This one is pushed unprompted on
-        # upgrade, so an unformatted announcement beats a silently missing one.
-        logger.warning("Version announcement rejected as HTML (%s); resending as plain text", e)
-        await bot.send_message(chat_id=chat_id, text=to_plain_text(text), link_preview_options=_NO_PREVIEW)
-
-
 async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, new_version: str) -> None:
     """Send a version-change announcement to all authorized chats.
 
@@ -533,7 +608,7 @@ async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, n
     for chat_id in bot_data.authorized_chats:
         try:
             for message in messages:
-                await _send_announcement_message(bot, chat_id, message)
+                await send_html_with_fallback(bot, chat_id, message)
             logger.info("Sent version announcement to chat_id=%s (%d message(s))", chat_id, len(messages))
         except TelegramError as e:
             logger.error("Failed to send version announcement to chat_id=%s: %s", chat_id, e)
@@ -614,6 +689,15 @@ async def post_init(application: Application) -> None:
         name="quip_pool_refresh",
     )
 
+    # Valve ships patches at any hour, so this polls around the clock. Starts right after boot
+    # so a restart does not hold back a patch note by a whole interval.
+    application.job_queue.run_repeating(
+        cs2_patchnotes_sweep_callback,
+        interval=cs2_patchnotes_poll_interval(),
+        first=25,
+        name="cs2_patchnotes_sweep",
+    )
+
 
 async def error(update: object, context: CallbackContext) -> None:
     """Log Errors caused by Updates."""
@@ -662,6 +746,7 @@ def main() -> None:
     application.add_handler(StatisticsSortCallbackHandler())
     application.add_handler(LeaderboardCommandHandler())
     application.add_handler(Cs2CommandHandler())
+    application.add_handler(Cs2PatchesCommandHandler())
     application.add_handler(LinkSteamCommandHandler())
     application.add_handler(UnLinkSteamCommandHandler())
     application.add_handler(TopicsCommandHandler())

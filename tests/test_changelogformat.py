@@ -7,15 +7,14 @@ from ongabot.utils.changelog import MAX_MESSAGE_CHARS
 from ongabot.utils.changelogformat import (
     BULLET,
     CHANGELOG_HEADING,
-    EXPANDABLE_MIN_LINES,
     INDENT,
     NESTED_BULLET,
     _collect_link_defs,
-    _pack,
     _render_body,
     _split_sections,
     render_changelog_html,
 )
+from ongabot.utils.htmlblocks import EXPANDABLE_MIN_LINES, pack_sections
 
 ONE_SECTION = """\
 ## [1.2.0] - 2026-05-24
@@ -126,7 +125,7 @@ class LayoutTest(unittest.TestCase):
         body = ["<i>Added</i>", f"{INDENT}{BULLET} " + "a" * 40, "", "<i>Fixed</i>", f"{INDENT}{BULLET} " + "b" * 40]
         split_seen = False
         for limit in range(90, 200):
-            messages = _pack([("<b>v1.0.0</b>", body)], limit=limit)
+            messages = pack_sections([("<b>v1.0.0</b>", body)], limit=limit)
             split_seen = split_seen or len(messages) > 1
             for message in messages[1:]:
                 self.assertFalse(self._inner(message).startswith("\n"), f"limit={limit}: {message[:60]!r}")
