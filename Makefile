@@ -52,7 +52,7 @@ black:
 	$(BLACK) .
 
 test:
-	$(PYTEST) -v --cov=ongabot --cov-report=term-missing --cov-fail-under=89
+	$(PYTEST) -v --cov=ongabot --cov-report=term-missing --cov-fail-under=91
 
 clean:
 	rm -rf $(VENV_PATH)

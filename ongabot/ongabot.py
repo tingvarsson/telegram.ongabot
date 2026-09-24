@@ -706,26 +706,8 @@ async def error(update: object, context: CallbackContext) -> None:
     logger.warning('Update "%s" caused error "%s"', update, context.error)
 
 
-def main() -> None:
-    """Setup and run ONGAbot"""
-    context_types = ContextTypes(bot_data=BotData, user_data=UserData)
-
-    persistence = PicklePersistence(filepath=os.getenv("DB_PATH", "ongabot.db"), context_types=context_types)
-
-    api_token = os.getenv("API_TOKEN")
-    if not api_token:
-        logger.error("API_TOKEN environment variable is not set. Exiting.")
-        return
-
-    application = (
-        Application.builder()
-        .token(api_token)
-        .persistence(persistence)
-        .context_types(context_types)
-        .post_init(post_init)
-        .build()
-    )
-
+def register_handlers(application: Application) -> None:
+    """Register every update handler. Kept out of main() so tests can check the command set."""
     # Authorization gate — runs before all other handlers (group -1)
     application.add_handler(AuthorizationHandler(), group=-1)
 
@@ -753,6 +735,29 @@ def main() -> None:
     application.add_handler(UnLinkSteamCommandHandler())
     application.add_handler(TopicsCommandHandler())
     application.add_handler(ShortsReactionHandler())
+
+
+def main() -> None:
+    """Setup and run ONGAbot"""
+    context_types = ContextTypes(bot_data=BotData, user_data=UserData)
+
+    persistence = PicklePersistence(filepath=os.getenv("DB_PATH", "ongabot.db"), context_types=context_types)
+
+    api_token = os.getenv("API_TOKEN")
+    if not api_token:
+        logger.error("API_TOKEN environment variable is not set. Exiting.")
+        return
+
+    application = (
+        Application.builder()
+        .token(api_token)
+        .persistence(persistence)
+        .context_types(context_types)
+        .post_init(post_init)
+        .build()
+    )
+
+    register_handlers(application)
     application.add_error_handler(error)
 
     # Start the bot. message_reaction is opt-in and not delivered by default - without
