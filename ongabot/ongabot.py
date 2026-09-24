@@ -6,7 +6,7 @@ import html
 import logging
 import os
 import random
-from typing import Any, Dict, Tuple, cast
+from typing import Any, Dict, List, Tuple, cast
 
 from telegram import Bot, BotCommand, LinkPreviewOptions, Update
 from telegram.constants import ParseMode
@@ -18,7 +18,10 @@ from _version import __version__ as CURRENT_VERSION
 from botdata import BotData
 from chat import Chat
 from cs2.leetify import get_client
+from cs2.patchnotesformat import render_patch_notes_html
 from cs2.report import event_session, render_results
+from cs2.steamnews import SteamNewsItem
+from cs2.steamnews import get_client as get_steam_news_client
 from event import Event
 from handler import AuthorizationHandler
 from handler import AuthorizeCommandHandler
@@ -304,6 +307,77 @@ async def refresh_quip_pool_callback(context: CallbackContext) -> None:  # pylin
     Takes no per-chat state, but job_queue always passes a CallbackContext.
     """
     await refresh_quip_pool(get_joke_client())
+
+
+DEFAULT_CS2_PATCHNOTES_POLL_MINUTES = 20
+
+
+def cs2_patchnotes_poll_interval() -> datetime.timedelta:
+    """How often to poll Steam for new CS2 patch notes.
+
+    CS2_PATCHNOTES_POLL_MINUTES overrides the default. Read once, when the job is registered
+    at startup, so a change needs a restart - unlike shorts_window, the interval of a running
+    repeating job cannot change under it.
+    """
+    default = datetime.timedelta(minutes=DEFAULT_CS2_PATCHNOTES_POLL_MINUTES)
+    raw = os.getenv("CS2_PATCHNOTES_POLL_MINUTES")
+    if not raw:
+        return default
+    try:
+        minutes = int(raw)
+    except ValueError:
+        minutes = 0
+    if minutes <= 0:
+        logger.warning("Ignoring malformed CS2_PATCHNOTES_POLL_MINUTES=%r; using %s", raw, default)
+        return default
+    return datetime.timedelta(minutes=minutes)
+
+
+async def _announce_cs2_patch_notes(bot: Bot, bot_data: BotData, items: List[SteamNewsItem]) -> None:
+    """Send new CS2 patch notes to every subscribed chat, in the order given."""
+    messages = render_patch_notes_html(items)
+    for chat_id in bot_data.cs2_patchnotes_subscribers:
+        try:
+            for message in messages:
+                await send_html_with_fallback(bot, chat_id, message)
+            logger.info("Sent %d CS2 patch note(s) to chat_id=%s (%d message(s))", len(items), chat_id, len(messages))
+        except TelegramError as e:
+            logger.error("Failed to send CS2 patch notes to chat_id=%s: %s", chat_id, e)
+
+
+@log.log
+async def cs2_patchnotes_sweep_callback(context: CallbackContext) -> None:
+    """Poll Steam for CS2 patch notes and announce any not seen before to subscribed chats.
+
+    The first successful poll only records what Steam lists, so neither a fresh deployment
+    nor an upgrade floods the chats with weeks of old patches. After that, patches that
+    appeared since the last poll are announced oldest first. An unreachable feed changes
+    nothing and is retried on the next poll.
+    """
+    bot_data: BotData = context.bot_data
+    items = await get_steam_news_client().get_cs2_patch_notes()
+    if items is None:
+        return
+
+    seen = bot_data.cs2_patchnotes_seen_gids
+    if seen is None:
+        # An empty feed is left unprimed: priming on it would make the next real fetch
+        # announce everything.
+        if items:
+            bot_data.cs2_patchnotes_seen_gids = {item.gid for item in items}
+            logger.info("Started tracking CS2 patch notes: %d already published, none announced", len(items))
+        return
+
+    # gid is only an identity; Steam's publish date is what orders patches.
+    new_items = sorted((item for item in items if item.gid not in seen), key=lambda item: item.date)
+    if not new_items:
+        logger.debug("No new CS2 patch notes among %d listed", len(items))
+        return
+
+    logger.info("Found %d new CS2 patch note(s): %s", len(new_items), [item.gid for item in new_items])
+    if bot_data.cs2_patchnotes_subscribers:
+        await _announce_cs2_patch_notes(context.bot, bot_data, new_items)
+    seen.update(item.gid for item in new_items)
 
 
 async def _publish_cs2_results(context: CallbackContext, event: Event, text: str) -> int:
@@ -599,6 +673,15 @@ async def post_init(application: Application) -> None:
         interval=datetime.timedelta(hours=6),
         first=20,
         name="quip_pool_refresh",
+    )
+
+    # Valve ships patches at any hour, so this polls around the clock. Starts right after boot
+    # so a restart does not hold back a patch note by a whole interval.
+    application.job_queue.run_repeating(
+        cs2_patchnotes_sweep_callback,
+        interval=cs2_patchnotes_poll_interval(),
+        first=25,
+        name="cs2_patchnotes_sweep",
     )
 
 

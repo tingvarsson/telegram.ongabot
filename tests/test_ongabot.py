@@ -186,8 +186,8 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
         await post_init(application)
 
         # Event cleanup (startup + daily), the hourly CS2 sweep scheduler, the hourly Shorts
-        # scheduler, the nightly topic-score decay, and the quip pool refresh are all
-        # registered.
+        # scheduler, the nightly topic-score decay, the quip pool refresh, and the CS2
+        # patch-notes poll are all registered.
         scheduled = [
             call.kwargs["name"]
             for calls in (
@@ -202,6 +202,7 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
             [
                 "complete_past_events",
                 "complete_past_events_startup",
+                "cs2_patchnotes_sweep",
                 "cs2_sweeps",
                 "decay_shorts_topic_scores",
                 "quip_pool_refresh",
