@@ -83,7 +83,8 @@ celerybeat-schedule
 
 # Environments
 .env
-# Per-bot dev env files (.env.ongadev1, .env.ongadev2) hold tokens too; only the template is tracked.
+# Per-bot dev env files (.env.d/<botname>) hold tokens too; only the template is tracked.
+.env.d/
 .env.*
 !.env.example
 .venv

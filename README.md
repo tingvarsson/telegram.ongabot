@@ -6,16 +6,30 @@ Built on [python-telegram-bot](https://github.com/python-telegram-bot/python-tel
 
 ## Setup
 
-Local runs use one of two dev bots, each with its own env file in the main checkout:
-`.env.ongadev1` and `.env.ongadev2`. Create them from the template, each with that bot's token:
+Local runs use dev bots, each with its own env file in `.env.d/` in the main checkout, named
+after the bot. Any number works; every file there is one bot that `make run` can use:
 
 ```bash
-cp .env.example .env.ongadev1
-cp .env.example .env.ongadev2
-# edit each file and set API_TOKEN to that bot's token
+mkdir -p .env.d
+cp .env.example .env.d/ongadev2
+cp .env.example .env.d/ongadev3
+# edit each file: API_TOKEN, BOT_ADMINS, and CS2_MIN_MEMBERS=1 for a test group
 ```
 
-Give each bot its own test group, so their commands and scheduled posts don't mix.
+### Creating a bot
+
+1. In [@BotFather](https://t.me/BotFather), send `/newbot`. Pick a display name, then a username
+   ending in `bot` (e.g. `ongadev3bot`). Put the token it replies with in `API_TOKEN`.
+2. Leave commands, description and about text alone. The bot sets them itself on every start.
+   Privacy mode can stay on too, because an admin bot sees every message anyway.
+3. Create a test group for the bot, one group per bot, so two bots never both answer a command
+   or post the same scheduled message. Add the bot to the group.
+4. Make the bot an **administrator** with at least *Pin Messages*. It pins the weekly poll, and
+   only admin bots get the per-user reactions that drive YouTube topic learning.
+   Telegram may upgrade the group to a supergroup at this point, which **changes its chat ID**.
+   Make the bot an admin before step 5.
+5. Set `BOT_ADMINS` to your own Telegram user ID, start the bot with `make run BOT=<name>`, and
+   send `/authorize` in the group.
 
 ### Local Python environment
 
@@ -29,12 +43,12 @@ make run
 ```
 
 `make run` works from the main checkout and from any git worktree. It picks a dev bot and
-prints which one it started (`ongadev1 → <branch>`):
+prints which one it started (`ongadev2 → <branch>`):
 
 - Re-running it restarts the bot this checkout used last, so it stays in the same test group.
-- Otherwise it takes the first free bot. Two branches can be tested side by side.
-- If both bots are in use by other checkouts, it fails and says which branches hold them.
-- `make run BOT=ongadev2` picks a bot explicitly and stops whatever is running on it.
+- Otherwise it takes the first free bot, in name order. Several branches can be tested side by side.
+- If every bot is in use by another checkout, it fails and says which branches hold them.
+- `make run BOT=ongadev3` picks a bot explicitly and stops whatever is running on it.
 - `make status` shows which branch each bot is running, and `make stop` stops this checkout's bot.
 
 A worktree gets its own `ongabot.db`, seeded from the newest `ongabot.db*` in the main

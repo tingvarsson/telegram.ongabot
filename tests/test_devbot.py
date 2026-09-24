@@ -10,57 +10,102 @@ from scripts.devbot import Checkout, Holder, SlotError, choose_slot
 
 HERE = "/repo"
 OTHER = "/repo/.claude/worktrees/other"
+SLOTS = ["ongadev2", "ongadev3"]
 
 
 def _running(*pids):
     return lambda pid: pid in pids
 
 
+def _free():
+    return {slot: None for slot in SLOTS}
+
+
 class ChooseSlotTest(unittest.TestCase):
-    def test_first_free_slot_when_nothing_has_run(self):
-        self.assertEqual(choose_slot({"ongadev1": None, "ongadev2": None}, HERE, None), ("ongadev1", []))
+    def test_first_free_slot_in_name_order_when_nothing_has_run(self):
+        self.assertEqual(choose_slot(SLOTS, _free(), HERE, None), ("ongadev2", []))
 
     def test_skips_a_slot_another_checkout_is_running(self):
-        holders = {"ongadev1": Holder(11, OTHER, "feat/a"), "ongadev2": None}
-        self.assertEqual(choose_slot(holders, HERE, None, _running(11)), ("ongadev2", []))
+        holders = {"ongadev2": Holder(11, OTHER, "feat/a"), "ongadev3": None}
+        self.assertEqual(choose_slot(SLOTS, holders, HERE, None, _running(11)), ("ongadev3", []))
 
     def test_restarting_reuses_this_checkouts_running_slot(self):
-        holders = {"ongadev1": Holder(11, OTHER, "feat/a"), "ongadev2": Holder(22, HERE, "feat/b")}
-        self.assertEqual(choose_slot(holders, HERE, None, _running(11, 22)), ("ongadev2", ["ongadev2"]))
+        holders = {"ongadev2": Holder(11, OTHER, "feat/a"), "ongadev3": Holder(22, HERE, "feat/b")}
+        self.assertEqual(choose_slot(SLOTS, holders, HERE, None, _running(11, 22)), ("ongadev3", ["ongadev3"]))
 
     def test_reuses_the_slot_this_checkout_held_last_even_after_it_stopped(self):
         # Sticky slot: the same branch comes back in the same test chat.
-        holders = {"ongadev1": None, "ongadev2": Holder(22, HERE, "feat/b")}
-        self.assertEqual(choose_slot(holders, HERE, None, _running()), ("ongadev2", []))
+        holders = {"ongadev2": None, "ongadev3": Holder(22, HERE, "feat/b")}
+        self.assertEqual(choose_slot(SLOTS, holders, HERE, None, _running()), ("ongadev3", []))
 
     def test_a_dead_holder_frees_the_slot(self):
-        holders = {"ongadev1": Holder(11, OTHER, "feat/a"), "ongadev2": None}
-        self.assertEqual(choose_slot(holders, HERE, None, _running()), ("ongadev1", []))
+        holders = {"ongadev2": Holder(11, OTHER, "feat/a"), "ongadev3": None}
+        self.assertEqual(choose_slot(SLOTS, holders, HERE, None, _running()), ("ongadev2", []))
 
-    def test_both_busy_fails_and_names_both_branches(self):
-        holders = {"ongadev1": Holder(11, OTHER, "feat/a"), "ongadev2": Holder(22, "/x", "feat/c")}
+    def test_all_busy_fails_and_names_every_branch(self):
+        holders = {"ongadev2": Holder(11, OTHER, "feat/a"), "ongadev3": Holder(22, "/x", "feat/c")}
         with self.assertRaises(SlotError) as ctx:
-            choose_slot(holders, HERE, None, _running(11, 22))
+            choose_slot(SLOTS, holders, HERE, None, _running(11, 22))
         self.assertIn("feat/a", str(ctx.exception))
         self.assertIn("feat/c", str(ctx.exception))
 
+    def test_any_number_of_slots(self):
+        slots = ["a", "b", "c"]
+        holders = {"a": Holder(1, OTHER, "x"), "b": Holder(2, "/y", "y"), "c": None}
+        self.assertEqual(choose_slot(slots, holders, HERE, None, _running(1, 2)), ("c", []))
+
     def test_requested_slot_takes_over_from_another_checkout(self):
-        holders = {"ongadev1": Holder(11, OTHER, "feat/a"), "ongadev2": None}
-        self.assertEqual(choose_slot(holders, HERE, "ongadev1", _running(11)), ("ongadev1", ["ongadev1"]))
+        holders = {"ongadev2": Holder(11, OTHER, "feat/a"), "ongadev3": None}
+        self.assertEqual(choose_slot(SLOTS, holders, HERE, "ongadev2", _running(11)), ("ongadev2", ["ongadev2"]))
 
     def test_requested_slot_also_stops_this_checkouts_other_bot(self):
         # A checkout runs at most one bot.
-        holders = {"ongadev1": Holder(11, HERE, "feat/b"), "ongadev2": Holder(22, OTHER, "feat/a")}
+        holders = {"ongadev2": Holder(11, HERE, "feat/b"), "ongadev3": Holder(22, OTHER, "feat/a")}
         self.assertEqual(
-            choose_slot(holders, HERE, "ongadev2", _running(11, 22)), ("ongadev2", ["ongadev1", "ongadev2"])
+            choose_slot(SLOTS, holders, HERE, "ongadev3", _running(11, 22)), ("ongadev3", ["ongadev2", "ongadev3"])
         )
 
     def test_requested_free_slot_stops_nothing(self):
-        self.assertEqual(choose_slot({"ongadev1": None, "ongadev2": None}, HERE, "ongadev2"), ("ongadev2", []))
+        self.assertEqual(choose_slot(SLOTS, _free(), HERE, "ongadev3"), ("ongadev3", []))
 
-    def test_unknown_requested_slot_is_rejected(self):
+    def test_unknown_requested_slot_is_rejected_with_the_configured_names(self):
+        with self.assertRaises(SlotError) as ctx:
+            choose_slot(SLOTS, _free(), HERE, "ongadev1")
+        self.assertIn("ongadev2, ongadev3", str(ctx.exception))
+
+    def test_no_configured_slots_is_an_error(self):
         with self.assertRaises(SlotError):
-            choose_slot({"ongadev1": None, "ongadev2": None}, HERE, "prod")
+            choose_slot([], {}, HERE, None)
+
+
+class DiscoverSlotsTest(unittest.TestCase):
+    def test_every_env_file_in_env_d_is_a_slot_in_name_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            main = Path(tmp)
+            env_dir = main / ".env.d"
+            env_dir.mkdir()
+            for name in ["ongadev3", "ongadev2", ".hidden", "ongadev2~", "ongadev2.swp"]:
+                (env_dir / name).write_text("")
+            (env_dir / "subdir").mkdir()
+            self.assertEqual(devbot.discover_slots(main), ["ongadev2", "ongadev3"])
+            self.assertEqual(devbot.env_file(main, "ongadev3"), env_dir / "ongadev3")
+
+    @unittest.skipIf(os.geteuid() == 0, "root can list any directory")
+    def test_unreadable_env_d_is_an_error_not_an_empty_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_dir = Path(tmp) / ".env.d"
+            env_dir.mkdir()
+            env_dir.chmod(0)
+            try:
+                with self.assertRaises(SlotError) as ctx:
+                    devbot.discover_slots(Path(tmp))
+                self.assertIn("outside the sandbox", str(ctx.exception))
+            finally:
+                env_dir.chmod(0o700)
+
+    def test_no_env_d_means_no_slots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(devbot.discover_slots(Path(tmp)), [])
 
 
 class ParseEnvFileTest(unittest.TestCase):
@@ -81,17 +126,17 @@ class HolderStateTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             main = Path(tmp)
             holder = Holder(123, "/repo", "feat/x")
-            devbot.write_holder(main, "ongadev1", holder)
-            self.assertEqual(devbot.read_holder(main, "ongadev1"), holder)
+            devbot.write_holder(main, "ongadev2", holder)
+            self.assertEqual(devbot.read_holder(main, "ongadev2"), holder)
 
     def test_missing_or_corrupt_state_reads_as_none(self):
         with tempfile.TemporaryDirectory() as tmp:
             main = Path(tmp)
-            self.assertIsNone(devbot.read_holder(main, "ongadev1"))
-            state = main / ".git" / "devbot" / "ongadev1.json"
+            self.assertIsNone(devbot.read_holder(main, "ongadev2"))
+            state = main / ".git" / "devbot" / "ongadev2.json"
             state.parent.mkdir(parents=True)
             state.write_text("{not json")
-            self.assertIsNone(devbot.read_holder(main, "ongadev1"))
+            self.assertIsNone(devbot.read_holder(main, "ongadev2"))
 
 
 class IsRunningTest(unittest.TestCase):
@@ -173,18 +218,30 @@ class FindCheckoutTest(unittest.TestCase):
             self.assertFalse(in_main.is_worktree)
             self.assertEqual(in_worktree, Checkout(root=worktree, main=main, branch="feat"))
             self.assertTrue(in_worktree.is_worktree)
-            self.assertEqual(devbot.env_file(in_worktree.main, "ongadev1"), main / ".env.ongadev1")
+            self.assertEqual(devbot.env_file(in_worktree.main, "ongadev2"), main / ".env.d" / "ongadev2")
 
 
 class CliTest(unittest.TestCase):
-    def test_run_without_the_slot_env_file_explains_what_to_create(self):
+    def test_run_with_only_top_level_env_files_says_to_move_them(self):
         with tempfile.TemporaryDirectory() as tmp:
             main = Path(tmp).resolve()
-            checkout = Checkout(root=main, main=main, branch="master")
+            for name in [".env.ongadev2", ".env.ongadev3", ".env.example"]:
+                (main / name).write_text("")
             with self.assertRaises(SlotError) as ctx:
-                devbot.cmd_run(checkout, "ongadev1")
-            self.assertIn(".env.ongadev1", str(ctx.exception))
-            self.assertIsNone(devbot.read_holder(main, "ongadev1"))
+                devbot.cmd_run(Checkout(root=main, main=main, branch="master"), None)
+            message = str(ctx.exception)
+            self.assertIn(".env.ongadev2 → .env.d/ongadev2", message)
+            self.assertIn(".env.ongadev3 → .env.d/ongadev3", message)
+            self.assertNotIn(".env.example", message)
+
+    def test_run_with_an_unknown_bot_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            main = Path(tmp).resolve()
+            (main / ".env.d").mkdir()
+            (main / ".env.d" / "ongadev2").write_text("")
+            with self.assertRaises(SlotError):
+                devbot.cmd_run(Checkout(root=main, main=main, branch="master"), "ongadev9")
+            self.assertIsNone(devbot.read_holder(main, "ongadev9"))
 
 
 if __name__ == "__main__":

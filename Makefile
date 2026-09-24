@@ -9,7 +9,7 @@ MYPY:=mypy
 
 DOCKER_IMAGE=tingvarsson/telegram.ongabot:latest
 VENV_PATH=venv
-# Dev-bot slot for run/stop/docker-run: ongadev1 or ongadev2. Empty picks one automatically.
+# Dev bot for run/stop/docker-run: a file name in .env.d/ (e.g. ongadev2). Empty picks one automatically.
 BOT ?=
 DEVBOT = $(PYTHON) scripts/devbot.py
 
