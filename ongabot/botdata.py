@@ -20,12 +20,20 @@ class BotData:
         chats: Dict of Chat objects indexed by chat_id
         authorized_chats: Set of chat IDs allowed to use the bot
         last_known_version: Version string of the last bot startup, used to detect upgrades
+        cs2_patchnotes_subscribers: Set of chat IDs that opted in to CS2 patch notes
+        cs2_patchnotes_seen_gids: Steam news gids of every CS2 patch note already seen, or
+            None until the first successful poll has recorded the feed
     """
 
     def __init__(self) -> None:
         self.chats: Dict[int, Chat] = {}
         self.authorized_chats: Set[int] = set()
         self.last_known_version: str | None = None
+        self.cs2_patchnotes_subscribers: Set[int] = set()
+        # None, not empty: an empty set would make the first poll announce the whole feed.
+        # The set only ever grows - a few hundred short ids over years - so a post that drops
+        # out of Steam's page and later reappears is never announced twice.
+        self.cs2_patchnotes_seen_gids: Optional[Set[str]] = None
 
     def __setstate__(self, state: Dict) -> None:
         self.__dict__.update(state)
@@ -39,6 +47,12 @@ class BotData:
             # point (1.2.0, the release in which tracking shipped) instead of None, so
             # the next real release announces the delta rather than recording silently.
             self.last_known_version = "1.2.0"
+        if not hasattr(self, "cs2_patchnotes_subscribers"):
+            self.cs2_patchnotes_subscribers = set()
+        if not hasattr(self, "cs2_patchnotes_seen_gids"):
+            # Unprimed, so the first poll after the upgrade records the feed silently instead
+            # of announcing every patch note Steam still lists.
+            self.cs2_patchnotes_seen_gids = None
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -81,6 +95,23 @@ class BotData:
         """Remove a chat from the set of authorized chats"""
         self.authorized_chats.discard(chat_id)
         _logger.info("Deauthorized chat_id=%s", chat_id)
+
+    @log.method
+    def is_subscribed_to_cs2_patchnotes(self, chat_id: int) -> bool:
+        """Return True if the chat opted in to CS2 patch-note announcements"""
+        return chat_id in self.cs2_patchnotes_subscribers
+
+    @log.method
+    def subscribe_to_cs2_patchnotes(self, chat_id: int) -> None:
+        """Opt a chat in to CS2 patch-note announcements"""
+        self.cs2_patchnotes_subscribers.add(chat_id)
+        _logger.info("Subscribed chat_id=%s to CS2 patch notes", chat_id)
+
+    @log.method
+    def unsubscribe_from_cs2_patchnotes(self, chat_id: int) -> None:
+        """Opt a chat out of CS2 patch-note announcements"""
+        self.cs2_patchnotes_subscribers.discard(chat_id)
+        _logger.info("Unsubscribed chat_id=%s from CS2 patch notes", chat_id)
 
     @log.method
     def schedule_all_event_jobs(self, job_queue: JobQueue, callback: Callable) -> None:
