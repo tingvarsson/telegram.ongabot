@@ -25,6 +25,7 @@ from handler import AuthorizeCommandHandler
 from handler import CancelEventCommandHandler
 from handler import ChangelogCommandHandler
 from handler import Cs2CommandHandler
+from handler import Cs2PatchesCommandHandler
 from handler import DeAuthorizeCommandHandler
 from handler import DeScheduleCommandHandler
 from handler import EventPollAnswerHandler
@@ -648,6 +649,7 @@ def main() -> None:
     application.add_handler(StatisticsSortCallbackHandler())
     application.add_handler(LeaderboardCommandHandler())
     application.add_handler(Cs2CommandHandler())
+    application.add_handler(Cs2PatchesCommandHandler())
     application.add_handler(LinkSteamCommandHandler())
     application.add_handler(UnLinkSteamCommandHandler())
     application.add_handler(TopicsCommandHandler())
