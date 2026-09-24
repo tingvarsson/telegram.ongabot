@@ -1,9 +1,9 @@
 import os
 import subprocess
 import tempfile
-import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import scripts.devbot as devbot
 from scripts.devbot import Checkout, Holder, SlotError, choose_slot
@@ -155,44 +155,39 @@ class IsRunningTest(unittest.TestCase):
         self.assertTrue(devbot.is_running(os.getpid(), marker=marker))
 
 
-class WorktreeDbTest(unittest.TestCase):
-    def test_seeds_from_the_newest_database_in_the_main_checkout(self):
+class DatabaseTest(unittest.TestCase):
+    def test_one_database_per_checkout_and_bot(self):
+        main, worktree = Path("/repo"), Path("/repo/.claude/worktrees/feat")
+        in_main = Checkout(root=main, main=main, branch="master")
+        in_worktree = Checkout(root=worktree, main=main, branch="feat")
+        self.assertEqual(devbot.db_path(in_main, "ongadev2"), main / "ongabot-ongadev2.db")
+        self.assertEqual(devbot.db_path(in_main, "ongadev3"), main / "ongabot-ongadev3.db")
+        self.assertEqual(devbot.db_path(in_worktree, "ongadev3"), worktree / "ongabot-ongadev3.db")
+
+
+class CmdRunTest(unittest.TestCase):
+    def _run(self, env_text):
         with tempfile.TemporaryDirectory() as tmp:
-            main, root = Path(tmp) / "main", Path(tmp) / "wt"
-            main.mkdir()
-            root.mkdir()
-            (main / "ongabot.db").write_text("dev")
-            snapshot = main / "ongabot.db.260831"
-            snapshot.write_text("snapshot")
-            past = time.time() - 3600
-            os.utime(main / "ongabot.db", (past, past))
+            main = Path(tmp).resolve()
+            (main / ".env.d").mkdir()
+            (main / ".env.d" / "ongadev2").write_text(env_text)
+            checkout = Checkout(root=main, main=main, branch="feat")
+            with patch.object(devbot.os, "execve") as execve, patch.object(devbot.os, "chdir"):
+                devbot.cmd_run(checkout, None)
+            holder = devbot.read_holder(main, "ongadev2")
+            return main, execve.call_args.args[2], holder
 
-            db_path, seed = devbot.ensure_worktree_db(Checkout(root=root, main=main, branch="b"))
+    def test_starts_the_bot_with_its_env_and_its_own_database(self):
+        main, env, holder = self._run("API_TOKEN=x\nAUTHORIZED_CHAT_IDS=-5119974194\n")
+        self.assertEqual(env["API_TOKEN"], "x")
+        self.assertEqual(env["AUTHORIZED_CHAT_IDS"], "-5119974194")
+        self.assertEqual(env["DB_PATH"], str(main / "ongabot-ongadev2.db"))
+        self.assertEqual(holder, Holder(os.getpid(), str(main), "feat"))
 
-            self.assertEqual((db_path, seed), (root / "ongabot.db", snapshot))
-            self.assertEqual(db_path.read_text(), "snapshot")
-
-    def test_existing_worktree_database_is_left_alone(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            main, root = Path(tmp) / "main", Path(tmp) / "wt"
-            main.mkdir()
-            root.mkdir()
-            (main / "ongabot.db").write_text("dev")
-            (root / "ongabot.db").write_text("branch state")
-
-            db_path, seed = devbot.ensure_worktree_db(Checkout(root=root, main=main, branch="b"))
-
-            self.assertIsNone(seed)
-            self.assertEqual(db_path.read_text(), "branch state")
-
-    def test_no_seed_available_starts_empty(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            main, root = Path(tmp) / "main", Path(tmp) / "wt"
-            main.mkdir()
-            root.mkdir()
-            db_path, seed = devbot.ensure_worktree_db(Checkout(root=root, main=main, branch="b"))
-            self.assertIsNone(seed)
-            self.assertFalse(db_path.exists())
+    def test_db_path_from_the_env_file_is_overridden(self):
+        # .env.example sets DB_PATH=ongabot.db; honouring it would put every bot on one database.
+        main, env, _ = self._run("API_TOKEN=x\nDB_PATH=ongabot.db\n")
+        self.assertEqual(env["DB_PATH"], str(main / "ongabot-ongadev2.db"))
 
 
 def _git(cwd, *args):

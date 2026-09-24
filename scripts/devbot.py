@@ -18,9 +18,11 @@ Slot choice when no slot is named:
      another branch's bot is never stopped silently
 Naming a slot (`make run BOT=ongadev3`) takes it over, stopping whatever runs on it.
 
-A worktree gets its own database (seeded from the newest ongabot.db* in the main
-checkout), so a branch's pickle migrations never touch the main dev database.
-The main checkout keeps using DB_PATH from its env file.
+Each checkout keeps one database per bot, `<checkout>/ongabot-<bot>.db`, which starts
+empty and persists across restarts. Bot data is tied to the bot's own chats, so bots
+never share a database, and a branch never touches another checkout's data. DB_PATH
+in an env file is ignored here. Put the test group in AUTHORIZED_CHAT_IDS in the bot's
+env file so an empty database is authorized from the first start.
 
 Usage:
     python scripts/devbot.py run [--bot NAME]
@@ -33,7 +35,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import signal
 import subprocess
 import sys
@@ -46,7 +47,6 @@ ENV_DIR = ".env.d"
 # A slot name is the env file's name; anything else in .env.d (dotfiles, editor backups) is ignored.
 SLOT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 BOT_SCRIPT = "ongabot/ongabot.py"
-DB_NAME = "ongabot.db"
 STOP_TIMEOUT_SECONDS = 15.0
 
 
@@ -193,21 +193,9 @@ def choose_slot(
     raise SlotError(f"All dev bots are busy: {busy}. Stop one, or take one over with `make run BOT=<name>`.")
 
 
-def find_seed_db(main: Path) -> Path | None:
-    """Return the newest ongabot.db / ongabot.db.* in the main checkout, if any."""
-    candidates = [path for path in [main / DB_NAME, *main.glob(f"{DB_NAME}.*")] if path.is_file()]
-    return max(candidates, key=lambda path: path.stat().st_mtime, default=None)
-
-
-def ensure_worktree_db(checkout: Checkout) -> tuple[Path, Path | None]:
-    """Return this worktree's database path and the file it was seeded from (None if it already existed)."""
-    target = checkout.root / DB_NAME
-    if target.exists():
-        return target, None
-    seed = find_seed_db(checkout.main)
-    if seed is not None:
-        shutil.copy2(seed, target)
-    return target, seed
+def db_path(checkout: Checkout, slot: str) -> Path:
+    """This checkout's database for `slot`; the bot creates it empty on first start."""
+    return checkout.root / f"ongabot-{slot}.db"
 
 
 def parse_env_file(text: str) -> dict[str, str]:
@@ -278,11 +266,11 @@ def cmd_run(checkout: Checkout, requested: str | None) -> int:
     env = dict(os.environ)
     env.update(parse_env_file(env_file(checkout.main, slot).read_text()))
     env.setdefault("CHANGELOG_PATH", str(checkout.root / "CHANGELOG.md"))
-    if checkout.is_worktree:
-        db_path, seed = ensure_worktree_db(checkout)
-        env["DB_PATH"] = str(db_path)
-        if seed is not None:
-            print(f"Seeded {db_path} from {seed}", flush=True)
+    database = db_path(checkout, slot)
+    if env.get("DB_PATH") not in (None, "", str(database)):
+        print(f"Ignoring DB_PATH={env['DB_PATH']} from {ENV_DIR}/{slot}: each bot uses its own database", flush=True)
+    env["DB_PATH"] = str(database)
+    print(f"Database: {database}{'' if database.exists() else ' (new, empty)'}", flush=True)
 
     # exec keeps the pid, so the recorded pid is the bot process itself and `stop` can signal it.
     write_holder(checkout.main, slot, Holder(pid=os.getpid(), checkout=str(checkout.root), branch=checkout.branch))

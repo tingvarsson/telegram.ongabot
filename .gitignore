@@ -113,5 +113,7 @@ venv.bak/
 
 # ongabot specific
 ongabot.db
+# Per-bot dev databases from `make run`
+ongabot-*.db
 # Database snapshots, e.g. a prod backup copied in to seed dev databases
 ongabot.db.*

@@ -13,7 +13,7 @@ after the bot. Any number works; every file there is one bot that `make run` can
 mkdir -p .env.d
 cp .env.example .env.d/ongadev2
 cp .env.example .env.d/ongadev3
-# edit each file: API_TOKEN, BOT_ADMINS, and CS2_MIN_MEMBERS=1 for a test group
+# edit each file: API_TOKEN, BOT_ADMINS, AUTHORIZED_CHAT_IDS, and CS2_MIN_MEMBERS=1 for a test group
 ```
 
 ### Creating a bot
@@ -29,7 +29,8 @@ cp .env.example .env.d/ongadev3
    Telegram may upgrade the group to a supergroup at this point, which **changes its chat ID**.
    Make the bot an admin before step 5.
 5. Set `BOT_ADMINS` to your own Telegram user ID, start the bot with `make run BOT=<name>`, and
-   send `/authorize` in the group.
+   send `/authorize` in the group. It replies with the chat ID: put that in
+   `AUTHORIZED_CHAT_IDS` in the bot's env file.
 
 ### Local Python environment
 
@@ -51,8 +52,10 @@ prints which one it started (`ongadev2 → <branch>`):
 - `make run BOT=ongadev3` picks a bot explicitly and stops whatever is running on it.
 - `make status` shows which branch each bot is running, and `make stop` stops this checkout's bot.
 
-A worktree gets its own `ongabot.db`, seeded from the newest `ongabot.db*` in the main
-checkout, so a branch never modifies the main dev database.
+Each checkout keeps one database per bot, `ongabot-<bot>.db`. It starts empty and persists
+across restarts, so bots never share data and a branch never touches another checkout's.
+Set `AUTHORIZED_CHAT_IDS` in each bot's env file to its test group's ID (`/authorize`
+replies with it), so a new, empty database is authorized from the first start.
 
 ### Docker
 
