@@ -12,6 +12,7 @@ wider than a phone screen wraps every row and becomes unreadable.
 import difflib
 import os
 import re
+import time
 import unittest
 from pathlib import Path
 from typing import Callable, Dict, List, Tuple
@@ -29,6 +30,10 @@ from tests.telegram_markup import check_html, check_markdown_v2, check_plain_tex
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 UPDATE_SNAPSHOTS = os.environ.get("UPDATE_SNAPSHOTS") == "1"
 MESSAGE_SEPARATOR = "\n\n---- next message ----\n\n"
+
+# Some renders show dates in the server's local time on purpose (a patch note shows the date the
+# group saw it), so the snapshots pin one zone. Otherwise a UTC CI runner renders the day before.
+SNAPSHOT_TZ = "Europe/Stockholm"
 
 # Monospace columns a code-block line may take before it wraps on a phone in portrait: the
 # widest tables confirmed to fit (a CS2 match scoreboard, the event recap). 35 is known to wrap.
@@ -110,6 +115,24 @@ def visible_text(name: str) -> str:
 def code_blocks(markdown_v2: str) -> List[List[str]]:
     """The lines of each ``` block in a MarkdownV2 message, unescaped."""
     return [_MARKDOWN_ESCAPE_RE.sub(r"\1", block).splitlines() for block in _CODE_BLOCK_RE.findall(markdown_v2)]
+
+
+_saved_tz = None
+
+
+def setUpModule():  # pylint: disable=invalid-name  # unittest's hook name
+    global _saved_tz  # pylint: disable=global-statement
+    _saved_tz = os.environ.get("TZ")
+    os.environ["TZ"] = SNAPSHOT_TZ
+    time.tzset()
+
+
+def tearDownModule():  # pylint: disable=invalid-name  # unittest's hook name
+    if _saved_tz is None:
+        os.environ.pop("TZ", None)
+    else:
+        os.environ["TZ"] = _saved_tz
+    time.tzset()
 
 
 class SnapshotTest(unittest.TestCase):
