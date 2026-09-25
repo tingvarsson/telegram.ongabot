@@ -11,7 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from ongabot import ongabot
+from ongabot import ongabot, quips
 from ongabot.cs2.format import format_session
 from ongabot.cs2.patchnotesformat import render_patch_notes_html
 from ongabot.cs2.steamnews import SteamNewsItem
@@ -109,6 +109,17 @@ class MarkdownV2BuildersTest(unittest.TestCase):
 class PlainTextBuildersTest(unittest.TestCase):
     def test_help_text_fits_one_message(self):
         check_plain_text(helper.create_help_text())
+
+    def test_every_vote_reply_is_valid_plain_text(self):
+        # Sent without a parse mode, so a nasty name needs no escaping; every banter line is
+        # still run through the checker once, via the path that uses its pool.
+        for (previous, new), kind in quips.BANTER_BY_PATH.items():
+            for line in quips.POOLS[kind]:
+                with patch("ongabot.quips.next_banter", return_value=line), self.subTest(kind=kind, line=line):
+                    if new is None:
+                        check_plain_text(quips.build_retraction_reply(NASTY, previous))
+                    else:
+                        check_plain_text(quips.build_vote_reply(NASTY, previous, new))
 
 
 if __name__ == "__main__":

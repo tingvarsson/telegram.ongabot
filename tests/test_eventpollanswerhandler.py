@@ -2,8 +2,7 @@ import unittest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from ongabot.handler.eventpollanswerhandler import callback
-from ongabot.quips import select_quip
+from ongabot.handler.eventpollanswerhandler import RETRACTION_REPLY_DELAY, callback, retraction_reply_callback
 from ongabot.userdata import UserData
 
 
@@ -253,13 +252,14 @@ class EventPollAnswerPlayedStreakTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn(5, played_at_call_time)
 
 
-class EventPollAnswerJokeResponseTest(unittest.IsolatedAsyncioTestCase):
-    """No-op/Maybe-Baby votes get a quip in the chat autoresponse, replacing the generic
-    "great job" / "changed their vote" message - not shown in the status message."""
+class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
+    """Every vote gets a chat reply saying what happened (first answer or a change, from what to
+    what), plus banter for that exact path. See quips.build_vote_reply for the matrix."""
 
     def setUp(self):
-        self.pool = [f"quip {i}" for i in range(20)]
-        patcher = patch("ongabot.handler.eventpollanswerhandler.get_quip_pool", return_value=self.pool)
+        # Swap the random banter for its pool name, so a reply shows which pool it drew from.
+        # The handler imports quips as a top-level module (pythonpath is ongabot/).
+        patcher = patch("quips.next_banter", side_effect=lambda kind: f"<{kind.name}>")
         self.addCleanup(patcher.stop)
         patcher.start()
 
@@ -279,50 +279,211 @@ class EventPollAnswerJokeResponseTest(unittest.IsolatedAsyncioTestCase):
         event.user_played_streaks = {}
         return event
 
-    async def test_no_op_vote_gets_a_quip_response(self):
-        user_data = UserData()
-        event = self._make_event()
-        context = _make_context(user_data, event, {date(2026, 1, 8): _make_event_mock("poll1", date(2026, 1, 8))})
+    def _context(self, user_data, event):
+        return _make_context(user_data, event, {date(2026, 1, 8): _make_event_mock("poll1", date(2026, 1, 8))})
 
-        # 5 slots means option id 5 is No-op.
-        await callback(self._make_update("poll1", user_id=42, option_ids=(5,)), context)
+    def _sent(self, context):
+        return [c.args[1] for c in context.bot.send_message.call_args_list]
 
-        expected_quip = select_quip(self.pool, "poll1", 42, 5)
-        context.bot.send_message.assert_called_once_with(event.chat_id, f"Alice — {expected_quip}")
+    async def test_first_game_vote_gets_the_classic_praise(self):
+        user_data, event = UserData(), self._make_event()
+        context = self._context(user_data, event)
 
-    async def test_maybe_baby_vote_gets_a_quip_response(self):
-        user_data = UserData()
-        event = self._make_event()
-        context = _make_context(user_data, event, {date(2026, 1, 8): _make_event_mock("poll1", date(2026, 1, 8))})
-
-        # 5 slots means option id 6 is Maybe Baby.
-        await callback(self._make_update("poll1", user_id=42, option_ids=(6,)), context)
-
-        expected_quip = select_quip(self.pool, "poll1", 42, 6)
-        context.bot.send_message.assert_called_once_with(event.chat_id, f"Alice — {expected_quip}")
-
-    async def test_real_slot_first_vote_keeps_the_generic_message(self):
-        user_data = UserData()
-        event = self._make_event()
-        context = _make_context(user_data, event, {date(2026, 1, 8): _make_event_mock("poll1", date(2026, 1, 8))})
-
-        await callback(self._make_update("poll1", user_id=42, option_ids=(0,)), context)
+        await callback(self._make_update("poll1", 42, (0,)), context)
 
         context.bot.send_message.assert_called_once_with(
             event.chat_id, "Wow Alice, what a great job answering that poll!"
         )
 
-    async def test_real_slot_changed_vote_keeps_the_generic_message(self):
-        user_data = UserData()
-        user_data.set_poll_answer("poll1", (0,))
-        event = self._make_event()
-        context = _make_context(user_data, event, {date(2026, 1, 8): _make_event_mock("poll1", date(2026, 1, 8))})
+    async def test_first_no_op_vote(self):
+        user_data, event = UserData(), self._make_event()
+        context = self._context(user_data, event)
 
-        await callback(self._make_update("poll1", user_id=42, option_ids=(1,)), context)
+        # 5 slots means option id 5 is No-op.
+        await callback(self._make_update("poll1", 42, (5,)), context)
+
+        context.bot.send_message.assert_called_once_with(event.chat_id, "Alice votes No-op — <FIRST_NO_OP>")
+
+    async def test_first_maybe_vote(self):
+        user_data, event = UserData(), self._make_event()
+        context = self._context(user_data, event)
+
+        # 5 slots means option id 6 is Maybe Baby.
+        await callback(self._make_update("poll1", 42, (6,)), context)
+
+        context.bot.send_message.assert_called_once_with(event.chat_id, "Alice votes Maybe — <FIRST_MAYBE>")
+
+    async def test_slot_to_slot_change_keeps_the_suspicious_line(self):
+        user_data, event = UserData(), self._make_event()
+        user_data.set_poll_answer("poll1", (0,))
+        context = self._context(user_data, event)
+
+        await callback(self._make_update("poll1", 42, (1,)), context)
 
         context.bot.send_message.assert_called_once_with(
             event.chat_id, "Hmm suspicious, looks like Alice changed their vote..."
         )
+
+    async def test_change_through_a_retraction_names_both_ends(self):
+        # Telegram changes a vote as retract-then-vote: game -> () -> No-op.
+        user_data, event = UserData(), self._make_event()
+        context = self._context(user_data, event)
+
+        await callback(self._make_update("poll1", 42, (0,)), context)
+        await callback(self._make_update("poll1", 42, ()), context)
+        await callback(self._make_update("poll1", 42, (5,)), context)
+
+        self.assertEqual(
+            self._sent(context),
+            ["Wow Alice, what a great job answering that poll!", "Alice went from game to No-op — <GAME_TO_NO_OP>"],
+        )
+
+    async def test_switching_to_game_from_no_op(self):
+        user_data, event = UserData(), self._make_event()
+        user_data.set_poll_answer("poll1", (5,))
+        user_data.set_poll_answer("poll1", ())
+        context = self._context(user_data, event)
+
+        await callback(self._make_update("poll1", 42, (3,)), context)
+
+        context.bot.send_message.assert_called_once_with(
+            event.chat_id, "Alice went from No-op to game — <NO_OP_TO_GAME>"
+        )
+
+    async def test_a_retraction_sends_nothing_right_away(self):
+        user_data, event = UserData(), self._make_event()
+        user_data.set_poll_answer("poll1", (0,))
+        context = self._context(user_data, event)
+
+        await callback(self._make_update("poll1", 42, ()), context)
+
+        context.bot.send_message.assert_not_called()
+
+
+class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
+    """A vote that is retracted and not replaced within RETRACTION_REPLY_DELAY gets a reply."""
+
+    def setUp(self):
+        patcher = patch("quips.next_banter", side_effect=lambda kind: f"<{kind.name}>")
+        self.addCleanup(patcher.stop)
+        patcher.start()
+
+    def _make_update(self, option_ids):
+        update = MagicMock()
+        update.poll_answer.poll_id = "poll1"
+        update.poll_answer.option_ids = option_ids
+        update.poll_answer.user.id = 42
+        update.poll_answer.user.name = "Alice"
+        return update
+
+    def _make_event(self):
+        event = MagicMock()
+        event.chat_id = 1
+        event.num_slots = 5
+        event.cancelled = False
+        event.completed = False
+        event.user_streaks = {}
+        event.user_played_streaks = {}
+        return event
+
+    async def test_retracting_a_vote_schedules_the_reply(self):
+        user_data, event = UserData(), self._make_event()
+        user_data.set_poll_answer("poll1", (0,))
+        context = _make_context(user_data, event)
+        context.job_queue.get_jobs_by_name.return_value = []
+
+        await callback(self._make_update(()), context)
+
+        context.job_queue.run_once.assert_called_once_with(
+            retraction_reply_callback,
+            when=RETRACTION_REPLY_DELAY,
+            chat_id=1,
+            user_id=42,
+            name="vote_retracted:poll1:42",
+            data="poll1",
+        )
+
+    async def test_retracting_without_an_earlier_vote_schedules_nothing(self):
+        user_data, event = UserData(), self._make_event()
+        context = _make_context(user_data, event)
+        context.job_queue.get_jobs_by_name.return_value = []
+
+        await callback(self._make_update(()), context)
+
+        context.job_queue.run_once.assert_not_called()
+
+    async def test_a_new_vote_cancels_the_pending_reply(self):
+        user_data, event = UserData(), self._make_event()
+        user_data.set_poll_answer("poll1", (0,))
+        user_data.set_poll_answer("poll1", ())
+        context = _make_context(user_data, event)
+        pending = MagicMock()
+        context.job_queue.get_jobs_by_name.return_value = [pending]
+
+        await callback(self._make_update((5,)), context)
+
+        context.job_queue.get_jobs_by_name.assert_called_with("vote_retracted:poll1:42")
+        pending.schedule_removal.assert_called_once()
+
+    def _job_context(self, user_data, event):
+        context = MagicMock()
+        context.job.data = "poll1"
+        context.user_data = user_data
+        context.bot_data.get_event.return_value = event
+        context.bot.send_message = AsyncMock()
+        return context
+
+    def _retracted_user_data(self, answer):
+        user_data = UserData()
+        user = MagicMock()
+        user.name = "Alice"
+        user_data.init_or_update(user)
+        user_data.set_poll_answer("poll1", answer)
+        user_data.set_poll_answer("poll1", ())
+        return user_data
+
+    async def test_reply_names_what_was_pulled(self):
+        event = self._make_event()
+        context = self._job_context(self._retracted_user_data((6,)), event)
+
+        await retraction_reply_callback(context)
+
+        context.bot.send_message.assert_called_once_with(1, "Alice pulled their Maybe vote — <RETRACTED_MAYBE>")
+
+    async def test_no_reply_when_the_user_voted_again(self):
+        user_data = self._retracted_user_data((0,))
+        user_data.set_poll_answer("poll1", (1,))
+        context = self._job_context(user_data, self._make_event())
+
+        await retraction_reply_callback(context)
+
+        context.bot.send_message.assert_not_called()
+
+    async def test_no_reply_when_the_event_is_gone(self):
+        context = self._job_context(self._retracted_user_data((0,)), None)
+
+        await retraction_reply_callback(context)
+
+        context.bot.send_message.assert_not_called()
+
+    async def test_no_reply_when_the_event_completed_meanwhile(self):
+        # Completing an event does not close its poll, so a vote can be pulled right before.
+        event = self._make_event()
+        event.completed = True
+        context = self._job_context(self._retracted_user_data((0,)), event)
+
+        await retraction_reply_callback(context)
+
+        context.bot.send_message.assert_not_called()
+
+    async def test_no_reply_when_the_event_was_cancelled(self):
+        event = self._make_event()
+        event.cancelled = True
+        context = self._job_context(self._retracted_user_data((0,)), event)
+
+        await retraction_reply_callback(context)
+
+        context.bot.send_message.assert_not_called()
 
 
 if __name__ == "__main__":

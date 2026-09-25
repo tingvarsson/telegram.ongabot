@@ -186,8 +186,8 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
         await post_init(application)
 
         # Event cleanup (startup + daily), the hourly CS2 sweep scheduler, the hourly Shorts
-        # scheduler, the nightly topic-score decay, the quip pool refresh, and the CS2
-        # patch-notes poll are all registered.
+        # scheduler, the nightly topic-score decay, and the CS2 patch-notes poll are all
+        # registered.
         scheduled = [
             call.kwargs["name"]
             for calls in (
@@ -205,7 +205,6 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
                 "cs2_patchnotes_sweep",
                 "cs2_sweeps",
                 "decay_shorts_topic_scores",
-                "quip_pool_refresh",
                 "youtube_shorts_schedule",
             ],
         )
@@ -398,18 +397,6 @@ class PostInitVersionTrackingTest(unittest.IsolatedAsyncioTestCase):
             await post_init(application)
         application.bot.send_message.assert_not_called()
         self.assertIsNone(application.bot_data.last_known_version)
-
-
-class RefreshQuipPoolCallbackTest(unittest.IsolatedAsyncioTestCase):
-    async def test_refreshes_the_pool_using_the_shared_joke_client(self):
-        context = MagicMock()
-        joke_client = MagicMock()
-
-        with patch("ongabot.ongabot.get_joke_client", return_value=joke_client):
-            with patch("ongabot.ongabot.refresh_quip_pool", AsyncMock()) as refresh:
-                await ongabot.refresh_quip_pool_callback(context)
-
-        refresh.assert_awaited_once_with(joke_client)
 
 
 if __name__ == "__main__":
