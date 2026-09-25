@@ -592,10 +592,17 @@ def format_statistics(result: StatisticsResult, sort_by: str = DEFAULT_SORT_KEY)
     return "\n\n".join(sections)
 
 
-def build_sort_keyboard() -> InlineKeyboardMarkup:
-    """Build the inline keyboard of sort buttons for the statistics table, 2 per row."""
+def build_sort_keyboard(chat_id: Optional[int] = None) -> InlineKeyboardMarkup:
+    """Build the inline keyboard of sort buttons for the statistics table, 2 per row.
+
+    A table sent to a private chat passes its group's chat_id, which each button carries
+    (stats_sort:<key>:<chat_id>): the private chat a tap comes from says nothing about which
+    group's table to re-sort. A table sent in the group leaves it out.
+    """
+    suffix = f":{chat_id}" if chat_id is not None else ""
     buttons = [
-        InlineKeyboardButton(c.button_label, callback_data=f"{CALLBACK_DATA_PREFIX}:{c.key}") for c in SORT_COLUMNS
+        InlineKeyboardButton(c.button_label, callback_data=f"{CALLBACK_DATA_PREFIX}:{c.key}{suffix}")
+        for c in SORT_COLUMNS
     ]
     rows = []
     for start in range(0, len(buttons), 2):
@@ -604,7 +611,12 @@ def build_sort_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
-def render_statistics_message(chat: Chat, sort_by: str = DEFAULT_SORT_KEY) -> Tuple[str, InlineKeyboardMarkup]:
-    """Compute statistics fresh and render the (text, keyboard) pair for a /statistics reply or edit."""
+def render_statistics_message(
+    chat: Chat, sort_by: str = DEFAULT_SORT_KEY, in_private_chat: bool = False
+) -> Tuple[str, InlineKeyboardMarkup]:
+    """Compute statistics fresh and render the (text, keyboard) pair for a /statistics reply or edit.
+
+    in_private_chat makes the sort buttons carry chat's id, see build_sort_keyboard.
+    """
     result = compute_statistics(chat)
-    return format_statistics(result, sort_by=sort_by), build_sort_keyboard()
+    return format_statistics(result, sort_by=sort_by), build_sort_keyboard(chat.chat_id if in_private_chat else None)

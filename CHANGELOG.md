@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   teases you for Maybe, No-op or pulling your vote, and cheers you on for switching to game.
 - `/cs2patches on` posts CS2 patch notes in the chat as Valve releases them, starting with
   the latest one, each collapsed so it doesn't flood the chat. `/cs2patches off` stops them.
+- `/statistics`, `/leaderboard`, `/cs2` and `/topics` also work in a private chat with the
+  bot, so you can check your group's numbers without posting in it. `/linksteam` and
+  `/unlinksteam` work there too.
 
 ### Fixed
 

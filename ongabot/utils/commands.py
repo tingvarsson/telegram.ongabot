@@ -17,6 +17,9 @@ class CommandInfo:
     brief: str  # one-liner shown in /help
     usage: str  # multi-line shown on bad input
     menu_description: str  # short phrase shown in Telegram command menu
+    # Also answered in a private chat with the bot. A group command sent there reads the
+    # sender's group (see utils/dm.py), so the reply stays out of the group chat.
+    private: bool = False
 
 
 HELP = CommandInfo(
@@ -24,6 +27,7 @@ HELP = CommandInfo(
     brief="/help - Get some aid in needing times",
     usage="/help",
     menu_description="Get some aid in needing times",
+    private=True,
 )
 
 CHANGELOG = CommandInfo(
@@ -152,16 +156,18 @@ DEAUTHORIZE = CommandInfo(
 
 STATISTICS = CommandInfo(
     command="statistics",
-    brief="/statistics - Show all-time participation statistics for this chat",
+    brief="/statistics - Show all-time participation statistics for the group",
     usage="/statistics",
     menu_description="Show all-time participation statistics",
+    private=True,
 )
 
 LEADERBOARD = CommandInfo(
     command="leaderboard",
-    brief="/leaderboard - Show the Banger Points leaderboard for this chat",
+    brief="/leaderboard - Show the Banger Points leaderboard for the group",
     usage="/leaderboard",
     menu_description="Show the Banger Points leaderboard",
+    private=True,
 )
 
 LINKSTEAM = CommandInfo(
@@ -177,6 +183,7 @@ LINKSTEAM = CommandInfo(
         "  /linksteam https://steamcommunity.com/profiles/76561198034202275"
     ),
     menu_description="Link your Steam account for CS2 results",
+    private=True,
 )
 
 UNLINKSTEAM = CommandInfo(
@@ -184,6 +191,7 @@ UNLINKSTEAM = CommandInfo(
     brief="/unlinksteam - Unlink your Steam account",
     usage="/unlinksteam",
     menu_description="Unlink your Steam account",
+    private=True,
 )
 
 CS2 = CommandInfo(
@@ -200,6 +208,7 @@ CS2 = CommandInfo(
         "  /cs2 target_date=2026-09-02"
     ),
     menu_description="Show CS2 results for a date [target_date=..]",
+    private=True,
 )
 
 CS2PATCHES = CommandInfo(
@@ -215,9 +224,10 @@ CS2PATCHES = CommandInfo(
 
 TOPICS = CommandInfo(
     command="topics",
-    brief="/topics - Show this chat's learned YouTube Short topic preferences",
+    brief="/topics - Show the group's learned YouTube Short topic preferences",
     usage="/topics",
     menu_description="Show learned YouTube Short topic preferences",
+    private=True,
 )
 
 BOT_SHORT_DESCRIPTION = "ONGAbot - the only bot you'll ever need"
@@ -249,3 +259,12 @@ ALL_COMMANDS = [
     LINKSTEAM,
     UNLINKSTEAM,
 ]
+
+# The commands a private chat with the bot answers, in help order: the private /help and the
+# private command menu list exactly these.
+PRIVATE_COMMANDS = [cmd for cmd in ALL_COMMANDS if cmd.private]
+
+# Command names let through the authorization gate in a private chat. /start is not in
+# ALL_COMMANDS (it is hidden from /help and the menu) but is the first thing Telegram sends
+# when someone opens the bot, so it must pass too.
+PRIVATE_COMMAND_NAMES = frozenset({"start"} | {cmd.command for cmd in PRIVATE_COMMANDS})

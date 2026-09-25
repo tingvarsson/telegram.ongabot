@@ -94,10 +94,10 @@ def _vote_replies() -> List[str]:
     return replies
 
 
-def _help() -> List[str]:
+def _help(private: bool = False) -> List[str]:
     # The help text ends with the version, which every release bumps.
     with patch.object(helper, "__version__", "1.2.3"):
-        return [helper.create_help_text()]
+        return [helper.create_help_text(private=private)]
 
 
 RENDERS: Dict[str, Render] = {
@@ -111,6 +111,7 @@ RENDERS: Dict[str, Render] = {
     "changelog": (check_html, lambda: render_changelog_html(SAMPLE_CHANGELOG, headline=CHANGELOG_HEADING)),
     "patch_note": (check_html, lambda: render_patch_notes_html(message_fixtures.steam_patch_notes()[:1])),
     "help": (check_plain_text, _help),
+    "help_private": (check_plain_text, lambda: _help(private=True)),
     "vote_replies": (check_plain_text, _vote_replies),
 }
 

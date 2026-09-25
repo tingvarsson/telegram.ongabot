@@ -41,6 +41,19 @@ class LeaderboardCommandHandlerTest(unittest.IsolatedAsyncioTestCase):
 
         update.message.reply_text.assert_awaited_once_with("TEXT", parse_mode=ParseMode.MARKDOWN_V2, do_quote=False)
 
+    async def test_waits_for_a_group_pick_when_none_resolved(self):
+        update, context, _chat = self._make()
+
+        with (
+            patch("ongabot.handler.leaderboardcommandhandler.resolve_group", AsyncMock(return_value=None)) as resolve,
+            patch("ongabot.handler.leaderboardcommandhandler.render_leaderboard_message") as render,
+        ):
+            await callback(update, context)
+
+        self.assertEqual(resolve.await_args.args[2], "leaderboard")
+        render.assert_not_called()
+        update.message.reply_text.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()

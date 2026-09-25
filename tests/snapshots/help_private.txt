@@ -1,0 +1,21 @@
+Welcome traveler, my name is ONGAbot.
+I'm the one and only, the truth speaker.
+
+My duties are:
+ - Uphold the law, obviously, with weekly ON/GA polls
+ - Give praise to the faithful
+ - Aid the needing
+ - Condemn the wicked
+
+Commandments:
+/help - Get some aid in needing times
+/statistics - Show all-time participation statistics for the group
+/leaderboard - Show the Banger Points leaderboard for the group
+/cs2 [<date|weekday>] - Show the CS2 results for a date
+/topics - Show the group's learned YouTube Short topic preferences
+/linksteam <steam64|profile URL> - Link your Steam account so your CS2 games are recognised
+/unlinksteam - Unlink your Steam account
+
+In here I answer only you: the group commands read your group without posting in it.
+
+Version: 1.2.3

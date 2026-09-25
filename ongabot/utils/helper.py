@@ -4,11 +4,14 @@ from datetime import date, datetime, time, timedelta
 
 from _version import __version__
 from .changelog import is_dev_version
-from .commands import ALL_COMMANDS
+from .commands import ALL_COMMANDS, PRIVATE_COMMANDS
 
 
-def create_help_text() -> str:
-    """Print the help text for a /start or /help command"""
+def create_help_text(private: bool = False) -> str:
+    """Print the help text for a /start or /help command
+
+    private: sent in a private chat with the bot, so only list the commands that work there.
+    """
     header = (
         "Welcome traveler, my name is ONGAbot.\n"
         "I'm the one and only, the truth speaker.\n"
@@ -21,11 +24,19 @@ def create_help_text() -> str:
         "\n"
         "Commandments:\n"
     )
-    commands = "\n".join(cmd.brief for cmd in ALL_COMMANDS)
+    if private:
+        commands = "\n".join(cmd.brief for cmd in PRIVATE_COMMANDS)
+        note = "In here I answer only you: the group commands read your group without posting in it."
+    else:
+        commands = "\n".join(cmd.brief for cmd in ALL_COMMANDS)
+        *names, last = [f"/{cmd.command}" for cmd in PRIVATE_COMMANDS if cmd.command != "help"]
+        note = (
+            f"{', '.join(names)} and {last} also work in a private chat with me, so the answer stays out of the group."
+        )
     version_line = f"Version: {__version__}"
     if is_dev_version(__version__):
         version_line += " (development build)"
-    return f"{header}{commands}\n\n{version_line}"
+    return f"{header}{commands}\n\n{note}\n\n{version_line}"
 
 
 def get_upcoming_date(today: date, upcoming_weekday: str) -> date:

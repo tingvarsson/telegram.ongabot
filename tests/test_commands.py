@@ -4,7 +4,14 @@ import unittest
 from telegram.ext import CommandHandler
 
 from ongabot.ongabot import register_handlers
-from ongabot.utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION, NEWEVENT
+from ongabot.utils.commands import (
+    ALL_COMMANDS,
+    BOT_DESCRIPTION,
+    BOT_SHORT_DESCRIPTION,
+    NEWEVENT,
+    PRIVATE_COMMAND_NAMES,
+    PRIVATE_COMMANDS,
+)
 
 # Registered but deliberately left out of /help and the command menu: Telegram sends /start by
 # itself when someone first opens the bot, and it just replies with the help text.
@@ -73,6 +80,22 @@ class CommandRegistrationTest(unittest.TestCase):
     def test_no_command_is_documented_twice(self):
         names = [cmd.command for cmd in ALL_COMMANDS]
         self.assertEqual(len(names), len(set(names)))
+
+
+class PrivateCommandsTest(unittest.TestCase):
+    """The commands a private chat with the bot answers - the gate, private /help and menu use these."""
+
+    def test_exactly_the_read_and_per_user_commands_are_private(self):
+        self.assertEqual(
+            [cmd.command for cmd in PRIVATE_COMMANDS],
+            ["help", "statistics", "leaderboard", "cs2", "topics", "linksteam", "unlinksteam"],
+        )
+
+    def test_start_passes_the_gate_although_hidden_from_help(self):
+        self.assertIn("start", PRIVATE_COMMAND_NAMES)
+
+    def test_every_private_command_is_registered(self):
+        self.assertLessEqual(PRIVATE_COMMAND_NAMES, set(_registered_commands()))
 
 
 class CommandInfoConsistencyTest(unittest.TestCase):

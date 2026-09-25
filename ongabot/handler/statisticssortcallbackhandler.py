@@ -7,6 +7,7 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CallbackQueryHandler
 
+from utils.dm import NO_LONGER_IN_GROUP, can_read_group, is_private_chat
 from utils.log import log
 from utils.statistics import CALLBACK_DATA_PREFIX, render_statistics_message
 
@@ -17,7 +18,8 @@ _logger = logging.getLogger(__name__)
 # falls back to the default sort (see format_statistics's _COLUMNS_BY_KEY.get fallback)
 # instead of going dead - Telegram would otherwise spin the tapped button forever since
 # answer() would never be called.
-CALLBACK_PATTERN = rf"^{CALLBACK_DATA_PREFIX}:(\w+)$"
+# The optional trailing chat id is set on tables sent to a private chat (see build_sort_keyboard).
+CALLBACK_PATTERN = rf"^{CALLBACK_DATA_PREFIX}:(\w+)(?::(-?\d+))?$"
 
 
 class StatisticsSortCallbackHandler(CallbackQueryHandler):
@@ -35,13 +37,28 @@ async def callback(update: Update, context: CallbackContext) -> None:
         _logger.error("Received statistics sort callback without query/data/effective_chat")
         return
 
+    sort_by, _, group_id = query.data.removeprefix(f"{CALLBACK_DATA_PREFIX}:").partition(":")
+    private = is_private_chat(update)
+    if group_id:
+        # A table in a private chat: re-check the tapper may still read that group.
+        chat_id = int(group_id)
+        user_id = update.effective_user.id if update.effective_user else None
+        if user_id is None or not await can_read_group(context.bot, context.bot_data, chat_id, user_id):
+            _logger.info("Refused statistics re-sort of chat_id=%s for user_id=%s", chat_id, user_id)
+            await query.answer(NO_LONGER_IN_GROUP)
+            return
+    elif private:
+        # No group on the button and the private chat has no statistics of its own.
+        _logger.warning("Statistics sort tap in private chat_id=%s without a group", update.effective_chat.id)
+        await query.answer()
+        return
+    else:
+        chat_id = update.effective_chat.id
+
     await query.answer()
 
-    sort_by = query.data.removeprefix(f"{CALLBACK_DATA_PREFIX}:")
-    chat_id = update.effective_chat.id
     chat = context.bot_data.get_chat(chat_id)
-
-    text, keyboard = render_statistics_message(chat, sort_by=sort_by)
+    text, keyboard = render_statistics_message(chat, sort_by=sort_by, in_private_chat=private)
 
     try:
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=keyboard)
