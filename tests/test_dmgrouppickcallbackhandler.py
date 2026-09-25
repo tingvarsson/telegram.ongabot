@@ -4,9 +4,10 @@ from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram import InaccessibleMessage, Message
+from telegram.constants import ChatType
 
 from ongabot.handler import dmgrouppickcallbackhandler as handler
-from ongabot.utils.dm import NO_LONGER_IN_GROUP
+from ongabot.utils.dm import GROUP_UNAVAILABLE
 
 GROUP_ID = -100123
 USER_ID = 7
@@ -16,6 +17,7 @@ MODULE = "ongabot.handler.dmgrouppickcallbackhandler"
 def _make(data):
     update = MagicMock()
     update.effective_user.id = USER_ID
+    update.effective_chat.type = ChatType.PRIVATE
     query = update.callback_query
     query.data = data
     query.message = MagicMock(spec=Message)
@@ -82,12 +84,24 @@ class DmGroupPickCallbackTest(unittest.IsolatedAsyncioTestCase):
     async def test_refuses_a_user_no_longer_in_the_group(self):
         update, context, _, senders = await self._run(f"dm_pick:statistics:{GROUP_ID}", can_read=False)
 
-        update.callback_query.edit_message_text.assert_awaited_once_with(NO_LONGER_IN_GROUP)
+        update.callback_query.edit_message_text.assert_awaited_once_with(GROUP_UNAVAILABLE)
         context.bot_data.get_chat.assert_not_called()
         senders["statistics"].assert_not_awaited()
 
+    async def test_a_tap_outside_a_private_chat_is_answered_and_ignored(self):
+        """Pickers only exist in private chats; forged data in a group must not post another group there."""
+        update, context = _make(f"dm_pick:statistics:{GROUP_ID}")
+        update.effective_chat.type = ChatType.SUPERGROUP
+
+        with patch(f"{MODULE}.can_read_group", AsyncMock()) as can_read_group:
+            await handler.callback(update, context)
+
+        update.callback_query.answer.assert_awaited_once_with()
+        can_read_group.assert_not_awaited()
+        context.bot_data.get_chat.assert_not_called()
+
     async def test_unknown_command_or_bad_data_is_answered_and_ignored(self):
-        for data in (f"dm_pick:newevent:{GROUP_ID}", "dm_pick:statistics:nope"):
+        for data in (f"dm_pick:newevent:{GROUP_ID}", "dm_pick:statistics:nope", f"dm_pick:cs2:{GROUP_ID}:garbage"):
             with self.subTest(data=data):
                 update, context, can_read_group, _ = await self._run(data)
 

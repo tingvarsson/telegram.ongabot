@@ -2,14 +2,14 @@
 
 import logging
 from datetime import date
-from typing import Awaitable, Callable, Dict
+from typing import Awaitable, Callable, Dict, Optional
 
 from telegram import Message, Update
 from telegram.ext import CallbackContext, CallbackQueryHandler
 
 from chat import Chat
 from utils.commands import CS2, LEADERBOARD, STATISTICS, TOPICS
-from utils.dm import DM_PICK_PREFIX, NO_LONGER_IN_GROUP, can_read_group, decode_pick, group_title
+from utils.dm import DM_PICK_PREFIX, GROUP_UNAVAILABLE, can_read_group, decode_pick, group_title, is_private_chat
 from utils.log import log
 
 from .cs2commandhandler import send_cs2
@@ -21,24 +21,24 @@ _logger = logging.getLogger(__name__)
 
 CALLBACK_PATTERN = rf"^{DM_PICK_PREFIX}:"
 
-# (message to reply to, context, the picked group, the arg the picker carried)
-Sender = Callable[[Message, CallbackContext, Chat, str], Awaitable[None]]
+# (message to reply to, context, the picked group, the /cs2 date the picker carried, if any)
+Sender = Callable[[Message, CallbackContext, Chat, Optional[date]], Awaitable[None]]
 
 
-async def _statistics(message: Message, _context: CallbackContext, chat: Chat, _arg: str) -> None:
+async def _statistics(message: Message, _context: CallbackContext, chat: Chat, _date: Optional[date]) -> None:
     await send_statistics(message, chat)
 
 
-async def _leaderboard(message: Message, _context: CallbackContext, chat: Chat, _arg: str) -> None:
+async def _leaderboard(message: Message, _context: CallbackContext, chat: Chat, _date: Optional[date]) -> None:
     await send_leaderboard(message, chat)
 
 
-async def _topics(message: Message, _context: CallbackContext, chat: Chat, _arg: str) -> None:
+async def _topics(message: Message, _context: CallbackContext, chat: Chat, _date: Optional[date]) -> None:
     await send_topics(message, chat)
 
 
-async def _cs2(message: Message, context: CallbackContext, chat: Chat, arg: str) -> None:
-    await send_cs2(message, context, chat, date.fromisoformat(arg) if arg else None)
+async def _cs2(message: Message, context: CallbackContext, chat: Chat, event_date: Optional[date]) -> None:
+    await send_cs2(message, context, chat, event_date)
 
 
 # Every command whose private-chat reply can go through the group picker (utils.dm.resolve_group).
@@ -72,9 +72,18 @@ async def callback(update: Update, context: CallbackContext) -> None:
         await query.answer()
         return
 
+    # Pickers are only ever sent in private chats. Callback data can be forged, so without
+    # this a tap in a group could post another group's results into it.
+    if not is_private_chat(update):
+        _logger.warning("Ignoring group-pick callback outside a private chat, data=%r", query.data)
+        await query.answer()
+        return
+
     try:
         command, chat_id, arg = decode_pick(query.data)
         send = SENDERS[command]
+        # Only /cs2 carries an arg, its ISO date. Parsed here so bad data is ignored cleanly.
+        event_date = date.fromisoformat(arg) if arg else None
     except (ValueError, KeyError):
         _logger.warning("Ignoring group-pick callback with unknown data=%r", query.data)
         await query.answer()
@@ -84,11 +93,11 @@ async def callback(update: Update, context: CallbackContext) -> None:
     await query.answer()
     if not await can_read_group(context.bot, context.bot_data, chat_id, user_id):
         _logger.info("Refused /%s for chat_id=%s to user_id=%s", command, chat_id, user_id)
-        await query.edit_message_text(NO_LONGER_IN_GROUP)
+        await query.edit_message_text(GROUP_UNAVAILABLE)
         return
 
     _logger.info("Answering /%s for chat_id=%s to user_id=%s in a private chat", command, chat_id, user_id)
     # Replacing the picker with the group's name drops its buttons, so it can't be tapped
     # twice, and labels the reply that follows with the group it is about.
     await query.edit_message_text(await group_title(context.bot, chat_id))
-    await send(message, context, context.bot_data.get_chat(chat_id), arg)
+    await send(message, context, context.bot_data.get_chat(chat_id), event_date)

@@ -7,7 +7,7 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import CallbackContext, CallbackQueryHandler
 
-from utils.dm import NO_LONGER_IN_GROUP, can_read_group, is_private_chat
+from utils.dm import GROUP_UNAVAILABLE, can_read_group, is_private_chat
 from utils.log import log
 from utils.statistics import CALLBACK_DATA_PREFIX, render_statistics_message
 
@@ -39,21 +39,23 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     sort_by, _, group_id = query.data.removeprefix(f"{CALLBACK_DATA_PREFIX}:").partition(":")
     private = is_private_chat(update)
-    if group_id:
-        # A table in a private chat: re-check the tapper may still read that group.
-        chat_id = int(group_id)
-        user_id = update.effective_user.id if update.effective_user else None
-        if user_id is None or not await can_read_group(context.bot, context.bot_data, chat_id, user_id):
-            _logger.info("Refused statistics re-sort of chat_id=%s for user_id=%s", chat_id, user_id)
-            await query.answer(NO_LONGER_IN_GROUP)
-            return
-    elif private:
+    if not private:
+        # Always the group the tap came from. A group's table never carries a group id, and
+        # callback data can be forged, so one found here must not pull in another group.
+        chat_id = update.effective_chat.id
+    elif not group_id:
         # No group on the button and the private chat has no statistics of its own.
         _logger.warning("Statistics sort tap in private chat_id=%s without a group", update.effective_chat.id)
         await query.answer()
         return
     else:
-        chat_id = update.effective_chat.id
+        # A table in a private chat: re-check the tapper may still read that group.
+        chat_id = int(group_id)
+        user_id = update.effective_user.id if update.effective_user else None
+        if user_id is None or not await can_read_group(context.bot, context.bot_data, chat_id, user_id):
+            _logger.info("Refused statistics re-sort of chat_id=%s for user_id=%s", chat_id, user_id)
+            await query.answer(GROUP_UNAVAILABLE)
+            return
 
     await query.answer()
 

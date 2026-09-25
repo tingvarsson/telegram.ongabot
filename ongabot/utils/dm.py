@@ -26,7 +26,7 @@ CALLBACK_DATA_MAX_BYTES = 64
 
 NOT_IN_ANY_GROUP = "You're not in any group I'm running in, so there is nothing to show you here."
 PICK_GROUP_PROMPT = "Which group?"
-NO_LONGER_IN_GROUP = "You're no longer in that group."
+GROUP_UNAVAILABLE = "That group isn't available to you any more."
 
 _MEMBER_STATUSES = {ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER}
 
@@ -34,6 +34,14 @@ _MEMBER_STATUSES = {ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, Cha
 def is_private_chat(update: Update) -> bool:
     """True when update comes from a private chat with the bot."""
     return update.effective_chat is not None and update.effective_chat.type == ChatType.PRIVATE
+
+
+def private_commands_only(update: Update, context: CallbackContext) -> bool:
+    """True when update's chat answers only the private commands: a private chat not authorized.
+
+    A private chat a bot admin authorized answers every command, so its /help lists them all.
+    """
+    return is_private_chat(update) and not context.bot_data.is_authorized(update.effective_chat.id)
 
 
 async def is_group_member(bot: Bot, chat_id: int, user_id: int) -> bool:

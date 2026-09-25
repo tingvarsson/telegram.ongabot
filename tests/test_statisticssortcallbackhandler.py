@@ -6,7 +6,7 @@ from telegram.constants import ChatType, ParseMode
 from telegram.error import BadRequest
 
 from ongabot.handler.statisticssortcallbackhandler import CALLBACK_PATTERN, callback
-from ongabot.utils.dm import NO_LONGER_IN_GROUP
+from ongabot.utils.dm import GROUP_UNAVAILABLE
 
 MODULE = "ongabot.handler.statisticssortcallbackhandler"
 
@@ -156,9 +156,25 @@ class PrivateChatSortTest(unittest.IsolatedAsyncioTestCase):
         ):
             await callback(update, context)
 
-        update.callback_query.answer.assert_awaited_once_with(NO_LONGER_IN_GROUP)
+        update.callback_query.answer.assert_awaited_once_with(GROUP_UNAVAILABLE)
         render.assert_not_called()
         context.bot_data.get_chat.assert_not_called()
+
+    async def test_a_group_id_on_a_tap_in_a_group_is_ignored(self):
+        """Callback data can be forged: a tap in a group only ever re-sorts that group."""
+        update, context, chat = self._make("stats_sort:streak:-100999")
+        update.effective_chat.type = ChatType.SUPERGROUP
+        update.effective_chat.id = -100123
+
+        with (
+            patch(f"{MODULE}.can_read_group", AsyncMock()) as can_read_group,
+            patch(f"{MODULE}.render_statistics_message", return_value=("TEXT", "KEYBOARD")) as render,
+        ):
+            await callback(update, context)
+
+        can_read_group.assert_not_awaited()
+        context.bot_data.get_chat.assert_called_once_with(-100123)
+        render.assert_called_once_with(chat, sort_by="streak", in_private_chat=False)
 
     async def test_button_without_a_group_in_a_private_chat_reads_nothing(self):
         update, context, _chat = self._make("stats_sort:streak")

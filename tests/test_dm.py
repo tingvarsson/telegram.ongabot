@@ -180,6 +180,20 @@ class ResolveGroupTest(unittest.IsolatedAsyncioTestCase):
         )
 
 
+class PrivateCommandsOnlyTest(unittest.TestCase):
+    """Decides whether /help and /start list only the private commands."""
+
+    def test_an_unauthorized_private_chat_gets_only_private_commands(self):
+        self.assertTrue(dm.private_commands_only(_update(), _context(_bot(), _bot_data())))
+
+    def test_an_authorized_private_chat_gets_everything(self):
+        context = _context(_bot(), _bot_data(authorized=(USER_ID,)))
+        self.assertFalse(dm.private_commands_only(_update(), context))
+
+    def test_a_group_gets_everything(self):
+        self.assertFalse(dm.private_commands_only(_update(private=False), _context(_bot(), _bot_data())))
+
+
 class GroupTitleTest(unittest.IsolatedAsyncioTestCase):
     async def test_falls_back_to_the_id_when_telegram_errors(self):
         bot = MagicMock()
