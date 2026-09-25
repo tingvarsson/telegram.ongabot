@@ -5,7 +5,7 @@ import logging
 from telegram import Update
 from telegram.ext import CallbackContext, PollAnswerHandler
 
-from quips import get_quip_pool, select_quip
+from quips import next_quip
 from userdata import UserData
 from utils.log import log
 
@@ -49,10 +49,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
         # autoresponse, rather than in the status message.
         joke_option_ids = sorted(i for i in update.poll_answer.option_ids if i >= event.num_slots)
         if joke_option_ids:
-            quip = select_quip(
-                get_quip_pool(), update.poll_answer.poll_id, update.poll_answer.user.id, joke_option_ids[0]
-            )
-            response = f"{user_name} — {quip}"
+            response = f"{user_name} — {next_quip()}"
         elif user_data.get_poll_answer(update.poll_answer.poll_id) is None:
             response = f"Wow {user_name}, what a great job answering that poll!"
         else:

@@ -7,11 +7,15 @@ the gap before the first successful refresh, or a prolonged JokeAPI outage.
 
 import logging
 import random
-from typing import List, Sequence
+from typing import List, Optional
 
 from jokes import JokeApiClient
 
 _logger = logging.getLogger(__name__)
+
+# The quip follows "<name> — " in a chat message, so anything past about one phone line
+# reads as a rambling story rather than a callout. Longer jokes are dropped at refresh time.
+MAX_QUIP_LENGTH = 80
 
 FALLBACK_QUIPS: List[str] = [
     "has entered witness protection for the night",
@@ -24,6 +28,10 @@ FALLBACK_QUIPS: List[str] = [
 
 # The live pool, replaced wholesale by refresh_quip_pool. Empty until the first refresh.
 _pool: List[str] = []
+
+# The quip handed out most recently (in any chat), so next_quip never repeats it back to back.
+# Kept in memory only - after a restart the first pick is simply unconstrained.
+_last_quip: Optional[str] = None
 
 
 def get_quip_pool() -> List[str]:
@@ -39,18 +47,28 @@ async def refresh_quip_pool(client: JokeApiClient) -> None:
     render in progress.
     """
     global _pool  # pylint: disable=global-statement
-    fetched = await client.fetch_jokes()
-    if not fetched:
+    fetched = await client.fetch_jokes() or []
+    usable = [joke for joke in fetched if len(joke) <= MAX_QUIP_LENGTH]
+    if len(usable) < len(fetched):
+        _logger.info("Dropped %d joke(s) longer than %d chars", len(fetched) - len(usable), MAX_QUIP_LENGTH)
+    if not usable:
         _logger.warning("Quip pool refresh found nothing usable; keeping existing pool of %d", len(_pool))
         return
-    _pool = fetched
+    _pool = usable
     _logger.info("Refreshed quip pool with %d joke(s)", len(_pool))
 
 
-def select_quip(quips: Sequence[str], poll_id: str, user_id: int, option_index: int) -> str:
-    """Deterministically pick a quip for a (poll, user, option) triple.
+def next_quip() -> str:
+    """Pick a random quip from the current pool, never the same one twice in a row.
 
-    Seeded on the identifiers rather than stored anywhere, so repeated renders of the same
-    status message show the same quip for a given voter without persisting state.
+    The quip is a one-off chat message sent right after a No-op/Maybe-Baby vote, so it is
+    drawn fresh on every vote; excluding the previous pick keeps a voter toggling their vote
+    from getting the same line straight back, even with the small (~10 joke) pool.
     """
-    return random.Random(f"{poll_id}:{user_id}:{option_index}").choice(quips)
+    global _last_quip  # pylint: disable=global-statement
+    pool = get_quip_pool()
+    # Fall back to the whole pool when excluding the last quip would leave nothing to pick.
+    candidates = [quip for quip in pool if quip != _last_quip] or pool
+    _last_quip = random.choice(candidates)
+    _logger.debug("Picked quip from %d candidate(s) out of a pool of %d", len(candidates), len(pool))
+    return _last_quip

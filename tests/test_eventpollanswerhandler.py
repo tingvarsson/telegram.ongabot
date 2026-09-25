@@ -3,7 +3,6 @@ from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from ongabot.handler.eventpollanswerhandler import callback
-from ongabot.quips import select_quip
 from ongabot.userdata import UserData
 
 
@@ -258,10 +257,9 @@ class EventPollAnswerJokeResponseTest(unittest.IsolatedAsyncioTestCase):
     "great job" / "changed their vote" message - not shown in the status message."""
 
     def setUp(self):
-        self.pool = [f"quip {i}" for i in range(20)]
-        patcher = patch("ongabot.handler.eventpollanswerhandler.get_quip_pool", return_value=self.pool)
+        patcher = patch("ongabot.handler.eventpollanswerhandler.next_quip", return_value="a quip")
         self.addCleanup(patcher.stop)
-        patcher.start()
+        self.next_quip = patcher.start()
 
     def _make_update(self, poll_id, user_id, option_ids, user_name="Alice"):
         update = MagicMock()
@@ -287,8 +285,19 @@ class EventPollAnswerJokeResponseTest(unittest.IsolatedAsyncioTestCase):
         # 5 slots means option id 5 is No-op.
         await callback(self._make_update("poll1", user_id=42, option_ids=(5,)), context)
 
-        expected_quip = select_quip(self.pool, "poll1", 42, 5)
-        context.bot.send_message.assert_called_once_with(event.chat_id, f"Alice — {expected_quip}")
+        context.bot.send_message.assert_called_once_with(event.chat_id, "Alice — a quip")
+
+    async def test_repeated_no_op_votes_draw_a_new_quip_each_time(self):
+        self.next_quip.side_effect = ["first quip", "second quip"]
+        user_data = UserData()
+        event = self._make_event()
+        context = _make_context(user_data, event, {date(2026, 1, 8): _make_event_mock("poll1", date(2026, 1, 8))})
+
+        await callback(self._make_update("poll1", user_id=42, option_ids=(5,)), context)
+        await callback(self._make_update("poll1", user_id=42, option_ids=(5,)), context)
+
+        sent = [c.args[1] for c in context.bot.send_message.call_args_list]
+        self.assertEqual(sent, ["Alice — first quip", "Alice — second quip"])
 
     async def test_maybe_baby_vote_gets_a_quip_response(self):
         user_data = UserData()
@@ -298,8 +307,7 @@ class EventPollAnswerJokeResponseTest(unittest.IsolatedAsyncioTestCase):
         # 5 slots means option id 6 is Maybe Baby.
         await callback(self._make_update("poll1", user_id=42, option_ids=(6,)), context)
 
-        expected_quip = select_quip(self.pool, "poll1", 42, 6)
-        context.bot.send_message.assert_called_once_with(event.chat_id, f"Alice — {expected_quip}")
+        context.bot.send_message.assert_called_once_with(event.chat_id, "Alice — a quip")
 
     async def test_real_slot_first_vote_keeps_the_generic_message(self):
         user_data = UserData()
