@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Voting No-op or Maybe Baby now gets you called out with a quip in the chat, right after you vote.
+- Voting No-op or Maybe Baby now gets you called out with a short quip in the chat, right after
+  you vote, and never the same one twice in a row.
 - `/cs2patches on` posts CS2 patch notes in the chat as Valve releases them, starting with
   the latest one, each collapsed so it doesn't flood the chat. `/cs2patches off` stops them.
 

@@ -31,7 +31,7 @@ _pool: List[str] = []
 
 # The quip handed out most recently (in any chat), so next_quip never repeats it back to back.
 # Kept in memory only - after a restart the first pick is simply unconstrained.
-_last_quip: Optional[str] = None
+_last_quip: Optional[str] = None  # pylint: disable=invalid-name
 
 
 def get_quip_pool() -> List[str]:
