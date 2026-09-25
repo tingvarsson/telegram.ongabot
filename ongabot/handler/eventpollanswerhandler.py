@@ -47,8 +47,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
         # No-op / Maybe Baby: the two sentinel options appended after the real time slots
         # (see eventcreator._create_poll_options). Called out with a quip here in the chat
         # autoresponse, rather than in the status message.
-        joke_option_ids = sorted(i for i in update.poll_answer.option_ids if i >= event.num_slots)
-        if joke_option_ids:
+        if any(i >= event.num_slots for i in update.poll_answer.option_ids):
             response = f"{user_name} — {next_quip()}"
         elif user_data.get_poll_answer(update.poll_answer.poll_id) is None:
             response = f"Wow {user_name}, what a great job answering that poll!"

@@ -16,6 +16,10 @@ _logger = logging.getLogger(__name__)
 # The quip follows "<name> — " in a chat message, so anything past about one phone line
 # reads as a rambling story rather than a callout. Longer jokes are dropped at refresh time.
 MAX_QUIP_LENGTH = 80
+# JokeAPI returns at most 10 jokes per refresh and the length cap drops some of them. Below this
+# many survivors the pool is topped up with FALLBACK_QUIPS, so next_quip always has something
+# other than the last quip to pick for the ~6 hours until the next refresh.
+MIN_POOL_SIZE = 3
 
 FALLBACK_QUIPS: List[str] = [
     "has entered witness protection for the night",
@@ -54,6 +58,9 @@ async def refresh_quip_pool(client: JokeApiClient) -> None:
     if not usable:
         _logger.warning("Quip pool refresh found nothing usable; keeping existing pool of %d", len(_pool))
         return
+    if len(usable) < MIN_POOL_SIZE:
+        _logger.info("Only %d usable joke(s); topping up the quip pool with the fallback quips", len(usable))
+        usable += FALLBACK_QUIPS
     _pool = usable
     _logger.info("Refreshed quip pool with %d joke(s)", len(_pool))
 
@@ -63,7 +70,7 @@ def next_quip() -> str:
 
     The quip is a one-off chat message sent right after a No-op/Maybe-Baby vote, so it is
     drawn fresh on every vote; excluding the previous pick keeps a voter toggling their vote
-    from getting the same line straight back, even with the small (~10 joke) pool.
+    from getting the same line straight back, even though the pool holds at most ~10 jokes.
     """
     global _last_quip  # pylint: disable=global-statement
     pool = get_quip_pool()

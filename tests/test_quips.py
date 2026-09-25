@@ -54,14 +54,22 @@ class QuipPoolTest(unittest.IsolatedAsyncioTestCase):
             self.assertLessEqual(len(quip), MAX_QUIP_LENGTH, quip)
 
     async def test_refresh_drops_jokes_longer_than_the_limit(self):
-        fits = "x" * MAX_QUIP_LENGTH
+        fits = ["a" * MAX_QUIP_LENGTH, "b" * MAX_QUIP_LENGTH, "c" * MAX_QUIP_LENGTH]
         too_long = "y" * (MAX_QUIP_LENGTH + 1)
         client = AsyncMock()
-        client.fetch_jokes.return_value = [fits, too_long]
+        client.fetch_jokes.return_value = fits + [too_long]
 
         await refresh_quip_pool(client)
 
-        self.assertEqual(get_quip_pool(), [fits])
+        self.assertEqual(get_quip_pool(), fits)
+
+    async def test_refresh_tops_up_a_thin_pool_with_the_fallback_quips(self):
+        client = AsyncMock()
+        client.fetch_jokes.return_value = ["The one short joke.", "y" * (MAX_QUIP_LENGTH + 1)]
+
+        await refresh_quip_pool(client)
+
+        self.assertEqual(get_quip_pool(), ["The one short joke."] + FALLBACK_QUIPS)
 
     async def test_refresh_keeps_the_existing_pool_when_every_joke_is_too_long(self):
         quips._pool = ["Previously fetched joke."]
@@ -77,11 +85,11 @@ class QuipPoolTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_refresh_replaces_the_pool_with_freshly_fetched_jokes(self):
         client = AsyncMock()
-        client.fetch_jokes.return_value = ["Fresh joke one.", "Fresh joke two."]
+        client.fetch_jokes.return_value = ["Fresh joke one.", "Fresh joke two.", "Fresh joke three."]
 
         await refresh_quip_pool(client)
 
-        self.assertEqual(get_quip_pool(), ["Fresh joke one.", "Fresh joke two."])
+        self.assertEqual(get_quip_pool(), ["Fresh joke one.", "Fresh joke two.", "Fresh joke three."])
 
     async def test_refresh_keeps_the_existing_pool_when_the_fetch_fails(self):
         quips._pool = ["Previously fetched joke."]

@@ -287,7 +287,9 @@ class EventPollAnswerJokeResponseTest(unittest.IsolatedAsyncioTestCase):
 
         context.bot.send_message.assert_called_once_with(event.chat_id, "Alice — a quip")
 
-    async def test_repeated_no_op_votes_draw_a_new_quip_each_time(self):
+    async def test_each_no_op_vote_asks_for_a_fresh_quip(self):
+        # Only proves the handler draws per vote; the no-repeat rule itself is covered by
+        # test_quips.NextQuipTest.
         self.next_quip.side_effect = ["first quip", "second quip"]
         user_data = UserData()
         event = self._make_event()
