@@ -15,7 +15,7 @@ DEVBOT = $(PYTHON) scripts/devbot.py
 
 export PYTHONPATH=$PYTHONPATH:./ongabot
 
-.PHONY: venv install run stop status lint pep8 mypy black-check check black test clean docker-build docker-run release post-release
+.PHONY: venv install run stop status lint pep8 mypy black-check check black test snapshots clean docker-build docker-run release post-release
 
 venv:
 	$(PYTHON) -m venv $(VENV_PATH)
@@ -53,6 +53,10 @@ black:
 
 test:
 	$(PYTEST) -v --cov=ongabot --cov-report=term-missing --cov-fail-under=91
+
+# Rewrite tests/snapshots/ from the current renderers; review the diff before committing.
+snapshots:
+	UPDATE_SNAPSHOTS=1 $(PYTEST) -q tests/test_snapshots.py
 
 clean:
 	rm -rf $(VENV_PATH)

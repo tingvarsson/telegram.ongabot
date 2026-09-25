@@ -1,0 +1,30 @@
+Welcome traveler, my name is ONGAbot.
+I'm the one and only, the truth speaker.
+
+My duties are:
+ - Uphold the law, obviously, with weekly ON/GA polls
+ - Give praise to the faithful
+ - Aid the needing
+ - Condemn the wicked
+
+Commandments:
+/help - Get some aid in needing times
+/changelog - Show recent changelog entries
+/onga - This is the way, let me show you
+/newevent [day=<date|weekday>] [time=<HH:MM>] [slots=<n>] [force=true] - Create a new event poll (defaults: wednesday, 18:30, 5 slots)
+/cancelevent [<date|weekday>] - Cancel an active event
+/updateevent [target_date=<date|weekday>] [day=<date|weekday>] [time=<HH:MM>] [slots=<n>] - Update an active event
+/schedule [trigger_on=<weekday>] [day=<weekday>] [time=<HH:MM>] [slots=<n>] - Schedule weekly poll creation (defaults: sunday → wednesday, 18:30, 5 slots)
+/reschedule [trigger_on=<weekday>] [day=<weekday>] [time=<HH:MM>] [slots=<n>] - Update the weekly schedule
+/deschedule - Remove the weekly schedule
+/authorize - Authorize this chat to use ONGAbot (bot admins only)
+/deauthorize - Deauthorize this chat from using ONGAbot (bot admins only)
+/statistics - Show all-time participation statistics for this chat
+/leaderboard - Show the Banger Points leaderboard for this chat
+/cs2 [<date|weekday>] - Show the CS2 results for a date
+/cs2patches on|off - Post CS2 patch notes in this chat as Valve releases them
+/topics - Show this chat's learned YouTube Short topic preferences
+/linksteam <steam64|profile URL> - Link your Steam account so your CS2 games are recognised
+/unlinksteam - Unlink your Steam account
+
+Version: 1.2.3

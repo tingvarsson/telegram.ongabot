@@ -1,0 +1,12 @@
+Changelog
+
+v1.4.0 · 2026-09-20
+Added
+  • /cs2patches on posts CS2 patch notes in the chat as Valve releases them.
+
+Fixed
+  • /statistics no longer wraps on narrow phones.
+
+v1.3.0 · 2026-09-01
+Changed
+  • Banger Points recap after every event, see the rules.
