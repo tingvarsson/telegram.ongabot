@@ -381,6 +381,7 @@ class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
         event.chat_id = 1
         event.num_slots = 5
         event.cancelled = False
+        event.completed = False
         event.user_streaks = {}
         event.user_played_streaks = {}
         return event
@@ -460,6 +461,16 @@ class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_reply_when_the_event_is_gone(self):
         context = self._job_context(self._retracted_user_data((0,)), None)
+
+        await retraction_reply_callback(context)
+
+        context.bot.send_message.assert_not_called()
+
+    async def test_no_reply_when_the_event_completed_meanwhile(self):
+        # Completing an event does not close its poll, so a vote can be pulled right before.
+        event = self._make_event()
+        event.completed = True
+        context = self._job_context(self._retracted_user_data((0,)), event)
 
         await retraction_reply_callback(context)
 

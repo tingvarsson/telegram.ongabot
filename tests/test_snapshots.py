@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Tuple
 from unittest.mock import patch
 
+from ongabot import quips
 from ongabot.cs2.format import format_session
 from ongabot.cs2.patchnotesformat import render_patch_notes_html
 from ongabot.utils import helper
@@ -83,6 +84,16 @@ def _event_recap() -> List[str]:
     return [render_event_recap_message(chat, message_fixtures.latest_event(chat))]
 
 
+def _vote_replies() -> List[str]:
+    """One reply per path in the vote-reply matrix, banter pinned to each pool's first line."""
+    first_line = lambda kind: quips.POOLS[kind][0]  # noqa: E731
+    with patch("ongabot.quips.next_banter", side_effect=first_line):
+        replies = [quips.build_vote_reply("Alice", None, new) for new in quips.Answer]
+        replies += [quips.build_vote_reply("Alice", previous, new) for previous in quips.Answer for new in quips.Answer]
+        replies += [quips.build_retraction_reply("Alice", previous) for previous in quips.Answer]
+    return replies
+
+
 def _help() -> List[str]:
     # The help text ends with the version, which every release bumps.
     with patch.object(helper, "__version__", "1.2.3"):
@@ -100,6 +111,7 @@ RENDERS: Dict[str, Render] = {
     "changelog": (check_html, lambda: render_changelog_html(SAMPLE_CHANGELOG, headline=CHANGELOG_HEADING)),
     "patch_note": (check_html, lambda: render_patch_notes_html(message_fixtures.steam_patch_notes()[:1])),
     "help": (check_plain_text, _help),
+    "vote_replies": (check_plain_text, _vote_replies),
 }
 
 

@@ -131,8 +131,10 @@ async def retraction_reply_callback(context: CallbackContext) -> None:
     poll_id = str(context.job.data)
 
     event = context.bot_data.get_event(poll_id)
-    if event is None or event.cancelled:
-        _logger.info("Skipping retraction reply: poll_id=%s is gone or cancelled", poll_id)
+    # Completing an event does not close its poll, so a vote pulled right before completion
+    # would otherwise get a reply after the recap.
+    if event is None or event.cancelled or event.completed:
+        _logger.info("Skipping retraction reply: poll_id=%s is gone, cancelled or completed", poll_id)
         return
 
     # context.user_data is the retracting user's, since the job was scheduled with user_id.
