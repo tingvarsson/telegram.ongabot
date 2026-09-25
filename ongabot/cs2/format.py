@@ -50,16 +50,16 @@ CS2_NAME_WIDTH = 8
 # The Session table lists exactly the members, which is where to look for who is in the chat.
 #
 # K/A/D width differs by table: a single match rarely breaks two digits, but a session sums
-# across the whole night and can. K/D and ADR are sized dynamically per table render instead
-# of a fixed width - most nights need only the default, and only a table that actually has a
-# row needing more (a double-digit K/D ratio, a triple-digit ADR) pays for the extra column.
-# See _widen.
+# across the whole night and can. K/D, ADR and the session's match count are sized dynamically
+# per table render instead of a fixed width - most nights need only the default, and only a
+# table that actually has a row needing more (a double-digit K/D ratio, a triple-digit ADR,
+# ten matches in a night) pays for the extra column. See _widen.
 MATCH_KAD_WIDTH = 2
 SESSION_KAD_WIDTH = 3
 KD_DEFAULT_WIDTH = 4
 ADR_DEFAULT_WIDTH = 3
 ACES_WIDTH = 2  # "5K" - a night's multi-kill rounds are never more than two digits
-MATCHES_WIDTH = 2
+MATCHES_DEFAULT_WIDTH = 1  # widened for a night of ten or more matches, see _widen
 TEAM_DIVIDER = "--"
 
 
@@ -192,7 +192,8 @@ def _session_table(session: Cs2Session) -> Optional[str]:
 
     kd_width = _widen((r["kd"] for r in rows), KD_DEFAULT_WIDTH)
     adr_width = _widen((r["adr"] for r in rows), ADR_DEFAULT_WIDTH)
-    columns = (("M", MATCHES_WIDTH),) + _stat_columns(SESSION_KAD_WIDTH, kd_width, adr_width)
+    matches_width = _widen((r["m"] for r in rows), MATCHES_DEFAULT_WIDTH)
+    columns = (("M", matches_width),) + _stat_columns(SESSION_KAD_WIDTH, kd_width, adr_width)
 
     header = "Name".ljust(CS2_NAME_WIDTH) + " " + _columns(*columns)
     lines = [header]
@@ -201,7 +202,7 @@ def _session_table(session: Cs2Session) -> Optional[str]:
             _name_cell(row["name"], fallback=row["fallback"])
             + " "
             + _columns(
-                (row["m"], MATCHES_WIDTH),
+                (row["m"], matches_width),
                 (row["k"], SESSION_KAD_WIDTH),
                 (row["a"], SESSION_KAD_WIDTH),
                 (row["d"], SESSION_KAD_WIDTH),

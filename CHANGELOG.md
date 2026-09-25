@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/cs2patches on` posts CS2 patch notes in the chat as Valve releases them, starting with
   the latest one, each collapsed so it doesn't flood the chat. `/cs2patches off` stops them.
 
+### Fixed
+
+- The CS2 results session table no longer wraps on a phone held upright.
+
 ## [1.9.0] - 2026-09-23
 
 ### Added

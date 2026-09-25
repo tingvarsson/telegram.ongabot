@@ -167,6 +167,21 @@ class SessionPlayerSummaryTest(unittest.TestCase):
         self.assertNotIn("foe1", summary)
         self.assertNotIn("mate1", summary)
 
+    def test_matches_column_is_one_wide_on_a_normal_night(self):
+        header, tommy = _scoreboard(format_session(_session()), index=0)[:2]
+
+        self.assertTrue(header.startswith("Name".ljust(CS2_NAME_WIDTH) + " M "))
+        self.assertTrue(tommy.startswith("tommy".ljust(CS2_NAME_WIDTH) + " 1 "))
+
+    def test_ten_matches_widen_the_matches_column_for_every_row(self):
+        tommy_all_night = [_match(match_id=str(i), players=[_member(11, "tommy", 10, 10, 1.0)]) for i in range(10)]
+        kalle_once = [_match(match_id="k", players=[_member(22, "kalle", 5, 10, 0.5)])]
+
+        lines = _scoreboard(format_session(_session(tommy_all_night + kalle_once)), index=0)
+
+        self.assertTrue(lines[0].startswith("Name".ljust(CS2_NAME_WIDTH) + "  M "))
+        self.assertEqual({len(line) for line in lines}, {len(lines[0])}, "rows stay aligned with the header")
+
     def test_zero_deaths_does_not_divide_by_zero(self):
         session = _session([_match(players=[_member(11, "tommy", 5, 0, 0.0), _member(22, "kalle", 1, 1, 1.0)])])
 

@@ -45,9 +45,6 @@ WIDE_CODE_BLOCKS: Dict[Tuple[str, int], int] = {
     # /statistics is the one deliberate exception: a wide tap-to-sort table read sideways.
     ("statistics", 0): 67,
     ("statistics", 1): 67,
-    # The CS2 session summary is one column too wide for a phone; pinned until it is narrowed.
-    ("cs2_results", 0): 35,
-    ("cs2_results_live", 0): 35,
 }
 
 # Fixed, so the snapshot changes when the renderer does and not when CHANGELOG.md grows.

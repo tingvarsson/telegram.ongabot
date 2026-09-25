@@ -2,10 +2,10 @@ CS2 results · 2026-09-02
 
 Session 1W - 1L
 
-Name      M   K   A   D  K/D ADR 5K
-tommy     2  54   6  28 1.93 141  2
-anna_sv   2  36   8  32 1.12 114  0
-_*[]()~.  1   9   6  19 0.47  87  0
+Name     M   K   A   D  K/D ADR 5K
+tommy    2  54   6  28 1.93 141  2
+anna_sv  2  36   8  32 1.12 114  0
+_*[]()~. 1   9   6  19 0.47  87  0
 
 
 de_mirage 13-7 (W) · ended 20:10
