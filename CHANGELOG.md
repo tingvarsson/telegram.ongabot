@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The CS2 results session table no longer wraps on a phone held upright.
+- CS2 results and the Banger Points recap no longer wrap on a phone held upright.
 
 ## [1.9.0] - 2026-09-23
 

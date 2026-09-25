@@ -23,6 +23,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 from telegram.helpers import escape_markdown
 
 from cs2.session import Cs2Match, Cs2Session, PlayerLine
+from utils.codeblock import pad_for_phone
 from utils.statistics import fit_name
 
 _logger = logging.getLogger(__name__)
@@ -90,8 +91,9 @@ def _name_cell(name: str, fallback: str = "?") -> str:
 
 
 def _code_block(lines: Iterable[str]) -> str:
-    """Wrap table lines in a MarkdownV2 fenced code block."""
-    body = "\n".join(lines)
+    """Wrap table lines in a MarkdownV2 fenced code block, padded to fit a phone (see
+    utils.codeblock)."""
+    body = "\n".join(pad_for_phone(list(lines)))
     return "```\n" + escape_markdown(body, version=2, entity_type="pre") + "\n```"
 
 

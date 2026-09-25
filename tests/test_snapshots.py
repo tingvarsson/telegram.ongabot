@@ -23,7 +23,8 @@ from ongabot.cs2.patchnotesformat import render_patch_notes_html
 from ongabot.utils import helper
 from ongabot.utils.changelogformat import CHANGELOG_HEADING, render_changelog_html
 from ongabot.utils.points import render_event_recap_message, render_leaderboard_message
-from ongabot.utils.statistics import display_width, render_statistics_message
+from ongabot.utils.codeblock import LARGE_FONT_COLUMNS, SMALL_FONT_COLUMNS, SMALL_FONT_MIN_ROWS, visible_width
+from ongabot.utils.statistics import render_statistics_message
 from tests import message_fixtures
 from tests.telegram_markup import check_html, check_markdown_v2, check_plain_text
 
@@ -35,9 +36,8 @@ MESSAGE_SEPARATOR = "\n\n---- next message ----\n\n"
 # group saw it), so the snapshots pin one zone. Otherwise a UTC CI runner renders the day before.
 SNAPSHOT_TZ = "Europe/Stockholm"
 
-# Monospace columns a code-block line may take before it wraps on a phone in portrait. Measured
-# live with a ruler on Android (2026-09-25): 34 fits, 35 wraps. Landscape fits 42 and more.
-PHONE_CODE_COLUMNS = 34
+# The phone limits (28 columns in the large code font, 34 in the small one it switches to at 7
+# wide rows) were measured live; see ongabot/utils/codeblock.py.
 
 # Code blocks allowed past the phone width, keyed by (render name, block index). Each is pinned
 # at its width today, so it cannot get any wider unnoticed.
@@ -170,10 +170,23 @@ class PhoneWidthTest(unittest.TestCase):
                 continue
             blocks = [block for message in render() for block in code_blocks(message)]
             for index, block in enumerate(blocks):
-                limit = WIDE_CODE_BLOCKS.get((name, index), PHONE_CODE_COLUMNS)
-                widest = max(block, key=display_width)
+                if (name, index) in WIDE_CODE_BLOCKS:
+                    continue
+                widths = [visible_width(line) for line in block]
                 with self.subTest(message=name, block=index):
-                    self.assertLessEqual(display_width(widest), limit, f"too wide for a phone: {widest!r}")
+                    self.assertLessEqual(max(widths), SMALL_FONT_COLUMNS, f"too wide for a phone: {block}")
+                    if max(widths) > LARGE_FONT_COLUMNS:
+                        wide_rows = sum(width > LARGE_FONT_COLUMNS for width in widths)
+                        self.assertGreaterEqual(
+                            wide_rows, SMALL_FONT_MIN_ROWS, f"too few wide rows for the small font: {block}"
+                        )
+
+    def test_wide_exceptions_stay_within_their_width(self):
+        for (name, index), limit in WIDE_CODE_BLOCKS.items():
+            _, render = RENDERS[name]
+            block = [block for message in render() for block in code_blocks(message)][index]
+            with self.subTest(message=name, block=index):
+                self.assertLessEqual(max(visible_width(line) for line in block), limit)
 
     def test_wide_exceptions_still_exist(self):
         # An exception whose table is gone or renumbered would silently gate the wrong block.

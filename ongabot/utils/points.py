@@ -26,6 +26,7 @@ from telegram.helpers import escape_markdown
 
 from chat import Chat
 from event import Event
+from utils.codeblock import pad_for_phone
 from utils.statistics import NO_OP_TEXT, display_names, format_name_cell, group_slot_texts
 
 _logger = logging.getLogger(__name__)
@@ -400,7 +401,8 @@ def _board_table(
             movement = _format_movement(rank, previous_ranks.get(row.user.id))
             line += f" {_format_delta(delta)} {movement}"
         lines.append(line)
-    return "```\n" + "\n".join(lines) + "\n```"
+    # The recap's delta and movement columns make it wider than the large code font fits.
+    return "```\n" + "\n".join(pad_for_phone(lines, escaped=True)) + "\n```"
 
 
 def format_leaderboard(result: PointsResult) -> str:
