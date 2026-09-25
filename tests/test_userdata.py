@@ -164,5 +164,35 @@ class UserDataCalculatePlayedStreakTest(unittest.TestCase):
         self.assertEqual(self.ud.calculate_played_streak(poll_id_to_date, {"p1": 3, "p2": 5}), 1)
 
 
+class UserDataLastPollAnswerTest(unittest.TestCase):
+    """Telegram changes a vote as retract-then-vote, so the last real answer is kept apart from
+    poll_answer (which must hold the empty retraction for the streaks)."""
+
+    def setUp(self):
+        self.ud = UserData()
+
+    def test_none_before_any_vote(self):
+        self.assertIsNone(self.ud.get_last_poll_answer("p1"))
+
+    def test_tracks_the_latest_vote(self):
+        self.ud.set_poll_answer("p1", (0,))
+        self.ud.set_poll_answer("p1", (5,))
+        self.assertEqual(self.ud.get_last_poll_answer("p1"), (5,))
+
+    def test_survives_a_retraction(self):
+        self.ud.set_poll_answer("p1", (2,))
+        self.ud.set_poll_answer("p1", ())
+        self.assertEqual(self.ud.get_last_poll_answer("p1"), (2,))
+        self.assertEqual(self.ud.get_poll_answer("p1"), ())
+
+    def test_backfilled_from_old_persisted_data(self):
+        # Unpickling skips __init__, so start from a bare instance like pickle does.
+        old = UserData.__new__(UserData)
+        state = {"poll_answer": {"p1": (0,), "p2": ()}, "user": None, "steam64_id": None}
+        old.__setstate__(state)
+        self.assertEqual(old.get_last_poll_answer("p1"), (0,))
+        self.assertIsNone(old.get_last_poll_answer("p2"))
+
+
 if __name__ == "__main__":
     unittest.main()

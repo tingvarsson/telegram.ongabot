@@ -19,6 +19,10 @@ class UserData:
 
     Attributes:
         poll_answer: Dict of telegram.PollAnswer given by this user indexed by poll_id
+        last_poll_answer: Dict of the last non-empty answer per poll_id. Telegram changes a
+            vote as retract-then-vote, and poll_answer holds the empty retraction in between
+            (the streaks count it as not voting), so this is what tells the vote reply what
+            the user switched away from.
         user: telegram.User object for this user - has to be initialized via init()
         steam64_id: Steam64 this user linked via /linksteam, or None when unlinked. UserData
             is keyed globally by user id, so one link serves every chat the user is in.
@@ -26,6 +30,7 @@ class UserData:
 
     def __init__(self) -> None:
         self.poll_answer: Dict[str, Tuple[int, ...]] = {}
+        self.last_poll_answer: Dict[str, Tuple[int, ...]] = {}
         self.user: Optional[User] = None
         self.steam64_id: Optional[str] = None
 
@@ -35,6 +40,9 @@ class UserData:
         if not hasattr(self, "steam64_id"):
             # Linking is opt-in consent, so nobody is linked retroactively.
             self.steam64_id = None
+        if not hasattr(self, "last_poll_answer"):
+            # Best effort: a poll whose latest update was a retraction has no answer to recover.
+            self.last_poll_answer = {poll_id: answer for poll_id, answer in self.poll_answer.items() if answer}
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -57,9 +65,16 @@ class UserData:
 
     @log.method
     def set_poll_answer(self, poll_id: str, poll_answer: Tuple[int, ...]) -> None:
-        """Set a PollAnswer for a given poll_id"""
+        """Set a PollAnswer for a given poll_id. An empty answer is a retraction."""
         self.poll_answer.update({poll_id: poll_answer})
+        if poll_answer:
+            self.last_poll_answer[poll_id] = poll_answer
         _logger.debug("user_data:\n%s", self)
+
+    @log.method
+    def get_last_poll_answer(self, poll_id: str) -> Optional[Tuple[int, ...]]:
+        """Get the last non-empty answer for a given poll_id, surviving any retraction since."""
+        return self.last_poll_answer.get(poll_id)
 
     def _streak(self, poll_id_to_date: Dict[str, date], participated: Callable[[str], bool]) -> int:
         """Count consecutive most-recent events (newest first) for which participated() holds.
