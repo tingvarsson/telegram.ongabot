@@ -2,6 +2,7 @@ import unittest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from telegram import BotCommandScopeAllPrivateChats
 from telegram.constants import ParseMode
 from telegram.error import BadRequest, TelegramError
 
@@ -219,7 +220,7 @@ class PostInitMetadataWiringTest(unittest.IsolatedAsyncioTestCase):
 
         await post_init(application)
 
-        application.bot.set_my_commands.assert_called_once()
+        self.assertEqual(application.bot.set_my_commands.await_count, 2)
         application.bot.set_my_description.assert_called_once()
         application.bot.set_my_short_description.assert_called_once()
 
@@ -231,7 +232,7 @@ class PostInitMetadataWiringTest(unittest.IsolatedAsyncioTestCase):
 
         await post_init(application)
 
-        application.bot.set_my_commands.assert_called_once()
+        self.assertEqual(application.bot.set_my_commands.await_count, 2)
         application.bot.set_my_description.assert_called_once()
         application.bot.set_my_short_description.assert_called_once()
 
@@ -240,9 +241,19 @@ class SetupBotMetadataTest(unittest.IsolatedAsyncioTestCase):
     async def test_calls_all_three_api_methods_on_success(self):
         bot = AsyncMock()
         await setup_bot_metadata(bot)
-        bot.set_my_commands.assert_called_once()
+        self.assertEqual(bot.set_my_commands.await_count, 2)
         bot.set_my_description.assert_called_once()
         bot.set_my_short_description.assert_called_once()
+
+    async def test_private_chat_menu_lists_only_private_commands(self):
+        bot = AsyncMock()
+        await setup_bot_metadata(bot)
+        private_call = bot.set_my_commands.await_args_list[1]
+        self.assertIsInstance(private_call.kwargs["scope"], BotCommandScopeAllPrivateChats)
+        self.assertEqual(
+            [command.command for command in private_call.args[0]],
+            ["help", "statistics", "leaderboard", "cs2", "topics", "linksteam", "unlinksteam"],
+        )
 
     async def test_continues_when_set_my_commands_raises(self):
         bot = AsyncMock()
@@ -255,14 +266,14 @@ class SetupBotMetadataTest(unittest.IsolatedAsyncioTestCase):
         bot = AsyncMock()
         bot.set_my_description.side_effect = TelegramError("network error")
         await setup_bot_metadata(bot)  # must not raise
-        bot.set_my_commands.assert_called_once()
+        self.assertEqual(bot.set_my_commands.await_count, 2)
         bot.set_my_short_description.assert_called_once()
 
     async def test_continues_when_set_my_short_description_raises(self):
         bot = AsyncMock()
         bot.set_my_short_description.side_effect = TelegramError("network error")
         await setup_bot_metadata(bot)  # must not raise
-        bot.set_my_commands.assert_called_once()
+        self.assertEqual(bot.set_my_commands.await_count, 2)
         bot.set_my_description.assert_called_once()
 
 

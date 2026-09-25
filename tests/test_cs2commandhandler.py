@@ -119,5 +119,36 @@ class Cs2CommandHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Leetify", _reply(update))
 
 
+class Cs2PrivateChatTest(unittest.IsolatedAsyncioTestCase):
+    async def test_a_bad_date_is_answered_before_any_group_is_resolved(self):
+        update, context, _chat = _make(args=["target_date=nonsense"])
+
+        with patch("ongabot.handler.cs2commandhandler.resolve_group", AsyncMock()) as resolve:
+            await callback(update, context)
+
+        resolve.assert_not_awaited()
+        self.assertIn("/cs2", _reply(update))
+
+    async def test_the_picker_carries_the_resolved_iso_date(self):
+        update, context, _chat = _make(args=["02.09.2026"])
+
+        with (
+            patch("ongabot.handler.cs2commandhandler.resolve_group", AsyncMock(return_value=None)) as resolve,
+            patch("ongabot.handler.cs2commandhandler.event_results", AsyncMock()) as results,
+        ):
+            await callback(update, context)
+
+        self.assertEqual(resolve.await_args.args[2:], ("cs2", "2026-09-02"))
+        results.assert_not_awaited()
+
+    async def test_the_picker_carries_no_date_for_the_latest_event(self):
+        update, context, _chat = _make()
+
+        with patch("ongabot.handler.cs2commandhandler.resolve_group", AsyncMock(return_value=None)) as resolve:
+            await callback(update, context)
+
+        self.assertEqual(resolve.await_args.args[2:], ("cs2", ""))
+
+
 if __name__ == "__main__":
     unittest.main()

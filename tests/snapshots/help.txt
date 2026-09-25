@@ -19,12 +19,14 @@ Commandments:
 /deschedule - Remove the weekly schedule
 /authorize - Authorize this chat to use ONGAbot (bot admins only)
 /deauthorize - Deauthorize this chat from using ONGAbot (bot admins only)
-/statistics - Show all-time participation statistics for this chat
-/leaderboard - Show the Banger Points leaderboard for this chat
+/statistics - Show all-time participation statistics for the group
+/leaderboard - Show the Banger Points leaderboard for the group
 /cs2 [<date|weekday>] - Show the CS2 results for a date
 /cs2patches on|off - Post CS2 patch notes in this chat as Valve releases them
-/topics - Show this chat's learned YouTube Short topic preferences
+/topics - Show the group's learned YouTube Short topic preferences
 /linksteam <steam64|profile URL> - Link your Steam account so your CS2 games are recognised
 /unlinksteam - Unlink your Steam account
+
+/statistics, /leaderboard, /cs2, /topics, /linksteam and /unlinksteam also work in a private chat with me, so the answer stays out of the group.
 
 Version: 1.2.3

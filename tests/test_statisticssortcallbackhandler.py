@@ -2,10 +2,13 @@ import re
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram.constants import ParseMode
+from telegram.constants import ChatType, ParseMode
 from telegram.error import BadRequest
 
 from ongabot.handler.statisticssortcallbackhandler import CALLBACK_PATTERN, callback
+from ongabot.utils.dm import GROUP_UNAVAILABLE
+
+MODULE = "ongabot.handler.statisticssortcallbackhandler"
 
 
 class CallbackPatternTest(unittest.TestCase):
@@ -52,7 +55,7 @@ class StatisticsSortCallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             await callback(update, context)
 
         context.bot_data.get_chat.assert_called_once_with(123)
-        render.assert_called_once_with(chat, sort_by="streak")
+        render.assert_called_once_with(chat, sort_by="streak", in_private_chat=False)
 
     async def test_edits_message_with_rendered_text_and_keyboard(self):
         update, context, _chat = self._make()
@@ -107,6 +110,81 @@ class StatisticsSortCallbackHandlerTest(unittest.IsolatedAsyncioTestCase):
             await callback(update, context)
 
         render.assert_not_called()
+
+
+class PrivateChatSortTest(unittest.IsolatedAsyncioTestCase):
+    """A /statistics table sent to a private chat carries its group's id on every sort button."""
+
+    def _make(self, data):
+        update = MagicMock()
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.data = data
+        update.effective_chat.id = 7
+        update.effective_chat.type = ChatType.PRIVATE
+        update.effective_user.id = 7
+
+        context = MagicMock()
+        chat = MagicMock()
+        context.bot_data.get_chat.return_value = chat
+        return update, context, chat
+
+    def test_pattern_matches_a_button_carrying_a_group_id(self):
+        match = re.match(CALLBACK_PATTERN, "stats_sort:played:-1001234567890")
+        self.assertEqual(match.groups(), ("played", "-1001234567890"))
+
+    async def test_re_sorts_the_group_on_the_button_for_a_member(self):
+        update, context, chat = self._make("stats_sort:streak:-100123")
+
+        with (
+            patch(f"{MODULE}.can_read_group", AsyncMock(return_value=True)) as can_read_group,
+            patch(f"{MODULE}.render_statistics_message", return_value=("TEXT", "KEYBOARD")) as render,
+        ):
+            await callback(update, context)
+
+        can_read_group.assert_awaited_once_with(context.bot, context.bot_data, -100123, 7)
+        context.bot_data.get_chat.assert_called_once_with(-100123)
+        render.assert_called_once_with(chat, sort_by="streak", in_private_chat=True)
+        update.callback_query.edit_message_text.assert_awaited_once()
+
+    async def test_refuses_a_user_no_longer_in_the_group(self):
+        update, context, _chat = self._make("stats_sort:streak:-100123")
+
+        with (
+            patch(f"{MODULE}.can_read_group", AsyncMock(return_value=False)),
+            patch(f"{MODULE}.render_statistics_message") as render,
+        ):
+            await callback(update, context)
+
+        update.callback_query.answer.assert_awaited_once_with(GROUP_UNAVAILABLE)
+        render.assert_not_called()
+        context.bot_data.get_chat.assert_not_called()
+
+    async def test_a_group_id_on_a_tap_in_a_group_is_ignored(self):
+        """Callback data can be forged: a tap in a group only ever re-sorts that group."""
+        update, context, chat = self._make("stats_sort:streak:-100999")
+        update.effective_chat.type = ChatType.SUPERGROUP
+        update.effective_chat.id = -100123
+
+        with (
+            patch(f"{MODULE}.can_read_group", AsyncMock()) as can_read_group,
+            patch(f"{MODULE}.render_statistics_message", return_value=("TEXT", "KEYBOARD")) as render,
+        ):
+            await callback(update, context)
+
+        can_read_group.assert_not_awaited()
+        context.bot_data.get_chat.assert_called_once_with(-100123)
+        render.assert_called_once_with(chat, sort_by="streak", in_private_chat=False)
+
+    async def test_button_without_a_group_in_a_private_chat_reads_nothing(self):
+        update, context, _chat = self._make("stats_sort:streak")
+
+        with patch(f"{MODULE}.render_statistics_message") as render:
+            await callback(update, context)
+
+        update.callback_query.answer.assert_awaited_once_with()
+        render.assert_not_called()
+        context.bot_data.get_chat.assert_not_called()
 
 
 if __name__ == "__main__":

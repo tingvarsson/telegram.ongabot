@@ -8,6 +8,7 @@ from .cs2commandhandler import Cs2CommandHandler
 from .cs2patchescommandhandler import Cs2PatchesCommandHandler
 from .deauthorizecommandhandler import DeAuthorizeCommandHandler
 from .deschedulecommandhandler import DeScheduleCommandHandler
+from .dmgrouppickcallbackhandler import DmGroupPickCallbackHandler
 from .eventpollanswerhandler import EventPollAnswerHandler
 from .eventpollhandler import EventPollHandler
 from .helpcommandhandler import HelpCommandHandler
@@ -34,6 +35,7 @@ __all__ = (
     "Cs2PatchesCommandHandler",
     "DeAuthorizeCommandHandler",
     "DeScheduleCommandHandler",
+    "DmGroupPickCallbackHandler",
     "EventPollAnswerHandler",
     "EventPollHandler",
     "HelpCommandHandler",

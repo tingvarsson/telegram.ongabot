@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from ongabot.handler.topicscommandhandler import callback
 
@@ -53,6 +53,15 @@ class TopicsCommandHandlerTest(unittest.IsolatedAsyncioTestCase):
         await callback(update, context)
 
         context.bot_data.get_chat.assert_not_called()
+
+    async def test_waits_for_a_group_pick_when_none_resolved(self):
+        update, context = _make({"linux": 1.0})
+
+        with patch("ongabot.handler.topicscommandhandler.resolve_group", AsyncMock(return_value=None)) as resolve:
+            await callback(update, context)
+
+        self.assertEqual(resolve.await_args.args[2], "topics")
+        update.message.reply_text.assert_not_awaited()
 
 
 if __name__ == "__main__":

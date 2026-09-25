@@ -1034,6 +1034,21 @@ class BuildSortKeyboardTest(unittest.TestCase):
         for button in self._all_buttons():
             self.assertLessEqual(len(button.callback_data.encode("utf-8")), 64)
 
+    def test_private_chat_buttons_carry_the_group_id_within_64_bytes(self):
+        keyboard = build_sort_keyboard(chat_id=-1009999999999)
+        for button in (b for row in keyboard.inline_keyboard for b in row):
+            self.assertTrue(button.callback_data.endswith(":-1009999999999"), button.callback_data)
+            self.assertLessEqual(len(button.callback_data.encode("utf-8")), 64)
+
+    def test_render_puts_the_group_id_on_buttons_only_for_a_private_chat(self):
+        chat = MagicMock()
+        chat.chat_id = -100123
+        chat.events = {}
+        _, group_keyboard = render_statistics_message(chat)
+        _, private_keyboard = render_statistics_message(chat, in_private_chat=True)
+        self.assertFalse(group_keyboard.inline_keyboard[0][0].callback_data.endswith(":-100123"))
+        self.assertTrue(private_keyboard.inline_keyboard[0][0].callback_data.endswith(":-100123"))
+
 
 class DefaultSortKeyIsValidColumnTest(unittest.TestCase):
     def test_default_sort_key_is_a_real_column(self):

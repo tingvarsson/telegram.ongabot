@@ -8,7 +8,7 @@ import os
 import random
 from typing import Any, Dict, List, Tuple, cast
 
-from telegram import Bot, BotCommand, LinkPreviewOptions, Update
+from telegram import Bot, BotCommand, BotCommandScopeAllPrivateChats, LinkPreviewOptions, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackContext, ContextTypes, JobQueue, PicklePersistence
 from telegram.error import BadRequest, ChatMigrated, Forbidden, TelegramError
@@ -31,6 +31,7 @@ from handler import Cs2CommandHandler
 from handler import Cs2PatchesCommandHandler
 from handler import DeAuthorizeCommandHandler
 from handler import DeScheduleCommandHandler
+from handler import DmGroupPickCallbackHandler
 from handler import EventPollAnswerHandler
 from handler import EventPollHandler
 from handler import HelpCommandHandler
@@ -51,7 +52,7 @@ from userdata import UserData
 from utils import log
 from utils.changelog import get_changelog_delta, is_dev_version
 from utils.changelogformat import render_changelog_html
-from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
+from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION, PRIVATE_COMMANDS
 from utils.helper import parse_time
 from utils.htmlblocks import send_html_with_fallback
 from utils.points import render_event_recap_message
@@ -572,6 +573,14 @@ async def setup_bot_metadata(bot: Bot) -> None:
         logger.info("Bot commands registered (%d commands)", len(commands))
     except TelegramError as e:
         logger.error("Failed to set bot commands: %s", e)
+    # A private chat only answers the private commands, so its menu offers only those; this
+    # scope wins over the default one above in every private chat.
+    private_commands = [BotCommand(cmd.command, cmd.menu_description) for cmd in PRIVATE_COMMANDS]
+    try:
+        await bot.set_my_commands(private_commands, scope=BotCommandScopeAllPrivateChats())
+        logger.info("Private chat bot commands registered (%d commands)", len(private_commands))
+    except TelegramError as e:
+        logger.error("Failed to set private chat bot commands: %s", e)
     try:
         await bot.set_my_description(BOT_DESCRIPTION)
         logger.info("Bot description registered")
@@ -707,6 +716,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(RescheduleCommandHandler())
     application.add_handler(StatisticsCommandHandler())
     application.add_handler(StatisticsSortCallbackHandler())
+    application.add_handler(DmGroupPickCallbackHandler())
     application.add_handler(LeaderboardCommandHandler())
     application.add_handler(Cs2CommandHandler())
     application.add_handler(Cs2PatchesCommandHandler())
