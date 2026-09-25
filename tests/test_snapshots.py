@@ -35,9 +35,9 @@ MESSAGE_SEPARATOR = "\n\n---- next message ----\n\n"
 # group saw it), so the snapshots pin one zone. Otherwise a UTC CI runner renders the day before.
 SNAPSHOT_TZ = "Europe/Stockholm"
 
-# Monospace columns a code-block line may take before it wraps on a phone in portrait: the
-# widest tables confirmed to fit (a CS2 match scoreboard, the event recap). 35 is known to wrap.
-PHONE_CODE_COLUMNS = 29
+# Monospace columns a code-block line may take before it wraps on a phone in portrait. Measured
+# live with a ruler on Android (2026-09-25): 34 fits, 35 wraps. Landscape fits 42 and more.
+PHONE_CODE_COLUMNS = 34
 
 # Code blocks allowed past the phone width, keyed by (render name, block index). Each is pinned
 # at its width today, so it cannot get any wider unnoticed.
@@ -45,7 +45,7 @@ WIDE_CODE_BLOCKS: Dict[Tuple[str, int], int] = {
     # /statistics is the one deliberate exception: a wide tap-to-sort table read sideways.
     ("statistics", 0): 67,
     ("statistics", 1): 67,
-    # The CS2 session summary wraps on a phone; pinned until it is narrowed.
+    # The CS2 session summary is one column too wide for a phone; pinned until it is narrowed.
     ("cs2_results", 0): 35,
     ("cs2_results_live", 0): 35,
 }
