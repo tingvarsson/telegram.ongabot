@@ -5,6 +5,7 @@ from telegram.helpers import escape_markdown
 
 from ongabot.cs2.format import ATTRIBUTION, CS2_NAME_WIDTH, LIVE_NOTE, MAX_MESSAGE_CHARS, format_session
 from ongabot.cs2.session import Cs2Match, Cs2Session, PlayerLine
+from ongabot.utils.codeblock import visible_width
 from ongabot.utils.statistics import NAME_WIDTH, display_width
 
 EVENT_DATE = date(2026, 9, 2)
@@ -167,6 +168,21 @@ class SessionPlayerSummaryTest(unittest.TestCase):
         self.assertNotIn("foe1", summary)
         self.assertNotIn("mate1", summary)
 
+    def test_matches_column_is_one_wide_on_a_normal_night(self):
+        header, tommy = _scoreboard(format_session(_session()), index=0)[:2]
+
+        self.assertTrue(header.startswith("Name".ljust(CS2_NAME_WIDTH) + " M "))
+        self.assertTrue(tommy.startswith("tommy".ljust(CS2_NAME_WIDTH) + " 1 "))
+
+    def test_ten_matches_widen_the_matches_column_for_every_row(self):
+        tommy_all_night = [_match(match_id=str(i), players=[_member(11, "tommy", 10, 10, 1.0)]) for i in range(10)]
+        kalle_once = [_match(match_id="k", players=[_member(22, "kalle", 5, 10, 0.5)])]
+
+        lines = _scoreboard(format_session(_session(tommy_all_night + kalle_once)), index=0)
+
+        self.assertTrue(lines[0].startswith("Name".ljust(CS2_NAME_WIDTH) + "  M "))
+        self.assertEqual({len(line) for line in lines}, {len(lines[0])}, "rows stay aligned with the header")
+
     def test_zero_deaths_does_not_divide_by_zero(self):
         session = _session([_match(players=[_member(11, "tommy", 5, 0, 0.0), _member(22, "kalle", 1, 1, 1.0)])])
 
@@ -322,7 +338,7 @@ class StatColumnsTest(unittest.TestCase):
     def test_every_scoreboard_row_is_the_same_width(self):
         rows = [r for r in _scoreboard(format_session(_session())) if r.strip() != "--"]
 
-        self.assertEqual(len({display_width(r) for r in rows}), 1, rows)
+        self.assertEqual(len({visible_width(r) for r in rows}), 1, rows)
 
     def test_uses_the_narrower_cs2_name_width_not_the_shared_statistics_width(self):
         """/statistics and /leaderboard must keep NAME_WIDTH=10; CS2 tables need it narrower."""

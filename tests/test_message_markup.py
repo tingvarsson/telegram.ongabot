@@ -6,78 +6,24 @@ renders a builder with that input at its worst and runs the result through the c
 tests.telegram_markup.
 """
 
-import json
 import unittest
-from datetime import date, datetime, time, timedelta
+from dataclasses import replace
 from pathlib import Path
-from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram import User
-
 from ongabot import ongabot
-from ongabot.chat import Chat
 from ongabot.cs2.format import format_session
 from ongabot.cs2.patchnotesformat import render_patch_notes_html
-from ongabot.cs2.session import Cs2Match, Cs2Session, PlayerLine
 from ongabot.cs2.steamnews import SteamNewsItem
-from ongabot.event import Event
-from ongabot.eventdata import EventData
 from ongabot.utils import helper
 from ongabot.utils.changelogformat import CHANGELOG_HEADING, render_changelog_html
 from ongabot.utils.points import render_event_recap_message, render_leaderboard_message
-from ongabot.utils.statistics import MAYBE_TEXT, NO_OP_TEXT, SORT_COLUMNS, render_statistics_message
+from ongabot.utils.statistics import SORT_COLUMNS, render_statistics_message
+from tests import message_fixtures
+from tests.message_fixtures import NASTY
 from tests.telegram_markup import check_html, check_markdown_v2, check_plain_text
 
 REPO_ROOT = Path(__file__).parent.parent
-FIXTURES = Path(__file__).parent / "fixtures"
-
-# Every character MarkdownV2 reserves, every one HTML needs escaped, a backslash, and text
-# that is wider in UTF-16 than it looks.
-NASTY = '_*[]()~`>#+-=|{}.!\\ <b>&amp; "q" \U0001f389'
-SLOTS = ["18.30", "19.10", "19.50"]
-FIRST_EVENT = date(2026, 9, 2)
-
-
-def _users() -> List[User]:
-    return [
-        User(id=1, first_name=NASTY, is_bot=False),
-        User(id=2, first_name="Anna", last_name="<i>*_", is_bot=False),
-        User(id=3, first_name="Émile ß", is_bot=False),
-    ]
-
-
-def _event(event_date: date, users: List[User], picks: List[tuple]) -> Event:
-    """A completed event whose poll offers SLOTS plus the two joke options."""
-    texts = SLOTS + [NO_OP_TEXT, MAYBE_TEXT]
-    poll = MagicMock()
-    poll.id = f"poll-{event_date}"
-    poll.total_voter_count = len(users)
-    poll.options = [MagicMock(text=text, voter_count=sum(i in pick for pick in picks)) for i, text in enumerate(texts)]
-    event = Event(chat_id=42, poll=poll, data=EventData(event_date, time(18, 30), len(SLOTS)))
-    for user, pick in zip(users, picks):
-        answer = MagicMock()
-        answer.option_ids = pick
-        event.poll_answers[user] = answer
-    event.first_answer = users[0]
-    event.user_played_streaks = {user.id: 3 for user in users}
-    event.completed = True
-    return event
-
-
-def _chat() -> Chat:
-    """Three weeks of events with every kind of answer: slots, No-op, Maybe Baby, retracted."""
-    users = _users()
-    chat = Chat(42)
-    weekly_picks = [
-        [(0, 1), (0,), (3,)],
-        [(0, 1, 2), (4,), (1,)],
-        [(2,), (0, 2), ()],
-    ]
-    for week, picks in enumerate(weekly_picks):
-        event = _event(FIRST_EVENT + timedelta(weeks=week), users, picks)
-        chat.events[event.event_date] = event
-    return chat
 
 
 class HtmlBuildersTest(unittest.TestCase):
@@ -94,18 +40,7 @@ class HtmlBuildersTest(unittest.TestCase):
             check_html(message)
 
     def test_real_patch_notes_render_valid_html(self):
-        payload = json.loads((FIXTURES / "steam_news_cs2.json").read_text(encoding="utf-8"))
-        items = [
-            SteamNewsItem(
-                gid=str(raw["gid"]),
-                title=raw["title"],
-                url=raw["url"],
-                contents=raw.get("contents") or "",
-                date=int(raw["date"]),
-                tags=tuple(raw.get("tags") or []),
-            )
-            for raw in payload["appnews"]["newsitems"]
-        ]
+        items = message_fixtures.steam_patch_notes()
         for message in render_patch_notes_html(items):
             check_html(message)
 
@@ -137,8 +72,8 @@ class VersionAnnouncementTest(unittest.IsolatedAsyncioTestCase):
 
 class MarkdownV2BuildersTest(unittest.TestCase):
     def setUp(self):
-        self.chat = _chat()
-        self.latest = max(self.chat.events.values(), key=lambda event: event.event_date)
+        self.chat = message_fixtures.chat()
+        self.latest = message_fixtures.latest_event(self.chat)
 
     def test_poll_status_message(self):
         for completed in (False, True):
@@ -161,35 +96,14 @@ class MarkdownV2BuildersTest(unittest.TestCase):
                 check_markdown_v2(render_event_recap_message(self.chat, event))
 
     def test_cs2_results(self):
-        def player(index, user_id, name, team):
-            return PlayerLine(
-                user_id=user_id,
-                steam64_id=f"7656119800000{index:04d}",
-                name=name,
-                total_kills=21,
-                total_deaths=14,
-                kd_ratio=1.5,
-                mvps=3,
-                team_number=team,
-                total_assists=5,
-                adr=88.4,
-                multi5k=1,
-                total_damage=1326,
-                rounds_count=15,
-            )
-
-        players = (player(1, 1, NASTY, 2), player(2, 2, "<i>*_", 2), player(3, None, NASTY, 3), player(4, None, "`", 3))
-        match = Cs2Match(
-            id="2fae0fe6-a164-4c38-a2ee-c30d7b9dc57b",
-            map_name=f"de_{NASTY}",
-            finished_at=datetime(2026, 9, 2, 21, 2),
-            score=(13, 7),
-            our_team=2,
-            players=players,
-        )
         for live in (False, True):
             with self.subTest(live=live):
-                check_markdown_v2(format_session(Cs2Session(FIRST_EVENT, [match, match]), live=live))
+                check_markdown_v2(format_session(message_fixtures.cs2_session(), live=live))
+
+    def test_cs2_results_with_hostile_map_name(self):
+        session = message_fixtures.cs2_session()
+        hostile = replace(session, matches=[replace(match, map_name=f"de_{NASTY}") for match in session.matches])
+        check_markdown_v2(format_session(hostile))
 
 
 class PlainTextBuildersTest(unittest.TestCase):

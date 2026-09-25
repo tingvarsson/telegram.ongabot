@@ -1,0 +1,22 @@
+Counter-Strike 2 Update · 2026-09-24
+RUSH
+• Increased the maximum countdown-after-elimination time from 7 seconds to 14 seconds on end rooms and Convoy.
+• The countdown-after-elimination time does not activate in cases where an entire team dies to suicides, team kills, and/or disconnects.
+• Warmup time once all players have connected, freeze time, and technical timeout time are all reduced.
+• Various gap fixes and clipping adjustments.
+
+CROSSHAIR
+• Some additional information about the new crosshair system:
+  ◦ The new crosshair thickness and length units are in pixels. In the past, the values were defined with an arbitrary scale and converted to pixels based on display resolution so the same value would result in different pixel counts at different resolutions. With the new settings, if you want a 1-pixel wide crosshair with a bar length of 8 pixels and a gap of 4 pixels, then you would set: thickness = 1, length = 8, and gap = 4.
+  ◦ Please be aware that the new crosshair system automatically rescales pixel counts when the display resolution changes. For example, if a crosshair was configured at display resolution 1280x720 with a thickness of 2 pixels and then the display resolution changes to 2560x1440, it will now automatically rescale the thickness to 4 pixels so that it remains proportionally the same as when it was configured.
+• Added option to draw half-outlines. This will only draw the top-left portions of the outline for a crosshair.
+• Fixed a bug preventing 0 gap width from being respected.
+• Added a static square crosshair style
+• Reduced the minimum dynamic spread distance to 64 pixels. The new dynamic crosshair styles will show you the real weapon spread and inaccuracy and the 'Dynamic Spread Limit' setting is a limit on how far the crosshair will spread at maximum inaccuracy and spread. There is a baseline spread distance of 64 pixels which covers the weapons with the largest spread so that players can better understand how accurate they actually are with their equipped weapon.
+
+MISC
+• Fixed a case where left-handed viewmodels would animate incorrectly while silent reloading.
+• Fixed a case where thirdperson player models would animate too fast while silent reloading.
+• Fixed a case where firstperson Dual Berettas would animate incorrectly while reloading.
+• Clan tags now appear in death notices.
+Full notes on Steam

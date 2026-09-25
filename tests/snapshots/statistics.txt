@@ -1,0 +1,23 @@
+Chat Statistics
+
+
+Total Events                          3 100%
+Answered Events                       3 100%
+Average number of Bangers per event 3.0  75%
+Average number of Bangers per slot  2.0  50%
+Slot picked - 18.30                   6 100%
+Slot picked - 19.10                   6 100%
+Slot picked - 19.50                   6 100%
+
+
+User Statistics
+
+
+Name       Resp Resp% RStk Play Play% PStk Slot  Avg  May NoOp  DNB
+Tommy         3  100%    3    3  100%    3    6  2.0    0    0    0
+Anna          3  100%    3    2   67%    1    3  1.5    1    0    0
+_*[]()~`>.    3  100%    3    3  100%    3    8  2.7    0    0    0
+Émile         2   67%    0    1   33%    0    1  1.0    0    1    1
+
+
+Tap a button to sort User Statistics by that column
