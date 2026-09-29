@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-09-29
+
 ### Changed
 
 - `/short` posts one of this week's most-viewed gaming Shorts when you ask for it, and
@@ -280,7 +282,8 @@ No user-facing changes (version bump only).
 
 Initial release — basic Telegram bot for recurring event polls in group chats.
 
-[Unreleased]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/tingvarsson/telegram.ongabot/compare/v1.7.0...v1.8.0
