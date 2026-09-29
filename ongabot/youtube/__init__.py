@@ -1,1 +1,1 @@
-"""Daily YouTube Short selection, sourced from the YouTube Data API v3."""
+"""On-demand YouTube Short selection for /short, sourced from the YouTube Data API v3."""

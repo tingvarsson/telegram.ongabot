@@ -8,14 +8,13 @@ from telegram import Message, Update
 from telegram.ext import CallbackContext, CallbackQueryHandler
 
 from chat import Chat
-from utils.commands import CS2, LEADERBOARD, STATISTICS, TOPICS
+from utils.commands import CS2, LEADERBOARD, STATISTICS
 from utils.dm import DM_PICK_PREFIX, GROUP_UNAVAILABLE, can_read_group, decode_pick, group_title, is_private_chat
 from utils.log import log
 
 from .cs2commandhandler import send_cs2
 from .leaderboardcommandhandler import send_leaderboard
 from .statisticscommandhandler import send_statistics
-from .topicscommandhandler import send_topics
 
 _logger = logging.getLogger(__name__)
 
@@ -33,10 +32,6 @@ async def _leaderboard(message: Message, _context: CallbackContext, chat: Chat, 
     await send_leaderboard(message, chat)
 
 
-async def _topics(message: Message, _context: CallbackContext, chat: Chat, _date: Optional[date]) -> None:
-    await send_topics(message, chat)
-
-
 async def _cs2(message: Message, context: CallbackContext, chat: Chat, event_date: Optional[date]) -> None:
     await send_cs2(message, context, chat, event_date)
 
@@ -45,7 +40,6 @@ async def _cs2(message: Message, context: CallbackContext, chat: Chat, event_dat
 SENDERS: Dict[str, Sender] = {
     STATISTICS.command: _statistics,
     LEADERBOARD.command: _leaderboard,
-    TOPICS.command: _topics,
     CS2.command: _cs2,
 }
 

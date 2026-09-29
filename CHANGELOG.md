@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `/short` posts one of this week's most-viewed gaming Shorts when you ask for it, and
+  `/short <topics>` the most-viewed Short on those topics. It never repeats one within a month.
+  The daily automatic Short, its reaction-based topic learning and `/topics` are gone.
+
 ## [1.10.0] - 2026-09-25
 
 ### Added

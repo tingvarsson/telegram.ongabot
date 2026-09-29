@@ -1,6 +1,7 @@
 import json
 import os
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -72,6 +73,58 @@ class SearchShortsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seen["params"]["maxResults"], "5")
         self.assertEqual(seen["params"]["type"], "video")
         self.assertEqual(seen["params"]["videoDuration"], "short")
+        self.assertEqual(seen["params"]["safeSearch"], "strict")
+        self.assertEqual(seen["params"]["order"], "viewCount")
+        self.assertNotIn("publishedAfter", seen["params"])
+        self.assertNotIn("videoCategoryId", seen["params"])
+
+    async def _params_for(self, *args, **kwargs):
+        seen = {}
+
+        def handler(request):
+            seen["params"] = dict(request.url.params)
+            return _response(200, json_data={"items": []})
+
+        client = YouTubeClient(api_key="key")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            with patch.object(client, "_client", http):
+                await client.search_shorts(*args, **kwargs)
+        return seen["params"]
+
+    async def test_defaults_to_fifty_results_by_view_count(self):
+        params = await self._params_for("linux")
+
+        self.assertEqual(params["maxResults"], "50")
+        self.assertEqual(params["order"], "viewCount")
+
+    async def test_sends_order_published_after_and_category(self):
+        params = await self._params_for(
+            "#shorts",
+            order="date",
+            published_after=datetime(2026, 9, 22, 12, 30, 15, 123456, tzinfo=timezone.utc),
+            category_id="20",
+        )
+
+        self.assertEqual(params["order"], "date")
+        self.assertEqual(params["publishedAfter"], "2026-09-22T12:30:15Z")
+        self.assertEqual(params["videoCategoryId"], "20")
+
+    async def test_published_after_is_converted_to_utc(self):
+        cest = timezone(timedelta(hours=2))
+        params = await self._params_for("linux", published_after=datetime(2026, 9, 22, 14, 0, tzinfo=cest))
+
+        self.assertEqual(params["publishedAfter"], "2026-09-22T12:00:00Z")
+
+    async def test_naive_published_after_is_taken_as_utc(self):
+        params = await self._params_for("linux", published_after=datetime(2026, 9, 22, 14, 0))
+
+        self.assertEqual(params["publishedAfter"], "2026-09-22T14:00:00Z")
+
+    async def test_empty_query_omits_q(self):
+        params = await self._params_for("", category_id="20")
+
+        self.assertNotIn("q", params)
+        self.assertEqual(params["videoCategoryId"], "20")
 
 
 class GetVideoDetailsTest(unittest.IsolatedAsyncioTestCase):
@@ -88,6 +141,81 @@ class GetVideoDetailsTest(unittest.IsolatedAsyncioTestCase):
 
         longer = details["def456"]
         self.assertEqual(longer.duration_seconds, 65)
+
+    async def test_parses_view_count_from_statistics(self):
+        client = YouTubeClient(api_key="key")
+        payload = {
+            "items": [
+                {
+                    "id": "abc123",
+                    "snippet": {"title": "x", "liveBroadcastContent": "none"},
+                    "contentDetails": {"duration": "PT30S"},
+                    "statistics": {"viewCount": "1234567", "likeCount": "42"},
+                }
+            ]
+        }
+        with patch.object(client, "_get", AsyncMock(return_value=payload)):
+            details = await client.get_video_details(["abc123"])
+
+        self.assertEqual(details["abc123"].view_count, 1234567)
+        self.assertFalse(details["abc123"].live)
+
+    async def test_requests_statistics_part_and_batched_ids(self):
+        seen = {}
+
+        def handler(request):
+            seen["params"] = dict(request.url.params)
+            return _response(200, json_data={"items": []})
+
+        client = YouTubeClient(api_key="key")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            with patch.object(client, "_client", http):
+                await client.get_video_details(["abc123", "def456"])
+
+        self.assertEqual(seen["params"]["part"], "snippet,contentDetails,statistics")
+        self.assertEqual(seen["params"]["id"], "abc123,def456")
+
+    async def test_missing_statistics_gives_zero_views(self):
+        client = YouTubeClient(api_key="key")
+        payload = {"items": [{"id": "abc123", "snippet": {"title": "x"}, "contentDetails": {"duration": "PT30S"}}]}
+        with patch.object(client, "_get", AsyncMock(return_value=payload)):
+            details = await client.get_video_details(["abc123"])
+
+        self.assertEqual(details["abc123"].view_count, 0)
+        self.assertFalse(details["abc123"].live)
+
+    async def test_hidden_or_malformed_view_count_gives_zero_views(self):
+        client = YouTubeClient(api_key="key")
+        payload = {
+            "items": [
+                {"id": "hidden", "contentDetails": {"duration": "PT30S"}, "statistics": {"likeCount": "5"}},
+                {"id": "garbled", "contentDetails": {"duration": "PT30S"}, "statistics": {"viewCount": "lots"}},
+            ]
+        }
+        with patch.object(client, "_get", AsyncMock(return_value=payload)):
+            details = await client.get_video_details(["hidden", "garbled"])
+
+        self.assertEqual(details["hidden"].view_count, 0)
+        self.assertEqual(details["garbled"].view_count, 0)
+
+    async def test_live_and_upcoming_broadcasts_are_flagged_live(self):
+        client = YouTubeClient(api_key="key")
+        payload = {
+            "items": [
+                {
+                    "id": video_id,
+                    "snippet": {"title": "x", "liveBroadcastContent": state},
+                    "contentDetails": {"duration": "PT30S"},
+                }
+                for video_id, state in (("live", "live"), ("upcoming", "upcoming"), ("done", "none"))
+            ]
+        }
+        with patch.object(client, "_get", AsyncMock(return_value=payload)):
+            details = await client.get_video_details(["live", "upcoming", "done"])
+
+        self.assertTrue(details["live"].live)
+        self.assertTrue(details["upcoming"].live)
+        self.assertFalse(details["done"].live)
 
     async def test_returns_none_on_request_failure(self):
         client = YouTubeClient(api_key="key")
@@ -118,7 +246,7 @@ class GetVideoDetailsTest(unittest.IsolatedAsyncioTestCase):
 
 
 class YouTubeFailureIsolationTest(unittest.IsolatedAsyncioTestCase):
-    """A YouTube API outage must never raise into the scheduling job - every failure returns None."""
+    """A YouTube API outage must never raise into the /short handler - every failure returns None."""
 
     async def _search_through(self, handler):
         client = YouTubeClient(api_key="key")

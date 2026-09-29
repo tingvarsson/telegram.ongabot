@@ -186,9 +186,8 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
         # Should not raise
         await post_init(application)
 
-        # Event cleanup (startup + daily), the hourly CS2 sweep scheduler, the hourly Shorts
-        # scheduler, the nightly topic-score decay, and the CS2 patch-notes poll are all
-        # registered.
+        # Event cleanup (startup + daily), the hourly CS2 sweep scheduler, and the CS2
+        # patch-notes poll are all registered.
         scheduled = [
             call.kwargs["name"]
             for calls in (
@@ -205,8 +204,6 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
                 "complete_past_events_startup",
                 "cs2_patchnotes_sweep",
                 "cs2_sweeps",
-                "decay_shorts_topic_scores",
-                "youtube_shorts_schedule",
             ],
         )
 
@@ -252,7 +249,7 @@ class SetupBotMetadataTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(private_call.kwargs["scope"], BotCommandScopeAllPrivateChats)
         self.assertEqual(
             [command.command for command in private_call.args[0]],
-            ["help", "statistics", "leaderboard", "cs2", "topics", "linksteam", "unlinksteam"],
+            ["help", "statistics", "leaderboard", "cs2", "linksteam", "unlinksteam"],
         )
 
     async def test_continues_when_set_my_commands_raises(self):

@@ -88,7 +88,7 @@ class PrivateCommandsTest(unittest.TestCase):
     def test_exactly_the_read_and_per_user_commands_are_private(self):
         self.assertEqual(
             [cmd.command for cmd in PRIVATE_COMMANDS],
-            ["help", "statistics", "leaderboard", "cs2", "topics", "linksteam", "unlinksteam"],
+            ["help", "statistics", "leaderboard", "cs2", "linksteam", "unlinksteam"],
         )
 
     def test_start_passes_the_gate_although_hidden_from_help(self):

@@ -24,8 +24,7 @@ cp .env.example .env.d/ongadev3
    Privacy mode can stay on too, because an admin bot sees every message anyway.
 3. Create a test group for the bot, one group per bot, so two bots never both answer a command
    or post the same scheduled message. Add the bot to the group.
-4. Make the bot an **administrator** with at least *Pin Messages*. It pins the weekly poll, and
-   only admin bots get the per-user reactions that drive YouTube topic learning.
+4. Make the bot an **administrator** with at least *Pin Messages*. It pins the weekly poll.
    Telegram may upgrade the group to a supergroup at this point, which **changes its chat ID**.
    Make the bot an admin before step 5.
 5. Set `BOT_ADMINS` to your own Telegram user ID, start the bot with `make run BOT=<name>`, and

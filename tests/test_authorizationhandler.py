@@ -60,7 +60,7 @@ class AuthorizationHandlerTest(unittest.IsolatedAsyncioTestCase):
             await self._assert_blocked_with(_update("/authorize"), _context(), NOT_ENABLED)
 
     async def test_private_commands_pass_in_a_private_chat(self):
-        for command in ("/start", "/help", "/statistics", "/leaderboard", "/cs2 2026-09-02", "/topics", "/linksteam"):
+        for command in ("/start", "/help", "/statistics", "/leaderboard", "/cs2 2026-09-02", "/linksteam"):
             with self.subTest(command=command):
                 await self._assert_passes(_update(command, private=True), _context())
 
@@ -86,7 +86,7 @@ class AuthorizationHandlerTest(unittest.IsolatedAsyncioTestCase):
         await self._assert_passes(_update("/newevent", private=True), _context(authorized={USER_ID}))
 
     def test_hint_lists_the_private_commands(self):
-        for command in ("/help", "/statistics", "/leaderboard", "/cs2", "/topics", "/linksteam", "/unlinksteam"):
+        for command in ("/help", "/statistics", "/leaderboard", "/cs2", "/linksteam", "/unlinksteam"):
             self.assertIn(command, PRIVATE_CHAT_HINT)
         self.assertNotIn("/newevent", PRIVATE_CHAT_HINT)
 

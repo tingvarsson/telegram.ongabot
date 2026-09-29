@@ -35,7 +35,7 @@ class CallbackPatternTest(unittest.TestCase):
         self.assertIsNone(re.match(handler.CALLBACK_PATTERN, "stats_sort:played"))
 
     def test_every_picker_command_has_a_sender(self):
-        self.assertEqual(set(handler.SENDERS), {"statistics", "leaderboard", "topics", "cs2"})
+        self.assertEqual(set(handler.SENDERS), {"statistics", "leaderboard", "cs2"})
 
 
 class DmGroupPickCallbackTest(unittest.IsolatedAsyncioTestCase):
@@ -46,15 +46,14 @@ class DmGroupPickCallbackTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{MODULE}.group_title", AsyncMock(return_value=title)),
             patch(f"{MODULE}.send_statistics", AsyncMock()) as statistics,
             patch(f"{MODULE}.send_leaderboard", AsyncMock()) as leaderboard,
-            patch(f"{MODULE}.send_topics", AsyncMock()) as topics,
             patch(f"{MODULE}.send_cs2", AsyncMock()) as cs2,
         ):
             await handler.callback(update, context)
-        senders = {"statistics": statistics, "leaderboard": leaderboard, "topics": topics, "cs2": cs2}
+        senders = {"statistics": statistics, "leaderboard": leaderboard, "cs2": cs2}
         return update, context, can_read_group, senders
 
     async def test_answers_each_command_for_the_picked_group(self):
-        for command in ("statistics", "leaderboard", "topics"):
+        for command in ("statistics", "leaderboard"):
             with self.subTest(command=command):
                 update, context, _, senders = await self._run(f"dm_pick:{command}:{GROUP_ID}")
 

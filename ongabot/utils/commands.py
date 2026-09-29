@@ -222,12 +222,20 @@ CS2PATCHES = CommandInfo(
     menu_description="Post CS2 patch notes here [on|off]",
 )
 
-TOPICS = CommandInfo(
-    command="topics",
-    brief="/topics - Show the group's learned YouTube Short topic preferences",
-    usage="/topics",
-    menu_description="Show learned YouTube Short topic preferences",
-    private=True,
+SHORT = CommandInfo(
+    command="short",
+    brief="/short [topics] - Post one of this week's top gaming Shorts, or the best Short on your topics",
+    usage=(
+        "Usage: /short [topics]\n"
+        "  No topics: one of this week's most-viewed Shorts in YouTube's Gaming category.\n"
+        "  Topics: the most-viewed Short on those topics this week, widening to the past\n"
+        "  month and then all time when nothing new turns up. Up to 100 characters.\n"
+        "  Never repeats a Short this chat has had in the last 30 days.\n\n"
+        "Examples:\n"
+        "  /short\n"
+        "  /short counter strike"
+    ),
+    menu_description="Post a top YouTube Short [topics..]",
 )
 
 BOT_SHORT_DESCRIPTION = "ONGAbot - the only bot you'll ever need"
@@ -255,7 +263,7 @@ ALL_COMMANDS = [
     LEADERBOARD,
     CS2,
     CS2PATCHES,
-    TOPICS,
+    SHORT,
     LINKSTEAM,
     UNLINKSTEAM,
 ]

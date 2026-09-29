@@ -1,3 +1,4 @@
+import pickle
 import unittest
 from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock
@@ -5,7 +6,10 @@ from unittest.mock import MagicMock
 from ongabot.chat import SHORTS_HISTORY_DAYS, Chat
 from ongabot.event import Event
 from ongabot.eventdata import EventData
-from ongabot.youtube.selection import SelectedVideo
+from ongabot.youtube.selection import PostedShort
+
+# The daily-Short attributes /short no longer keeps; Chat drops them when an old pickle loads.
+STALE_SHORTS_ATTRS = ("topic_scores", "posted_shorts", "last_shorts_posted_date")
 
 
 def _make_event(poll_id: str, event_date: date, completed: bool = False, cancelled: bool = False):
@@ -307,60 +311,64 @@ class ChatSetStateRetroactiveMigrationTest(unittest.TestCase):
         self.assertIs(chat.events[date(2026, 6, 4)], event)
 
 
-def _video(video_id: str, topics=(), title="A Short"):
-    return SelectedVideo(
-        video_id=video_id, title=title, url=f"https://www.youtube.com/shorts/{video_id}", topics=topics
-    )
-
-
 class ChatShortsStateTest(unittest.TestCase):
-    def setUp(self):
-        self.chat = Chat(chat_id=1)
-
-    def test_new_chat_seeds_topic_scores(self):
-        self.assertEqual(set(self.chat.topic_scores), {"counter-strike", "linux"})
-
     def test_new_chat_has_no_shorts_history(self):
-        self.assertEqual(self.chat.recent_video_ids, {})
-        self.assertEqual(self.chat.posted_shorts, {})
-        self.assertIsNone(self.chat.last_shorts_posted_date)
+        chat = Chat(chat_id=1)
+
+        self.assertEqual(chat.recent_video_ids, {})
+
+    def test_new_chat_carries_no_daily_short_state(self):
+        chat = Chat(chat_id=1)
+
+        for stale in STALE_SHORTS_ATTRS:
+            self.assertFalse(hasattr(chat, stale), stale)
 
 
 class ChatRecordShortsPostTest(unittest.TestCase):
     def setUp(self):
         self.chat = Chat(chat_id=1)
 
-    def test_updates_all_three_collections(self):
-        video = _video("abc", topics=("linux",))
-        posted_at = datetime(2026, 9, 1, 12, 0)
+    def test_records_the_video_with_the_date_it_was_posted(self):
+        self.chat.record_shorts_post("abc", datetime(2026, 9, 1, 12, 0))
 
-        self.chat.record_shorts_post(42, video, posted_at)
-
-        self.assertEqual(self.chat.recent_video_ids["abc"], date(2026, 9, 1))
-        self.assertEqual(self.chat.posted_shorts[42].video_id, "abc")
-        self.assertEqual(self.chat.posted_shorts[42].topics, ("linux",))
-        self.assertEqual(self.chat.last_shorts_posted_date, date(2026, 9, 1))
+        self.assertEqual(self.chat.recent_video_ids, {"abc": date(2026, 9, 1)})
 
     def test_is_recently_posted_true_for_a_tracked_video(self):
-        self.chat.record_shorts_post(1, _video("abc"), datetime(2026, 9, 1))
+        self.chat.record_shorts_post("abc", datetime(2026, 9, 1))
 
         self.assertTrue(self.chat.is_recently_posted("abc"))
 
     def test_is_recently_posted_false_for_an_unknown_video(self):
         self.assertFalse(self.chat.is_recently_posted("xyz"))
 
+    def test_forget_undoes_a_recorded_post(self):
+        self.chat.record_shorts_post("abc", datetime(2026, 9, 1))
+
+        self.chat.forget_shorts_post("abc")
+
+        self.assertFalse(self.chat.is_recently_posted("abc"))
+
+    def test_forget_of_an_unknown_video_is_a_no_op(self):
+        self.chat.forget_shorts_post("xyz")
+
+        self.assertEqual(self.chat.recent_video_ids, {})
+
     def test_prunes_entries_older_than_the_history_window(self):
-        self.chat.record_shorts_post(1, _video("old"), datetime(2026, 1, 1))
-        self.chat.record_shorts_post(2, _video("new"), datetime(2026, 1, 1) + timedelta(days=SHORTS_HISTORY_DAYS + 1))
+        self.chat.record_shorts_post("old", datetime(2026, 1, 1))
+        self.chat.record_shorts_post("new", datetime(2026, 1, 1) + timedelta(days=SHORTS_HISTORY_DAYS + 1))
 
         self.assertNotIn("old", self.chat.recent_video_ids)
-        self.assertNotIn(1, self.chat.posted_shorts)
         self.assertIn("new", self.chat.recent_video_ids)
-        self.assertIn(2, self.chat.posted_shorts)
+
+    def test_keeps_entries_exactly_at_the_history_window(self):
+        self.chat.record_shorts_post("edge", datetime(2026, 1, 1))
+        self.chat.record_shorts_post("new", datetime(2026, 1, 1) + timedelta(days=SHORTS_HISTORY_DAYS))
+
+        self.assertIn("edge", self.chat.recent_video_ids)
 
 
 class ChatSetStateShortsMigrationTest(unittest.TestCase):
-    def test_backfills_shorts_fields_missing_from_an_old_pickle(self):
+    def test_defaults_recent_video_ids_missing_from_an_old_pickle(self):
         chat = Chat.__new__(Chat)
         chat.__setstate__(
             {
@@ -371,12 +379,9 @@ class ChatSetStateShortsMigrationTest(unittest.TestCase):
             }
         )
 
-        self.assertEqual(set(chat.topic_scores), {"counter-strike", "linux"})
         self.assertEqual(chat.recent_video_ids, {})
-        self.assertEqual(chat.posted_shorts, {})
-        self.assertIsNone(chat.last_shorts_posted_date)
 
-    def test_does_not_overwrite_existing_shorts_state(self):
+    def test_drops_the_daily_short_state_and_keeps_recent_video_ids(self):
         chat = Chat.__new__(Chat)
         chat.__setstate__(
             {
@@ -391,8 +396,24 @@ class ChatSetStateShortsMigrationTest(unittest.TestCase):
             }
         )
 
-        self.assertEqual(chat.topic_scores, {"speedrun": 5.0})
-        self.assertEqual(chat.last_shorts_posted_date, date(2026, 1, 1))
+        self.assertEqual(chat.recent_video_ids, {"abc": date(2026, 1, 1)})
+        for stale in STALE_SHORTS_ATTRS:
+            self.assertFalse(hasattr(chat, stale), stale)
+
+    def test_loads_a_pickle_written_by_the_daily_short_version(self):
+        # The pickle references youtube.selection.PostedShort, so the class has to stay
+        # importable or bot_data would fail to load at startup.
+        chat = Chat(chat_id=1)
+        chat.recent_video_ids = {"abc": date(2026, 9, 1)}
+        chat.topic_scores = {"linux": 3.0}
+        chat.posted_shorts = {1: PostedShort("abc", ("linux",), datetime(2026, 9, 1, 12, 0))}
+        chat.last_shorts_posted_date = date(2026, 9, 1)
+
+        restored = pickle.loads(pickle.dumps(chat))
+
+        self.assertEqual(restored.recent_video_ids, {"abc": date(2026, 9, 1)})
+        for stale in STALE_SHORTS_ATTRS:
+            self.assertFalse(hasattr(restored, stale), stale)
 
 
 if __name__ == "__main__":
