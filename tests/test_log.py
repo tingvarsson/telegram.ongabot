@@ -153,6 +153,27 @@ class TokenRedactionTest(unittest.TestCase):
         self.assertNotIn(FAKE_TOKEN, output)
         self.assertIn("RuntimeError", output)
 
+    def test_api_key_query_parameter_is_masked(self):
+        # httpx's request log line for a YouTube search, key in the middle of the query string.
+        self.child.info(
+            'HTTP Request: %s %s "%s"',
+            "GET",
+            "https://www.googleapis.com/youtube/v3/search?part=snippet&key=AIzaSyFAKEfake-KEY_123&q=cs2",
+            "HTTP/1.1 200 OK",
+        )
+        output = self.stream.getvalue()
+        self.assertNotIn("AIzaSyFAKEfake-KEY_123", output)
+        self.assertIn(f"&key={log.API_KEY_PLACEHOLDER}&q=cs2", output)
+
+    def test_api_key_as_the_first_query_parameter_is_masked(self):
+        self.child.info("GET https://www.googleapis.com/youtube/v3/videos?key=AIzaSyFAKE")
+        self.assertIn(f"?key={log.API_KEY_PLACEHOLDER}", self.stream.getvalue())
+        self.assertNotIn("AIzaSyFAKE", self.stream.getvalue())
+
+    def test_other_parameters_ending_in_key_are_left_alone(self):
+        self.child.info("GET https://example.com/?apikey=visible&monkey=business")
+        self.assertIn("apikey=visible&monkey=business", self.stream.getvalue())
+
     def test_messages_without_a_token_are_left_alone(self):
         self.child.info("chat_id=%s joined at %s", -1001345767319, "18:30:00")
         self.assertEqual(

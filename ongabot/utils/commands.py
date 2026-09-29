@@ -228,8 +228,8 @@ SHORT = CommandInfo(
     usage=(
         "Usage: /short [topics]\n"
         "  No topics: one of this week's most-viewed Shorts in YouTube's Gaming category.\n"
-        "  Topics: the most-viewed Short on those topics this week, widening to the last\n"
-        "  30 days and then all time when nothing new turns up.\n"
+        "  Topics: the most-viewed Short on those topics this week, widening to the past\n"
+        "  month and then all time when nothing new turns up. Up to 100 characters.\n"
         "  Never repeats a Short this chat has had in the last 30 days.\n\n"
         "Examples:\n"
         "  /short\n"

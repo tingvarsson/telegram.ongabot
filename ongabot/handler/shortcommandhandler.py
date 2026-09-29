@@ -9,6 +9,7 @@ from telegram.error import TelegramError
 from telegram.ext import CallbackContext, CommandHandler
 
 from botdata import BotData
+from utils.commands import SHORT
 from utils.log import log
 from youtube import selection
 from youtube.client import get_client
@@ -17,6 +18,10 @@ from youtube.selection import SelectedVideo
 _logger = logging.getLogger(__name__)
 
 UNAVAILABLE_TEXT = "Couldn't reach YouTube right now - try again in a bit."
+
+# The topics are echoed back in the reply, so a cap keeps it far below Telegram's message limit
+# and the search query sane. Stated in SHORT.usage.
+MAX_TOPICS_LENGTH = 100
 
 # What the chat has run out of, named in the exhausted reply when no topics were given.
 WEEKLY_SCOPE = "this week's gaming list"
@@ -80,6 +85,11 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     chat_id = update.effective_chat.id
     topics = _parse_topics(context.args or [])
+    if len(" ".join(topics)) > MAX_TOPICS_LENGTH:
+        _logger.info("Rejected /short in chat_id=%s: topics longer than %d characters", chat_id, MAX_TOPICS_LENGTH)
+        await update.message.reply_text(SHORT.usage)
+        return
+
     bot_data: BotData = context.bot_data
     chat = bot_data.get_chat(chat_id)
 
@@ -97,15 +107,19 @@ async def callback(update: Update, context: CallbackContext) -> None:
         return
 
     video = result.video
+    # Recorded before the send, with no await in between since the pick: this handler is
+    # non-blocking, so a second /short sent while this one's send is in flight would otherwise
+    # pick the same Short from the cached list and post it twice.
+    chat.record_shorts_post(video.video_id, datetime.now())
     try:
         # A Short reads as a post of its own, not an answer to the command message itself.
         await update.message.reply_text(render_short_message(video, topics), do_quote=False)
     except TelegramError as e:
-        # Not recorded, so the chat can still get this Short on the next /short.
+        # Forgotten again, so the chat can still get this Short on the next /short.
+        chat.forget_shorts_post(video.video_id)
         _logger.error("Failed to post Short video_id=%s to chat_id=%s: %s", video.video_id, chat_id, e)
         return
 
-    chat.record_shorts_post(video.video_id, datetime.now())
     _logger.info(
         "Posted Short video_id=%s to chat_id=%s (#%d %s, query=%r)",
         video.video_id,

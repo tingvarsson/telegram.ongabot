@@ -45,10 +45,14 @@ CACHE_MAX_ENTRIES = 32
 
 
 class Window(enum.Enum):
-    """A publish window a search is limited to, with the label used when presenting a pick."""
+    """A publish window a search is limited to, with the label used when presenting a pick.
+
+    The windows roll (the last 7 / 30 days), so MONTH reads "in the past month" rather than
+    "this month", which would suggest the calendar month.
+    """
 
     WEEK = (7, "this week")
-    MONTH = (30, "this month")
+    MONTH = (30, "in the past month")
     ALL_TIME = (None, "of all time")
 
     def __init__(self, days: Optional[int], label: str) -> None:
@@ -88,10 +92,10 @@ class PickResult:
     """The outcome of pick_short - exactly one of the three fields is set.
 
     * ``video`` - a Short to post.
-    * ``unavailable`` - no window returned data at all (API failure or quota), so the caller
-      should suggest trying again later.
-    * ``exhausted`` - data came back, but it was empty or every Short in it was already posted
-      to this chat recently.
+    * ``unavailable`` - nothing unseen was found and at least one window could not be fetched
+      (API failure or quota), so the caller should suggest trying again later.
+    * ``exhausted`` - every window came back, but each was empty or every Short in it was
+      already posted to this chat recently.
     """
 
     video: Optional[SelectedVideo] = None
@@ -244,8 +248,9 @@ async def pick_short(client: VideoSource, chat: "Chat", topics: Sequence[str]) -
 
     Without topics this is this week's Gaming chart only. With topics, the joined topics are
     searched across every category, widening WEEK -> MONTH -> ALL_TIME while a window yields
-    nothing unseen. A window that fails also widens; the result is only ``unavailable`` when
-    no window returned data at all.
+    nothing unseen. A window that fails also widens, but if nothing unseen turns up the result
+    is then ``unavailable`` rather than ``exhausted`` - the failed window may well have had
+    something, so "try again later" is the honest reply.
     """
     clean_topics = tuple(topic.strip() for topic in topics if topic.strip())
     if clean_topics:
@@ -257,13 +262,13 @@ async def pick_short(client: VideoSource, chat: "Chat", topics: Sequence[str]) -
         windows = (Window.WEEK,)
         category_id = GAMING_CATEGORY_ID
 
-    got_data = False
+    any_failed = False
     for window in windows:
         ranked = await fetch_ranked(client, query, window, category_id)
         if ranked is None:
             _logger.warning("Could not fetch Shorts for query=%r window=%s", query, window.name)
+            any_failed = True
             continue
-        got_data = True
 
         for rank, short in enumerate(ranked, start=1):
             if chat.is_recently_posted(short.video_id):
@@ -289,7 +294,7 @@ async def pick_short(client: VideoSource, chat: "Chat", topics: Sequence[str]) -
             )
         _logger.debug("No unseen Short among %d for query=%r window=%s", len(ranked), query, window.name)
 
-    if not got_data:
+    if any_failed:
         return PickResult(unavailable=True)
     _logger.info("No unseen Short for query=%r in any window - all empty or already posted", query)
     return PickResult(exhausted=True)

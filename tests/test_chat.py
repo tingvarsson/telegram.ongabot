@@ -341,6 +341,18 @@ class ChatRecordShortsPostTest(unittest.TestCase):
     def test_is_recently_posted_false_for_an_unknown_video(self):
         self.assertFalse(self.chat.is_recently_posted("xyz"))
 
+    def test_forget_undoes_a_recorded_post(self):
+        self.chat.record_shorts_post("abc", datetime(2026, 9, 1))
+
+        self.chat.forget_shorts_post("abc")
+
+        self.assertFalse(self.chat.is_recently_posted("abc"))
+
+    def test_forget_of_an_unknown_video_is_a_no_op(self):
+        self.chat.forget_shorts_post("xyz")
+
+        self.assertEqual(self.chat.recent_video_ids, {})
+
     def test_prunes_entries_older_than_the_history_window(self):
         self.chat.record_shorts_post("old", datetime(2026, 1, 1))
         self.chat.record_shorts_post("new", datetime(2026, 1, 1) + timedelta(days=SHORTS_HISTORY_DAYS + 1))

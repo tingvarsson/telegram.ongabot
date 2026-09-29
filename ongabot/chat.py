@@ -249,6 +249,11 @@ class Chat:
         self.recent_video_ids[video_id] = posted_at.date()
         self._prune_shorts_history(posted_at.date())
 
+    @log.method
+    def forget_shorts_post(self, video_id: str) -> None:
+        """Undo record_shorts_post for a Short that could not be sent after all."""
+        self.recent_video_ids.pop(video_id, None)
+
     def _prune_shorts_history(self, today: date) -> None:
         """Drop no-repeat entries older than SHORTS_HISTORY_DAYS, so the history stays bounded."""
         cutoff = today - timedelta(days=SHORTS_HISTORY_DAYS)

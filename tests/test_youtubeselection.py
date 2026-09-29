@@ -85,7 +85,7 @@ class SelectionTestCase(unittest.IsolatedAsyncioTestCase):
 class WindowTest(unittest.TestCase):
     def test_days_and_labels(self):
         self.assertEqual((Window.WEEK.days, Window.WEEK.label), (7, "this week"))
-        self.assertEqual((Window.MONTH.days, Window.MONTH.label), (30, "this month"))
+        self.assertEqual((Window.MONTH.days, Window.MONTH.label), (30, "in the past month"))
         self.assertEqual((Window.ALL_TIME.days, Window.ALL_TIME.label), (None, "of all time"))
 
 
@@ -370,13 +370,15 @@ class PickShortTopicsTest(SelectionTestCase):
         self.assertFalse(result.unavailable)
         self.assertIsNone(result.video)
 
-    async def test_some_data_and_some_failures_is_exhausted_not_unavailable(self):
-        client = FakeClient({7: None, 30: [], None: None})
+    async def test_nothing_found_with_any_window_failing_is_unavailable(self):
+        # The failed windows may have had something unseen, so "try again" beats "try other topics".
+        client = FakeClient({7: [_detail("a")], 30: None, None: []})
 
-        result = await pick_short(client, FakeChat(), ["linux"])
+        result = await pick_short(client, FakeChat(recently_posted={"a"}), ["linux"])
 
-        self.assertTrue(result.exhausted)
-        self.assertFalse(result.unavailable)
+        self.assertTrue(result.unavailable)
+        self.assertFalse(result.exhausted)
+        self.assertIsNone(result.video)
 
 
 if __name__ == "__main__":

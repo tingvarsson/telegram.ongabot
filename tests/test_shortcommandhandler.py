@@ -6,6 +6,7 @@ from telegram.error import TelegramError
 
 from ongabot.botdata import BotData
 from ongabot.handler.shortcommandhandler import (
+    MAX_TOPICS_LENGTH,
     UNAVAILABLE_TEXT,
     ShortCommandHandler,
     callback,
@@ -13,6 +14,7 @@ from ongabot.handler.shortcommandhandler import (
     render_exhausted_message,
     render_short_message,
 )
+from ongabot.utils.commands import SHORT
 from ongabot.youtube.selection import PickResult, SelectedVideo, Window
 
 MODULE = "ongabot.handler.shortcommandhandler"
@@ -76,7 +78,8 @@ class PostTest(_HandlerTestCase):
 
         pick.assert_awaited_once_with(client, context.bot_data.get_chat(CHAT_ID), ["counter", "strike"])
         self.assertEqual(
-            _replies(update), ["#1 for counter strike this month · 3.1M views\nhttps://www.youtube.com/shorts/abc123"]
+            _replies(update),
+            ["#1 for counter strike in the past month · 3.1M views\nhttps://www.youtube.com/shorts/abc123"],
         )
 
     async def test_send_failure_records_nothing(self) -> None:
@@ -85,6 +88,34 @@ class PostTest(_HandlerTestCase):
         )
 
         self.assertFalse(context.bot_data.get_chat(CHAT_ID).is_recently_posted("abc123"))
+
+    async def test_short_is_recorded_before_the_send_completes(self) -> None:
+        # A second /short handled while this send is in flight must already see the Short as
+        # posted, or both would post it.
+        seen_during_send = []
+
+        async def send(*_args, **_kwargs):
+            seen_during_send.append(context.bot_data.get_chat(CHAT_ID).is_recently_posted("abc123"))
+
+        update, context = _make(None)
+        update.message.reply_text = AsyncMock(side_effect=send)
+        with patch(f"{MODULE}.get_client"), patch(
+            f"{MODULE}.selection.pick_short", AsyncMock(return_value=PickResult(video=_video()))
+        ):
+            await callback(update, context)
+
+        self.assertEqual(seen_during_send, [True])
+
+    async def test_topics_over_the_length_cap_get_the_usage(self) -> None:
+        update, _context, _client, pick = await self._run(["x" * (MAX_TOPICS_LENGTH + 1)], PickResult(exhausted=True))
+
+        pick.assert_not_awaited()
+        self.assertEqual(_replies(update), [SHORT.usage])
+
+    async def test_topics_at_the_length_cap_are_searched(self) -> None:
+        _update, _context, _client, pick = await self._run(["x" * MAX_TOPICS_LENGTH], PickResult(exhausted=True))
+
+        pick.assert_awaited_once()
 
 
 class NoShortTest(_HandlerTestCase):
