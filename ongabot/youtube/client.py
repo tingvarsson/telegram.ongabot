@@ -1,18 +1,22 @@
 """Thin async client for the YouTube Data API v3.
 
 This module is I/O only - it knows how to search for candidate videos and fetch the fields
-needed to confirm one is an actual Short, and nothing about chats or topic scoring. See
-ongabot.youtube.selection for the domain logic.
+needed to confirm one is an actual Short and rank it, and nothing about chats or ranking
+policy. See ongabot.youtube.selection for the domain logic.
 
 Two calls carry the whole feature:
 
-* ``search.list`` finds candidates for a topic. ``videoDuration=short`` (<4 min) is only a
-  coarse pre-filter - the API has no "is this a Short" flag.
-* ``videos.list`` confirms the real length (Shorts are <=60s) via ``contentDetails.duration``
-  and returns ``snippet.tags``, used to extract topics from whichever video is chosen.
+* ``search.list`` finds candidates, most-viewed first, optionally limited to a query, a
+  publish window and a category. ``videoDuration=short`` (<4 min) is only a coarse
+  pre-filter - the API has no "is this a Short" flag.
+* ``videos.list`` confirms the real length via ``contentDetails.duration``, returns the view
+  count from ``statistics`` and flags live/upcoming broadcasts via
+  ``snippet.liveBroadcastContent``.
 
 search.list costs 100 quota units per call, videos.list costs 1, against a default 10,000/day
-quota - one search per authorized chat per day comfortably fits dozens of chats.
+quota. Searches run on demand from /short, so ongabot.youtube.selection caches ranked results
+in-process for a few hours - repeated /short calls walk down a cached list instead of spending
+another 100 units each.
 """
 
 import functools
@@ -20,6 +24,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import httpx
@@ -29,8 +34,8 @@ _logger = logging.getLogger(__name__)
 BASE_URL = "https://www.googleapis.com/youtube/v3"
 
 TIMEOUT_SECONDS = 10.0
-# One retry only. The caller is a daily scheduling pass, so a transient blip is picked up on
-# a later re-derivation rather than by hammering the API.
+# One retry only. The caller is a user waiting on /short, so a transient blip is better
+# answered with "try again in a bit" than by hammering the API.
 MAX_ATTEMPTS = 2
 
 _DURATION_RE = re.compile(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$")
@@ -45,6 +50,24 @@ def _parse_iso8601_duration(duration: str) -> Optional[int]:
     return hours * 3600 + minutes * 60 + seconds
 
 
+def _rfc3339_utc(moment: datetime) -> str:
+    """Format a datetime as the RFC 3339 UTC timestamp publishedAfter expects ("...Z").
+
+    A naive datetime is taken to already be UTC.
+    """
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(timezone.utc)
+    return moment.replace(tzinfo=None, microsecond=0).isoformat() + "Z"
+
+
+def _parse_view_count(statistics: Dict[str, Any]) -> int:
+    """Return statistics.viewCount as an int, or 0 when missing, hidden or malformed."""
+    try:
+        return int(statistics.get("viewCount") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 @dataclass(frozen=True)
 class SearchResult:
     """One search.list hit - just enough to decide whether to look closer."""
@@ -55,12 +78,16 @@ class SearchResult:
 
 @dataclass(frozen=True)
 class VideoDetail:
-    """A videos.list entry - what's needed to confirm a Short and extract its topics."""
+    """A videos.list entry - what's needed to confirm a Short and rank it."""
 
     video_id: str
     title: str
     tags: Tuple[str, ...]
     duration_seconds: int
+    # 0 when the uploader hides the count or statistics are missing, so such videos rank last.
+    view_count: int = 0
+    # True for live and upcoming broadcasts (liveBroadcastContent other than "none").
+    live: bool = False
 
 
 def _parse_search_result(raw: Dict[str, Any]) -> SearchResult:
@@ -73,6 +100,7 @@ def _parse_search_result(raw: Dict[str, Any]) -> SearchResult:
 def _parse_video_detail(raw: Dict[str, Any]) -> VideoDetail:
     snippet = raw.get("snippet") or {}
     content_details = raw.get("contentDetails") or {}
+    statistics = raw.get("statistics") or {}
     duration = _parse_iso8601_duration(str(content_details["duration"]))
     if duration is None:
         raise ValueError(f"unparseable duration: {content_details.get('duration')!r}")
@@ -81,6 +109,8 @@ def _parse_video_detail(raw: Dict[str, Any]) -> VideoDetail:
         title=str(snippet.get("title") or ""),
         tags=tuple(str(tag) for tag in snippet.get("tags") or ()),
         duration_seconds=duration,
+        view_count=_parse_view_count(statistics),
+        live=str(snippet.get("liveBroadcastContent") or "none") != "none",
     )
 
 
@@ -88,9 +118,9 @@ class YouTubeClient:
     """Async YouTube Data API v3 client that never raises on failure.
 
     Every method returns None when the data could not be fetched or understood, so an API
-    outage or quota exhaustion degrades into "no Short posted today" rather than breaking the
-    scheduling job. Requires an API key - console.cloud.google.com, enable "YouTube Data API
-    v3" - set via YOUTUBE_API_KEY.
+    outage or quota exhaustion degrades into a "couldn't reach YouTube" reply to /short rather
+    than an exception in the handler. Requires an API key - console.cloud.google.com, enable
+    "YouTube Data API v3" - set via YOUTUBE_API_KEY.
     """
 
     def __init__(self, api_key: Optional[str] = None, base_url: str = BASE_URL) -> None:
@@ -138,19 +168,45 @@ class YouTubeClient:
 
         return None
 
-    async def search_shorts(self, query: str, max_results: int = 10) -> Optional[List[SearchResult]]:
-        """Search for candidate Shorts matching query, or None if unavailable."""
-        payload = await self._get(
-            "/search",
-            {
-                "part": "snippet",
-                "type": "video",
-                "videoDuration": "short",
-                "safeSearch": "strict",
-                "maxResults": str(max_results),
-                "q": query,
-            },
+    async def search_shorts(
+        self,
+        query: str,
+        *,
+        order: str = "viewCount",
+        published_after: Optional[datetime] = None,
+        category_id: Optional[str] = None,
+        max_results: int = 50,
+    ) -> Optional[List[SearchResult]]:
+        """Search for candidate Shorts, or None if unavailable.
+
+        An empty query leaves out ``q`` so the search spans everything matching the other
+        filters (e.g. a whole category). published_after limits results to videos published
+        since then, and category_id to one videoCategoryId.
+        """
+        params = {
+            "part": "snippet",
+            "type": "video",
+            "videoDuration": "short",
+            "safeSearch": "strict",
+            "order": order,
+            "maxResults": str(max_results),
+        }
+        if query:
+            params["q"] = query
+        if published_after is not None:
+            params["publishedAfter"] = _rfc3339_utc(published_after)
+        if category_id is not None:
+            params["videoCategoryId"] = category_id
+        _logger.debug(
+            "YouTube search query=%r order=%s publishedAfter=%s category=%s maxResults=%d",
+            query,
+            order,
+            params.get("publishedAfter"),
+            category_id,
+            max_results,
         )
+
+        payload = await self._get("/search", params)
         if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
             if payload is not None:
                 _logger.warning("YouTube search response for query=%r was not the expected shape", query)
@@ -166,13 +222,16 @@ class YouTubeClient:
         return results
 
     async def get_video_details(self, video_ids: Sequence[str]) -> Optional[Dict[str, VideoDetail]]:
-        """Return duration/tags/title for each id in one batched call, or None if unavailable."""
+        """Return duration/views/live state/title for each id in one batched call, or None if unavailable.
+
+        videos.list takes at most 50 ids per call, which matches search_shorts' max_results.
+        """
         if not video_ids:
             return {}
 
         payload = await self._get(
             "/videos",
-            {"part": "snippet,contentDetails", "id": ",".join(video_ids)},
+            {"part": "snippet,contentDetails,statistics", "id": ",".join(video_ids)},
         )
         if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
             if payload is not None:

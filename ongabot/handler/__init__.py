@@ -18,11 +18,10 @@ from .neweventcommandhandler import NewEventCommandHandler
 from .ongacommandhandler import OngaCommandHandler
 from .reschedulecommandhandler import RescheduleCommandHandler
 from .schedulecommandhandler import ScheduleCommandHandler
-from .shortsreactionhandler import ShortsReactionHandler
+from .shortcommandhandler import ShortCommandHandler
 from .startcommandhandler import StartCommandHandler
 from .statisticscommandhandler import StatisticsCommandHandler
 from .statisticssortcallbackhandler import StatisticsSortCallbackHandler
-from .topicscommandhandler import TopicsCommandHandler
 from .unlinksteamcommandhandler import UnLinkSteamCommandHandler
 from .updateeventcommandhandler import UpdateEventCommandHandler
 
@@ -45,11 +44,10 @@ __all__ = (
     "OngaCommandHandler",
     "RescheduleCommandHandler",
     "ScheduleCommandHandler",
-    "ShortsReactionHandler",
+    "ShortCommandHandler",
     "StartCommandHandler",
     "StatisticsCommandHandler",
     "StatisticsSortCallbackHandler",
-    "TopicsCommandHandler",
     "UnLinkSteamCommandHandler",
     "UpdateEventCommandHandler",
 )

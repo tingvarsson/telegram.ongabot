@@ -21,11 +21,13 @@ from unittest.mock import patch
 from ongabot import quips
 from ongabot.cs2.format import format_session
 from ongabot.cs2.patchnotesformat import render_patch_notes_html
+from ongabot.handler.shortcommandhandler import render_short_message
 from ongabot.utils import helper
 from ongabot.utils.changelogformat import CHANGELOG_HEADING, render_changelog_html
 from ongabot.utils.points import render_event_recap_message, render_leaderboard_message
 from ongabot.utils.codeblock import LARGE_FONT_COLUMNS, SMALL_FONT_COLUMNS, SMALL_FONT_MIN_ROWS, visible_width
 from ongabot.utils.statistics import render_statistics_message
+from ongabot.youtube.selection import SelectedVideo, Window
 from tests import message_fixtures
 from tests.telegram_markup import check_html, check_markdown_v2, check_plain_text
 
@@ -94,6 +96,29 @@ def _vote_replies() -> List[str]:
     return replies
 
 
+def _shorts() -> List[str]:
+    """Both /short header shapes: the weekly Gaming chart, and topics widened to the month."""
+    weekly = SelectedVideo(
+        video_id="dQw4w9WgXcQ",
+        title="Weekly",
+        url="https://www.youtube.com/shorts/dQw4w9WgXcQ",
+        view_count=12_400_000,
+        rank=3,
+        window=Window.WEEK,
+        topics=(),
+    )
+    topical = SelectedVideo(
+        video_id="oHg5SJYRHA0",
+        title="Topical",
+        url="https://www.youtube.com/shorts/oHg5SJYRHA0",
+        view_count=3_100_000,
+        rank=1,
+        window=Window.MONTH,
+        topics=("counter", "strike"),
+    )
+    return [render_short_message(weekly, []), render_short_message(topical, ["counter", "strike"])]
+
+
 def _help(private: bool = False) -> List[str]:
     # The help text ends with the version, which every release bumps.
     with patch.object(helper, "__version__", "1.2.3"):
@@ -113,6 +138,7 @@ RENDERS: Dict[str, Render] = {
     "help": (check_plain_text, _help),
     "help_private": (check_plain_text, lambda: _help(private=True)),
     "vote_replies": (check_plain_text, _vote_replies),
+    "short": (check_plain_text, _shorts),
 }
 
 

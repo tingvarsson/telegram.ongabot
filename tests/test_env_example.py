@@ -42,7 +42,7 @@ def _module_env_reads(tree: ast.Module) -> Tuple[Set[str], List[str]]:
     """Variable names one module reads, and a description of every read it could not resolve.
 
     A name passed straight to os.getenv is read directly. One that arrives through a parameter
-    of a helper (like _parse_window_time(env_var, ...)) is resolved from the string literals
+    of a helper (like get(env_var, ...)) is resolved from the string literals
     every call of that helper in the same module passes in that position.
     """
     names: Set[str] = set()
@@ -102,9 +102,6 @@ class EnvExampleTest(unittest.TestCase):
 
     def test_every_variable_in_env_example_is_read_by_the_bot(self):
         self.assertEqual(env_example_keys() - self.read, set())
-
-    def test_finds_reads_made_through_a_helper_parameter(self):
-        self.assertTrue({"YOUTUBE_SHORTS_WINDOW_START", "YOUTUBE_SHORTS_WINDOW_END"} <= self.read)
 
 
 class ModuleEnvReadsTest(unittest.TestCase):
