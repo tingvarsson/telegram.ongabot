@@ -47,8 +47,7 @@ def poke_lead_time() -> datetime.timedelta:
     """How long before an event's start time the poke goes out.
 
     POKE_LEAD_HOURS overrides the default, fractions allowed (0.1 is six minutes, handy on a dev
-    bot). Read on every call, like cs2.session.min_members, so a change takes effect on the next
-    scheduling pass without a restart.
+    bot). A bad value logs a warning and falls back to the default.
     """
     raw = os.getenv("POKE_LEAD_HOURS")
     if not raw:
@@ -147,6 +146,9 @@ async def _still_in_group(bot: Bot, chat_id: int, user: User) -> bool:
     except TelegramError as e:
         _logger.warning("Could not check user_id=%s in chat_id=%s, poking anyway: %s", user.id, chat_id, e)
         return True
+    if member.status == ChatMemberStatus.RESTRICTED:
+        # A restricted user is still in the group, unless they left it while restricted.
+        return bool(getattr(member, "is_member", True))
     return member.status not in _GONE_STATUSES
 
 
@@ -179,19 +181,26 @@ async def poke_callback(context: CallbackContext) -> None:
     chat: Chat = context.bot_data.get_chat(job.chat_id)
     event = chat.get_event_by_date(event_date)  # type: ignore[arg-type]
 
-    # Re-checked here, since the event may have changed after the job was scheduled.
+    # Re-checked here, since the event may have changed after the job was scheduled - an
+    # /updateevent to an earlier start, say, leaves this job at the old time.
     if event is None or event.poked or event.cancelled or event.completed:
         _logger.info("Skipping poke for chat_id=%s on %s: event gone, poked or closed", job.chat_id, event_date)
         return
+    if datetime.datetime.now() >= datetime.datetime.combine(event.event_date, event.start_time):
+        _logger.info("Skipping poke for chat_id=%s on %s: the event has started", job.chat_id, event_date)
+        return
+
+    # Claimed before the first await: the JobQueue forgets a one-off job as soon as it starts,
+    # so an hourly pass landing while the membership lookups run would otherwise schedule a
+    # second poke. Released again below if the send fails, so the next pass retries.
+    event.poked = True
     if event.has_full_stack(FULL_STACK):
         _logger.info("Skipping poke for chat_id=%s on %s: a slot has a full stack", job.chat_id, event_date)
-        event.poked = True
         return
 
     users = await poke_candidates(context.bot, chat, event)
     if not users:
         _logger.info("Skipping poke for chat_id=%s on %s: every regular has voted", job.chat_id, event_date)
-        event.poked = True
         return
 
     # Replies to the poll so the ping lands next to it, as long as it is still pinned. A poll
@@ -206,8 +215,8 @@ async def poke_callback(context: CallbackContext) -> None:
             reply_parameters=reply,
         )
     except TelegramError as e:
-        # Not marked poked, so the next hourly pass retries until the event starts.
+        # Released, so the next hourly pass retries until the event starts.
+        event.poked = False
         _logger.warning("Failed to send poke for chat_id=%s on %s: %s", job.chat_id, event_date, e)
         return
-    event.poked = True
     _logger.info("Poked %d member(s) for chat_id=%s on %s", len(users), job.chat_id, event_date)

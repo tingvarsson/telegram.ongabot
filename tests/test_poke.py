@@ -15,7 +15,8 @@ from ongabot.chat import Chat
 from ongabot.event import Event
 from tests import message_fixtures
 
-EVENT_DATE = date(2026, 10, 7)
+# Always a week ahead, so the poke's has-it-started check never sees it as over.
+EVENT_DATE = date.today() + timedelta(weeks=1)
 CHAT_ID = message_fixtures.CHAT_ID
 POLL_MESSAGE_ID = 321
 
@@ -77,13 +78,13 @@ class PokeLeadTimeTest(unittest.TestCase):
 class PokeTimeTest(unittest.TestCase):
     def test_default_start_pokes_in_the_morning(self):
         with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(poke.poke_time(_event(EVENT_DATE, {})), datetime(2026, 10, 7, 8, 30))
+            self.assertEqual(poke.poke_time(_event(EVENT_DATE, {})), datetime.combine(EVENT_DATE, time(8, 30)))
 
     def test_never_pokes_the_day_before(self):
         event = _event(EVENT_DATE, {})
         event.data.start_time = time(9, 0)
         with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(poke.poke_time(event), datetime(2026, 10, 7, 0, 0))
+            self.assertEqual(poke.poke_time(event), datetime.combine(EVENT_DATE, time(0, 0)))
 
 
 class SchedulePokeTest(unittest.TestCase):
@@ -104,17 +105,17 @@ class SchedulePokeTest(unittest.TestCase):
         return kwargs["when"].replace(tzinfo=None)
 
     def test_schedules_at_the_poke_time(self):
-        poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime(2026, 10, 7, 0, 5))
-        self.assertEqual(self._scheduled_at(), datetime(2026, 10, 7, 8, 30))
+        poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime.combine(EVENT_DATE, time(0, 5)))
+        self.assertEqual(self._scheduled_at(), datetime.combine(EVENT_DATE, time(8, 30)))
 
     def test_runs_right_away_when_the_poke_time_has_passed(self):
         """A restart at noon still gets the poke out before the game."""
-        now = datetime(2026, 10, 7, 12, 0)
+        now = datetime.combine(EVENT_DATE, time(12, 0))
         poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), now)
         self.assertEqual(self._scheduled_at(), now)
 
     def test_nothing_once_the_event_has_started(self):
-        poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime(2026, 10, 7, 18, 30))
+        poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime.combine(EVENT_DATE, time(18, 30)))
         self.job_queue.run_once.assert_not_called()
 
     def test_nothing_for_a_poked_cancelled_or_completed_event(self):
@@ -122,12 +123,12 @@ class SchedulePokeTest(unittest.TestCase):
             with self.subTest(flag=flag):
                 event = _event(EVENT_DATE, {})
                 setattr(event, flag, True)
-                poke.schedule_poke(self.job_queue, CHAT_ID, event, datetime(2026, 10, 7, 0, 5))
+                poke.schedule_poke(self.job_queue, CHAT_ID, event, datetime.combine(EVENT_DATE, time(0, 5)))
                 self.job_queue.run_once.assert_not_called()
 
     def test_scheduling_twice_is_a_no_op(self):
         self.job_queue.get_jobs_by_name.return_value = [MagicMock()]
-        poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime(2026, 10, 7, 0, 5))
+        poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime.combine(EVENT_DATE, time(0, 5)))
         self.job_queue.run_once.assert_not_called()
 
 
@@ -242,6 +243,49 @@ class PokeCallbackTest(unittest.IsolatedAsyncioTestCase):
 
         context.bot.send_message.assert_not_awaited()
         self.assertTrue(chat.get_event_by_date(EVENT_DATE).poked)
+
+    async def test_claimed_before_the_lookups_so_a_rerun_cannot_double_ping(self):
+        chat = _chat(_event(EVENT_DATE, {}), _history())
+        event = chat.get_event_by_date(EVENT_DATE)
+        seen = []
+
+        async def lookup(_chat_id, _user_id):
+            seen.append(event.poked)
+            return _member()
+
+        await poke.poke_callback(_context(chat, AsyncMock(side_effect=lookup)))
+
+        self.assertTrue(seen)
+        self.assertTrue(all(seen))
+
+    async def test_skips_an_event_that_has_started(self):
+        """An /updateevent to an earlier start leaves the job at the old time."""
+        today = date.today()
+        chat = _chat(_event(today, {}), [_event(today - timedelta(weeks=1), {TOMMY: (0,)})])
+        chat.get_event_by_date(today).data.start_time = time.min
+        context = _context(chat)
+        context.job.data = today
+
+        with self.assertLogs("ongabot.poke", level="INFO") as logs:
+            await poke.poke_callback(context)
+
+        context.bot.send_message.assert_not_awaited()
+        self.assertIn("has started", "\n".join(logs.output))
+
+    async def test_restricted_members_are_pinged_only_while_in_the_group(self):
+        def lookup(_chat_id, user_id):
+            member = _member(ChatMemberStatus.RESTRICTED)
+            member.is_member = user_id != ANNA.id
+            return member
+
+        chat = _chat(_event(EVENT_DATE, {}), _history())
+        context = _context(chat, AsyncMock(side_effect=lookup))
+
+        await poke.poke_callback(context)
+
+        text = context.bot.send_message.call_args.args[1]
+        self.assertNotIn(f"tg://user?id={ANNA.id}", text)
+        self.assertIn(f"tg://user?id={TOMMY.id}", text)
 
     async def test_members_who_left_are_not_pinged(self):
         statuses = {ANNA.id: ChatMemberStatus.LEFT, EMILE.id: ChatMemberStatus.BANNED}
