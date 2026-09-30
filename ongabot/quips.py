@@ -9,7 +9,7 @@ matrix and BANTER_BY_PATH for which pool each path draws from.
 import logging
 import random
 from enum import Enum
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, Hashable, List, Optional, Sequence, Tuple
 
 _logger = logging.getLogger(__name__)
 
@@ -444,29 +444,35 @@ POOLS: Dict[Banter, List[str]] = {
 }
 
 # Per-pool shuffled decks, dealt from the end, and the line each pool dealt last. Kept in
-# memory only - after a restart every pool is simply reshuffled.
-_bags: Dict[Banter, List[str]] = {}
-_last: Dict[Banter, str] = {}
+# memory only - after a restart every pool is simply reshuffled. Keyed by any pool key, so
+# other banter (see shrink.py) deals from the same machinery.
+_bags: Dict[Hashable, List[str]] = {}
+_last: Dict[Hashable, str] = {}
+
+
+def deal(key: Hashable, lines: Sequence[str]) -> str:
+    """Deal the next line from the pool of lines stored under key.
+
+    Lines come from a shuffled deck, so every line is used before any repeats, and a fresh
+    shuffle never starts with the line that was just dealt.
+    """
+    bag = _bags.get(key)
+    if not bag:
+        bag = list(lines)
+        random.shuffle(bag)
+        # Dealt from the end: swap the previous deck's last line away from the top.
+        if len(bag) > 1 and bag[-1] == _last.get(key):
+            bag[0], bag[-1] = bag[-1], bag[0]
+        _bags[key] = bag
+        _logger.debug("Reshuffled banter pool %s", key)
+    line = bag.pop()
+    _last[key] = line
+    return line
 
 
 def next_banter(kind: Banter) -> str:
-    """Deal the next line from kind's pool.
-
-    Lines come from a shuffled deck, so all POOL_SIZE lines are used before any repeats, and
-    a fresh shuffle never starts with the line that was just dealt.
-    """
-    bag = _bags.get(kind)
-    if not bag:
-        bag = list(POOLS[kind])
-        random.shuffle(bag)
-        # Dealt from the end: swap the previous deck's last line away from the top.
-        if len(bag) > 1 and bag[-1] == _last.get(kind):
-            bag[0], bag[-1] = bag[-1], bag[0]
-        _bags[kind] = bag
-        _logger.debug("Reshuffled banter pool %s", kind.name)
-    line = bag.pop()
-    _last[kind] = line
-    return line
+    """Deal the next line from kind's pool, all POOL_SIZE lines before any repeats."""
+    return deal(kind, POOLS[kind])
 
 
 def build_vote_reply(name: str, previous: Optional[Answer], new: Answer) -> str:

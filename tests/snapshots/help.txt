@@ -21,12 +21,13 @@ Commandments:
 /deauthorize - Deauthorize this chat from using ONGAbot (bot admins only)
 /statistics - Show all-time participation statistics for the group
 /leaderboard - Show the Banger Points leaderboard for the group
+/shrink [@username] - Lie down on the couch: a diagnosis from your voting history
 /cs2 [<date|weekday>] - Show the CS2 results for a date
 /cs2patches on|off - Post CS2 patch notes in this chat as Valve releases them
 /short [topics] - Post one of this week's top gaming Shorts, or the best Short on your topics
 /linksteam <steam64|profile URL> - Link your Steam account so your CS2 games are recognised
 /unlinksteam - Unlink your Steam account
 
-/statistics, /leaderboard, /cs2, /linksteam and /unlinksteam also work in a private chat with me, so the answer stays out of the group.
+/statistics, /leaderboard, /shrink, /cs2, /linksteam and /unlinksteam also work in a private chat with me, so the answer stays out of the group.
 
 Version: 1.2.3

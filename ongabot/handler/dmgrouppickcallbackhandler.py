@@ -4,35 +4,46 @@ import logging
 from datetime import date
 from typing import Awaitable, Callable, Dict, Optional
 
-from telegram import Message, Update
+from telegram import Message, Update, User
 from telegram.ext import CallbackContext, CallbackQueryHandler
 
 from chat import Chat
-from utils.commands import CS2, LEADERBOARD, STATISTICS
+from utils.commands import CS2, LEADERBOARD, SHRINK, STATISTICS
 from utils.dm import DM_PICK_PREFIX, GROUP_UNAVAILABLE, can_read_group, decode_pick, group_title, is_private_chat
 from utils.log import log
 
 from .cs2commandhandler import send_cs2
 from .leaderboardcommandhandler import send_leaderboard
+from .shrinkcommandhandler import send_shrink
 from .statisticscommandhandler import send_statistics
 
 _logger = logging.getLogger(__name__)
 
 CALLBACK_PATTERN = rf"^{DM_PICK_PREFIX}:"
 
-# (message to reply to, context, the picked group, the /cs2 date the picker carried, if any)
-Sender = Callable[[Message, CallbackContext, Chat, Optional[date]], Awaitable[None]]
+# (message to reply to, context, the picked group, the user who tapped, the /cs2 date the
+# picker carried, if any)
+Sender = Callable[[Message, CallbackContext, Chat, User, Optional[date]], Awaitable[None]]
 
 
-async def _statistics(message: Message, _context: CallbackContext, chat: Chat, _date: Optional[date]) -> None:
+async def _statistics(
+    message: Message, _context: CallbackContext, chat: Chat, _user: User, _date: Optional[date]
+) -> None:
     await send_statistics(message, chat)
 
 
-async def _leaderboard(message: Message, _context: CallbackContext, chat: Chat, _date: Optional[date]) -> None:
+async def _leaderboard(
+    message: Message, _context: CallbackContext, chat: Chat, _user: User, _date: Optional[date]
+) -> None:
     await send_leaderboard(message, chat)
 
 
-async def _cs2(message: Message, context: CallbackContext, chat: Chat, event_date: Optional[date]) -> None:
+async def _shrink(message: Message, _context: CallbackContext, chat: Chat, user: User, _date: Optional[date]) -> None:
+    # A private chat's /shrink always diagnoses the sender, who is the one tapping the picker.
+    await send_shrink(message, chat, user)
+
+
+async def _cs2(message: Message, context: CallbackContext, chat: Chat, _user: User, event_date: Optional[date]) -> None:
     await send_cs2(message, context, chat, event_date)
 
 
@@ -40,6 +51,7 @@ async def _cs2(message: Message, context: CallbackContext, chat: Chat, event_dat
 SENDERS: Dict[str, Sender] = {
     STATISTICS.command: _statistics,
     LEADERBOARD.command: _leaderboard,
+    SHRINK.command: _shrink,
     CS2.command: _cs2,
 }
 
@@ -94,4 +106,4 @@ async def callback(update: Update, context: CallbackContext) -> None:
     # Replacing the picker with the group's name drops its buttons, so it can't be tapped
     # twice, and labels the reply that follows with the group it is about.
     await query.edit_message_text(await group_title(context.bot, chat_id))
-    await send(message, context, context.bot_data.get_chat(chat_id), event_date)
+    await send(message, context, context.bot_data.get_chat(chat_id), update.effective_user, event_date)

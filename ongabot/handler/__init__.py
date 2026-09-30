@@ -19,6 +19,7 @@ from .ongacommandhandler import OngaCommandHandler
 from .reschedulecommandhandler import RescheduleCommandHandler
 from .schedulecommandhandler import ScheduleCommandHandler
 from .shortcommandhandler import ShortCommandHandler
+from .shrinkcommandhandler import ShrinkCommandHandler
 from .startcommandhandler import StartCommandHandler
 from .statisticscommandhandler import StatisticsCommandHandler
 from .statisticssortcallbackhandler import StatisticsSortCallbackHandler
@@ -45,6 +46,7 @@ __all__ = (
     "RescheduleCommandHandler",
     "ScheduleCommandHandler",
     "ShortCommandHandler",
+    "ShrinkCommandHandler",
     "StartCommandHandler",
     "StatisticsCommandHandler",
     "StatisticsSortCallbackHandler",

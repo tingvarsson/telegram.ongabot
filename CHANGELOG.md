@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/shrink` puts you on the couch: a diagnosis from your voting history. Reply to someone, or
+  add their `@username`, to diagnose them instead. It also works in a private chat with the bot.
+
 ## [1.11.0] - 2026-09-29
 
 ### Changed

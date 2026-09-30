@@ -170,6 +170,23 @@ LEADERBOARD = CommandInfo(
     private=True,
 )
 
+SHRINK = CommandInfo(
+    command="shrink",
+    brief="/shrink [@username] - Lie down on the couch: a diagnosis from your voting history",
+    usage=(
+        "Usage: /shrink [@username]\n"
+        "  Diagnoses you from your voting history in the group.\n"
+        "  Reply to someone's message with /shrink, or name their @username,\n"
+        "  to diagnose them instead.\n"
+        "  In a private chat with the bot it always diagnoses you.\n\n"
+        "Examples:\n"
+        "  /shrink\n"
+        "  /shrink @username"
+    ),
+    menu_description="Get diagnosed from your voting history [@username]",
+    private=True,
+)
+
 LINKSTEAM = CommandInfo(
     command="linksteam",
     brief="/linksteam <steam64|profile URL> - Link your Steam account so your CS2 games are recognised",
@@ -261,6 +278,7 @@ ALL_COMMANDS = [
     DEAUTHORIZE,
     STATISTICS,
     LEADERBOARD,
+    SHRINK,
     CS2,
     CS2PATCHES,
     SHORT,
