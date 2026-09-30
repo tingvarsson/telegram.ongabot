@@ -4,6 +4,7 @@ import logging
 from typing import Optional, Sequence, Tuple
 
 from telegram import Message, Update, User
+from telegram.constants import MessageEntityType
 from telegram.ext import CallbackContext, CommandHandler
 
 from chat import Chat
@@ -48,14 +49,32 @@ def _parse_username(args: Sequence[str]) -> Optional[str]:
     return args[0][1:]
 
 
+def _text_mention(message: Message) -> Optional[User]:
+    """The user of a text mention in message, if any.
+
+    Picking someone without a username from the @ autocomplete inserts their plain name as a
+    text mention rather than an @username, and the mention itself carries the user.
+    """
+    for entity in message.entities or ():
+        if entity.type == MessageEntityType.TEXT_MENTION and entity.user is not None:
+            return entity.user
+    return None
+
+
 def _patient(update: Update, context: CallbackContext) -> Tuple[Optional[User], Optional[str]]:
     """(user, username) to diagnose; exactly one is set. Raises ValueError on bad args.
 
-    In a private chat the patient is always the sender, since there is nobody else to reply to.
-    In a group an explicit @username wins over a reply, which wins over the sender.
+    In a private chat the patient is always the sender, since there is nobody else to reply to,
+    so any args there are rejected rather than silently ignored. In a group a mention wins over
+    a reply, which wins over the sender.
     """
     if is_private_chat(update):
+        if context.args:
+            raise ValueError(f"Args in a private chat, where /shrink always diagnoses the sender: {context.args!r}")
         return update.effective_user, None
+    mentioned = _text_mention(update.message)
+    if mentioned is not None:
+        return mentioned, None
     username = _parse_username(context.args or [])
     if username is not None:
         return None, username

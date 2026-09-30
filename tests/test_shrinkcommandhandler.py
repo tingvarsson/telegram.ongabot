@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from telegram import MessageEntity
 from telegram.constants import ChatType
 
 from ongabot.handler.shrinkcommandhandler import callback
@@ -15,6 +16,7 @@ def _make(args=None, reply_from=None, chat_type=ChatType.SUPERGROUP):
     update.effective_chat.id = -100123
     update.effective_chat.type = chat_type
     update.effective_user.id = 7
+    update.message.entities = []
     if reply_from is None:
         update.message.reply_to_message = None
     else:
@@ -76,13 +78,36 @@ class ShrinkCommandHandlerTest(unittest.IsolatedAsyncioTestCase):
                 render.assert_not_called()
                 update.message.reply_text.assert_awaited_once_with(SHRINK.usage)
 
+    async def test_a_text_mention_diagnoses_the_mentioned_user(self):
+        """Someone without a username is picked from the @ list as a text mention of their name."""
+        patient = MagicMock()
+        update, context, chat = _make(args=["Anna", "Svensson"], reply_from=MagicMock())
+        update.message.entities = [
+            MessageEntity(MessageEntity.BOT_COMMAND, 0, 7),
+            MessageEntity(MessageEntity.TEXT_MENTION, 8, 13, user=patient),
+        ]
+
+        render = await self._run(update, context)
+
+        render.assert_called_once_with(chat, user=patient, username=None)
+
     async def test_a_private_chat_always_diagnoses_the_sender(self):
-        update, context, chat = _make(args=["@alice"], reply_from=MagicMock(), chat_type=ChatType.PRIVATE)
+        update, context, chat = _make(reply_from=MagicMock(), chat_type=ChatType.PRIVATE)
 
         with patch(f"{MODULE}.resolve_group", AsyncMock(return_value=chat)):
             render = await self._run(update, context)
 
         render.assert_called_once_with(chat, user=update.effective_user, username=None)
+
+    async def test_args_in_a_private_chat_reply_with_usage(self):
+        update, context, _chat = _make(args=["@alice"], chat_type=ChatType.PRIVATE)
+
+        with patch(f"{MODULE}.resolve_group", AsyncMock()) as resolve:
+            render = await self._run(update, context)
+
+        resolve.assert_not_awaited()
+        render.assert_not_called()
+        update.message.reply_text.assert_awaited_once_with(SHRINK.usage)
 
     async def test_waits_for_a_group_pick_when_none_resolved(self):
         update, context, _chat = _make(chat_type=ChatType.PRIVATE)

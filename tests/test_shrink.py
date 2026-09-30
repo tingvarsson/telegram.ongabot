@@ -15,6 +15,7 @@ from ongabot.shrink import (
     diagnose,
     find_patient,
     render_no_file,
+    render_no_file_for_username,
     render_session,
     render_shrink_message,
 )
@@ -158,7 +159,9 @@ class RenderTest(unittest.TestCase):
         self.assertTrue(text.startswith("The doctor will see you now, Alice.\n"))
 
     def test_unknown_username_has_no_file(self):
-        self.assertEqual(render_shrink_message(message_fixtures.chat(), username="ghost"), render_no_file("@ghost"))
+        self.assertEqual(
+            render_shrink_message(message_fixtures.chat(), username="ghost"), render_no_file_for_username("ghost")
+        )
 
     def test_needs_a_user_or_a_username(self):
         with self.assertRaises(ValueError):

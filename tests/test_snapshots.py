@@ -123,10 +123,11 @@ def _shorts() -> List[str]:
 
 
 def _shrink_sessions() -> List[str]:
-    """One /shrink session per fixture user, then a stranger with no file and a bot."""
+    """One /shrink session per fixture user, then strangers with no file (as sender and by name) and a bot."""
     chat = message_fixtures.chat()
     with patch("ongabot.shrink.deal", side_effect=lambda _key, lines: lines[0]):
         replies = [render_shrink_message(chat, user=user) for user in message_fixtures.users()]
+    replies.append(render_shrink_message(chat, user=User(id=77, first_name="Stranger", is_bot=False)))
     replies.append(render_shrink_message(chat, username="stranger"))
     replies.append(render_shrink_message(chat, user=User(id=99, first_name="ONGAbot", is_bot=True)))
     return replies

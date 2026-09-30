@@ -176,7 +176,7 @@ SHRINK = CommandInfo(
     usage=(
         "Usage: /shrink [@username]\n"
         "  Diagnoses you from your voting history in the group.\n"
-        "  Reply to someone's message with /shrink, or name their @username,\n"
+        "  Reply to someone's message with /shrink, or mention them,\n"
         "  to diagnose them instead.\n"
         "  In a private chat with the bot it always diagnoses you.\n\n"
         "Examples:\n"

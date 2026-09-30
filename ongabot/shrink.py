@@ -213,6 +213,15 @@ def render_no_file(who: str) -> str:
     return f"No file on {who} - never answered a poll here. Vote first, then we'll talk."
 
 
+def render_no_file_for_username(username: str) -> str:
+    """Reply for a username no voter in the chat's history had.
+
+    Worded apart from render_no_file: history holds each user as they were when they voted, so
+    this also covers someone who has voted but changed their username since.
+    """
+    return f"No file on @{username} - nobody has voted here under that name."
+
+
 def render_session(name: str, row: UserStatRow) -> str:
     """The session note for one patient: diagnosis, findings and a treatment line."""
     diagnosis, findings = diagnose(row)
@@ -247,7 +256,7 @@ def render_shrink_message(chat: Chat, user: Optional[User] = None, username: Opt
         row = find_patient(rows, username=username)
         if row is None:
             _logger.info("No file on @%s in chat_id=%s", username, chat.chat_id)
-            return render_no_file(f"@{username}")
+            return render_no_file_for_username(username)
         return render_session(row.user.first_name, row)
 
     if user is None:
