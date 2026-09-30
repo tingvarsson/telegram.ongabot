@@ -266,7 +266,7 @@ class SetupBotMetadataTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(private_call.kwargs["scope"], BotCommandScopeAllPrivateChats)
         self.assertEqual(
             [command.command for command in private_call.args[0]],
-            ["help", "statistics", "leaderboard", "cs2", "linksteam", "unlinksteam"],
+            ["help", "statistics", "leaderboard", "shrink", "cs2", "linksteam", "unlinksteam"],
         )
 
     async def test_continues_when_set_my_commands_raises(self):

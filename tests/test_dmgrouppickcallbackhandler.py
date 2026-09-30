@@ -35,7 +35,7 @@ class CallbackPatternTest(unittest.TestCase):
         self.assertIsNone(re.match(handler.CALLBACK_PATTERN, "stats_sort:played"))
 
     def test_every_picker_command_has_a_sender(self):
-        self.assertEqual(set(handler.SENDERS), {"statistics", "leaderboard", "cs2"})
+        self.assertEqual(set(handler.SENDERS), {"statistics", "leaderboard", "shrink", "cs2"})
 
 
 class DmGroupPickCallbackTest(unittest.IsolatedAsyncioTestCase):
@@ -47,9 +47,10 @@ class DmGroupPickCallbackTest(unittest.IsolatedAsyncioTestCase):
             patch(f"{MODULE}.send_statistics", AsyncMock()) as statistics,
             patch(f"{MODULE}.send_leaderboard", AsyncMock()) as leaderboard,
             patch(f"{MODULE}.send_cs2", AsyncMock()) as cs2,
+            patch(f"{MODULE}.send_shrink", AsyncMock()) as shrink,
         ):
             await handler.callback(update, context)
-        senders = {"statistics": statistics, "leaderboard": leaderboard, "cs2": cs2}
+        senders = {"statistics": statistics, "leaderboard": leaderboard, "cs2": cs2, "shrink": shrink}
         return update, context, can_read_group, senders
 
     async def test_answers_each_command_for_the_picked_group(self):
@@ -62,6 +63,12 @@ class DmGroupPickCallbackTest(unittest.IsolatedAsyncioTestCase):
                 for other, sender in senders.items():
                     if other != command:
                         sender.assert_not_awaited()
+
+    async def test_shrink_diagnoses_the_user_who_tapped(self):
+        update, context, _, senders = await self._run(f"dm_pick:shrink:{GROUP_ID}")
+
+        context.bot_data.get_chat.assert_called_once_with(GROUP_ID)
+        senders["shrink"].assert_awaited_once_with(update.callback_query.message, "CHAT", update.effective_user)
 
     async def test_cs2_gets_the_date_the_picker_carried(self):
         update, context, _, senders = await self._run(f"dm_pick:cs2:{GROUP_ID}:2026-09-02")

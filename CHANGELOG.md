@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/unverify @user` starts a one-hour group vote to revoke someone's age verification, and
   `/verify` votes it back. Unverified members get a 🔞 next to their name and every vote they
   cast gets roasted.
+- `/shrink` puts you on the couch: a diagnosis from your voting history. Reply to someone, or
+  mention them, to diagnose them instead. It also works in a private chat with the bot.
 
 ## [1.11.0] - 2026-09-29
 

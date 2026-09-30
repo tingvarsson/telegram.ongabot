@@ -11,6 +11,7 @@ Commandments:
 /help - Get some aid in needing times
 /statistics - Show all-time participation statistics for the group
 /leaderboard - Show the Banger Points leaderboard for the group
+/shrink [@username] - Lie down on the couch: a diagnosis from your voting history
 /cs2 [<date|weekday>] - Show the CS2 results for a date
 /linksteam <steam64|profile URL> - Link your Steam account so your CS2 games are recognised
 /unlinksteam - Unlink your Steam account

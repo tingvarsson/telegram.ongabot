@@ -11,7 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from ongabot import ongabot, quips
+from ongabot import ongabot, quips, shrink
 from ongabot.cs2.format import format_session
 from ongabot.cs2.patchnotesformat import render_patch_notes_html
 from ongabot.cs2.steamnews import SteamNewsItem
@@ -120,6 +120,19 @@ class PlainTextBuildersTest(unittest.TestCase):
                         check_plain_text(quips.build_retraction_reply(NASTY, previous))
                     else:
                         check_plain_text(quips.build_vote_reply(NASTY, previous, new))
+
+    def test_every_shrink_session_is_valid_plain_text(self):
+        # Sent without a parse mode too; every treatment line is checked under the nasty name.
+        chat = message_fixtures.chat()
+        patient = next(user for user in message_fixtures.users() if user.first_name == NASTY)
+        for diagnosis, lines in shrink.TREATMENTS.items():
+            for line in lines:
+                with (
+                    patch("ongabot.shrink.diagnose", return_value=(diagnosis, "findings")),
+                    patch("ongabot.shrink.deal", return_value=line),
+                    self.subTest(diagnosis=diagnosis, line=line),
+                ):
+                    check_plain_text(shrink.render_shrink_message(chat, user=patient))
 
 
 if __name__ == "__main__":

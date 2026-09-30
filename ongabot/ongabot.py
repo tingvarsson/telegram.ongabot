@@ -40,6 +40,7 @@ from handler import OngaCommandHandler
 from handler import RescheduleCommandHandler
 from handler import ScheduleCommandHandler
 from handler import ShortCommandHandler
+from handler import ShrinkCommandHandler
 from handler import StartCommandHandler
 from handler import StatisticsCommandHandler
 from handler import StatisticsSortCallbackHandler
@@ -558,6 +559,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(StatisticsSortCallbackHandler())
     application.add_handler(DmGroupPickCallbackHandler())
     application.add_handler(LeaderboardCommandHandler())
+    application.add_handler(ShrinkCommandHandler())
     application.add_handler(Cs2CommandHandler())
     application.add_handler(Cs2PatchesCommandHandler())
     application.add_handler(LinkSteamCommandHandler())

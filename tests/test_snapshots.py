@@ -19,11 +19,14 @@ from pathlib import Path
 from typing import Callable, Dict, List, Tuple
 from unittest.mock import patch
 
+from telegram import User
+
 from ongabot import quips
 from ongabot.chat import Chat
 from ongabot.cs2.format import format_session
 from ongabot.cs2.patchnotesformat import render_patch_notes_html
 from ongabot.handler.shortcommandhandler import render_short_message
+from ongabot.shrink import render_shrink_message
 from ongabot.utils import helper
 from ongabot.utils.changelogformat import CHANGELOG_HEADING, render_changelog_html
 from ongabot.utils.points import render_event_recap_message, render_leaderboard_message
@@ -151,6 +154,17 @@ def _shorts() -> List[str]:
     return [render_short_message(weekly, []), render_short_message(topical, ["counter", "strike"])]
 
 
+def _shrink_sessions() -> List[str]:
+    """One /shrink session per fixture user, then strangers with no file (as sender and by name) and a bot."""
+    chat = message_fixtures.chat()
+    with patch("ongabot.shrink.deal", side_effect=lambda _key, lines: lines[0]):
+        replies = [render_shrink_message(chat, user=user) for user in message_fixtures.users()]
+    replies.append(render_shrink_message(chat, user=User(id=77, first_name="Stranger", is_bot=False)))
+    replies.append(render_shrink_message(chat, username="stranger"))
+    replies.append(render_shrink_message(chat, user=User(id=99, first_name="ONGAbot", is_bot=True)))
+    return replies
+
+
 def _help(private: bool = False) -> List[str]:
     # The help text ends with the version, which every release bumps.
     with patch.object(helper, "__version__", "1.2.3"):
@@ -174,6 +188,7 @@ RENDERS: Dict[str, Render] = {
     "help_private": (check_plain_text, lambda: _help(private=True)),
     "vote_replies": (check_plain_text, _vote_replies),
     "short": (check_plain_text, _shorts),
+    "shrink": (check_plain_text, _shrink_sessions),
 }
 
 
