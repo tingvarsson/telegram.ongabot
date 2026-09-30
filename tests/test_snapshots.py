@@ -14,11 +14,13 @@ import os
 import re
 import time
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Tuple
 from unittest.mock import patch
 
 from ongabot import quips
+from ongabot.chat import Chat
 from ongabot.cs2.format import format_session
 from ongabot.cs2.patchnotesformat import render_patch_notes_html
 from ongabot.handler.shortcommandhandler import render_short_message
@@ -27,6 +29,7 @@ from ongabot.utils.changelogformat import CHANGELOG_HEADING, render_changelog_ht
 from ongabot.utils.points import render_event_recap_message, render_leaderboard_message
 from ongabot.utils.codeblock import LARGE_FONT_COLUMNS, SMALL_FONT_COLUMNS, SMALL_FONT_MIN_ROWS, visible_width
 from ongabot.utils.statistics import render_statistics_message
+from ongabot.verification import VerificationVote, badged, poll_question, verdict_text
 from ongabot.youtube.selection import SelectedVideo, Window
 from tests import message_fixtures
 from tests.telegram_markup import check_html, check_markdown_v2, check_plain_text
@@ -81,6 +84,30 @@ def _poll_status(completed: bool) -> List[str]:
     return [event._create_status_message_text(chat_member_count=9)]
 
 
+def _unverified_chat() -> Chat:
+    """The fixture chat with its first voter and the hostile name voted unverified."""
+    chat = message_fixtures.chat()
+    chat.set_unverified(1, "Tommy", True)
+    chat.set_unverified(4, message_fixtures.NASTY, True)
+    return chat
+
+
+def _poll_status_unverified() -> List[str]:
+    chat = _unverified_chat()
+    event = message_fixtures.latest_event(chat)
+    event.completed = False
+    return [event._create_status_message_text(chat_member_count=9, unverified=chat.unverified)]
+
+
+def _verification_votes() -> List[str]:
+    """Both poll questions, then the verdict for every outcome."""
+    messages = [poll_question("Will", unverify=True), poll_question("Will", unverify=False)]
+    for unverify in (True, False):
+        vote = VerificationVote("p", 1, 1, 42, "Will", unverify, datetime(2026, 9, 30, tzinfo=timezone.utc))
+        messages += [verdict_text(vote, yes=3, no=1), verdict_text(vote, yes=2, no=0)]
+    return messages
+
+
 def _event_recap() -> List[str]:
     chat = message_fixtures.chat()
     return [render_event_recap_message(chat, message_fixtures.latest_event(chat))]
@@ -93,6 +120,11 @@ def _vote_replies() -> List[str]:
         replies = [quips.build_vote_reply("Alice", None, new) for new in quips.Answer]
         replies += [quips.build_vote_reply("Alice", previous, new) for previous in quips.Answer for new in quips.Answer]
         replies += [quips.build_retraction_reply("Alice", previous) for previous in quips.Answer]
+        # An unverified voter: the badge, and the roast pool on every path.
+        replies += [
+            quips.build_vote_reply(badged("Will", True), None, quips.Answer.GAME, unverified=True),
+            quips.build_retraction_reply(badged("Will", True), quips.Answer.MAYBE, unverified=True),
+        ]
     return replies
 
 
@@ -129,7 +161,10 @@ RENDERS: Dict[str, Render] = {
     "poll_status_open": (check_markdown_v2, lambda: _poll_status(completed=False)),
     "poll_status_complete": (check_markdown_v2, lambda: _poll_status(completed=True)),
     "statistics": (check_markdown_v2, lambda: [render_statistics_message(message_fixtures.chat())[0]]),
+    "poll_status_unverified": (check_markdown_v2, _poll_status_unverified),
     "leaderboard": (check_markdown_v2, lambda: [render_leaderboard_message(message_fixtures.chat())]),
+    "leaderboard_unverified": (check_markdown_v2, lambda: [render_leaderboard_message(_unverified_chat())]),
+    "verification_votes": (check_plain_text, _verification_votes),
     "event_recap": (check_markdown_v2, _event_recap),
     "cs2_results": (check_markdown_v2, lambda: [format_session(message_fixtures.cs2_session())]),
     "cs2_results_live": (check_markdown_v2, lambda: [format_session(message_fixtures.cs2_session(), live=True)]),

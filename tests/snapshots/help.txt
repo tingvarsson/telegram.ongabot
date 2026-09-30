@@ -24,6 +24,8 @@ Commandments:
 /cs2 [<date|weekday>] - Show the CS2 results for a date
 /cs2patches on|off - Post CS2 patch notes in this chat as Valve releases them
 /short [topics] - Post one of this week's top gaming Shorts, or the best Short on your topics
+/unverify @user - Start a 1-hour group vote to revoke a member's age verification
+/verify @user - Start a 1-hour group vote to restore a member's age verification
 /linksteam <steam64|profile URL> - Link your Steam account so your CS2 games are recognised
 /unlinksteam - Unlink your Steam account
 

@@ -24,6 +24,7 @@ from .statisticscommandhandler import StatisticsCommandHandler
 from .statisticssortcallbackhandler import StatisticsSortCallbackHandler
 from .unlinksteamcommandhandler import UnLinkSteamCommandHandler
 from .updateeventcommandhandler import UpdateEventCommandHandler
+from .verifycommandhandler import UnverifyCommandHandler, VerifyCommandHandler
 
 __all__ = (
     "AuthorizationHandler",
@@ -49,5 +50,7 @@ __all__ = (
     "StatisticsCommandHandler",
     "StatisticsSortCallbackHandler",
     "UnLinkSteamCommandHandler",
+    "UnverifyCommandHandler",
     "UpdateEventCommandHandler",
+    "VerifyCommandHandler",
 )

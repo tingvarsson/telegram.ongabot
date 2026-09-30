@@ -2,7 +2,7 @@
 
 import logging
 from datetime import date, time
-from typing import Dict, Optional, Set
+from typing import Collection, Dict, Optional, Set
 
 
 from telegram import Bot, Poll, PollAnswer, User
@@ -11,6 +11,7 @@ from telegram.helpers import escape_markdown
 
 from eventdata import EventData
 from utils import log
+from verification import badged
 
 _logger = logging.getLogger(__name__)
 
@@ -135,24 +136,24 @@ class Event:
         return str(self.__class__) + ": " + str(self.__dict__)
 
     @log.method
-    async def send_status_message(self, bot: Bot) -> None:
-        """Send status message for the event poll"""
+    async def send_status_message(self, bot: Bot, unverified: Collection[int] = ()) -> None:
+        """Send status message for the event poll. unverified user ids get the 🔞 badge."""
         chat_member_count = await bot.get_chat_member_count(self.chat_id)
         status_message = await bot.send_message(
             chat_id=self.chat_id,
-            text=self._create_status_message_text(chat_member_count),
+            text=self._create_status_message_text(chat_member_count, unverified),
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         self.status_message_id = status_message.message_id
 
     @log.method
-    async def update_status_message(self, bot: Bot) -> None:
-        """Update status message for the event poll"""
+    async def update_status_message(self, bot: Bot, unverified: Collection[int] = ()) -> None:
+        """Update status message for the event poll. unverified user ids get the 🔞 badge."""
         chat_member_count = await bot.get_chat_member_count(self.chat_id)
         await bot.edit_message_text(
             chat_id=self.chat_id,
             message_id=self.status_message_id,
-            text=self._create_status_message_text(chat_member_count),
+            text=self._create_status_message_text(chat_member_count, unverified),
             parse_mode=ParseMode.MARKDOWN_V2,
         )
 
@@ -194,8 +195,13 @@ class Event:
         )
 
     @log.method
-    def _create_status_message_text(self, chat_member_count: int) -> str:
+    def _create_status_message_text(self, chat_member_count: int, unverified: Collection[int] = ()) -> str:
         """Create formatted status message text for the event poll"""
+
+        def mention(user: User) -> str:
+            # The badge is an emoji, which needs no MarkdownV2 escaping.
+            return badged(user.mention_markdown_v2(), user.id in unverified)
+
         if self.completed:
             message = "*__Event complete\\!__*\n"
         else:
@@ -205,7 +211,7 @@ class Event:
 
         if self.first_answer:
             message += "\n*Honerable mention, first newb to the poll box:* "
-            message += f"{self.first_answer.mention_markdown_v2()}\n"
+            message += f"{mention(self.first_answer)}\n"
 
         for i, option in enumerate(self.poll.options):
             message += f"\n*{escape_markdown(option.text, version=2)} \\({option.voter_count}\\)*"
@@ -215,7 +221,7 @@ class Event:
                     # pick), not the response streak - showing up is what earns the star.
                     streak = self.user_played_streaks.get(user.id, 0)
                     streak_suffix = f" ★{streak}" if streak > 1 else ""
-                    message += f"\n  • {user.mention_markdown_v2()}{streak_suffix}"
+                    message += f"\n  • {mention(user)}{streak_suffix}"
             message += "\n"
 
         return message
