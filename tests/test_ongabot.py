@@ -82,7 +82,7 @@ class CompletePastEventsHappyPathTest(unittest.IsolatedAsyncioTestCase):
         await ongabot.complete_past_events_callback(context)
 
         event.mark_complete.assert_called_once()
-        event.update_status_message.assert_called_once_with(context.bot)
+        event.update_status_message.assert_called_once_with(context.bot, unverified=chat.unverified)
         chat.remove_pinned_poll.assert_called_once_with("poll1")
 
 

@@ -76,8 +76,16 @@ class BotData:
             if event:
                 return event
 
+        # Votes on /unverify and /verify polls reach the event poll handlers too; not an error.
+        if self.is_verification_poll(poll_id):
+            _logger.debug("poll_id=%s is a verification vote, not an event", poll_id)
+            return None
         _logger.error("Event with poll_id=%s doesn't exist in BotData!", poll_id)
         return None
+
+    def is_verification_poll(self, poll_id: str) -> bool:
+        """Return True if poll_id belongs to an open /unverify or /verify vote in any chat"""
+        return any(poll_id in chat.verification_votes for chat in self.chats.values())
 
     @log.method
     def is_authorized(self, chat_id: int) -> bool:

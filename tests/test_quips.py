@@ -79,7 +79,9 @@ class PoolsTest(unittest.TestCase):
 
 class BanterByPathTest(unittest.TestCase):
     def test_every_banter_kind_is_reachable_from_exactly_one_path(self):
-        self.assertCountEqual(BANTER_BY_PATH.values(), list(Banter))
+        # UNVERIFIED is picked by who votes, not by the path, see build_vote_reply.
+        path_kinds = [kind for kind in Banter if kind is not Banter.UNVERIFIED]
+        self.assertCountEqual(BANTER_BY_PATH.values(), path_kinds)
 
     def test_covers_every_path_that_gets_banter(self):
         # First answers (None -> x) and retractions (x -> None) get banter except a first game
@@ -156,6 +158,18 @@ class BuildVoteReplyTest(unittest.TestCase):
             with self.subTest(previous=previous, new=new):
                 self.assertEqual(build_vote_reply("Alice", previous, new), reply)
 
+    def test_unverified_voter_is_roasted_on_every_path(self):
+        # Even the paths that normally keep a fixed line get the UNVERIFIED pool.
+        expected = {
+            (None, Answer.GAME): "Will votes game — <UNVERIFIED>",
+            (None, Answer.NO_OP): "Will votes No-op — <UNVERIFIED>",
+            (Answer.GAME, Answer.GAME): "Will changed their vote — <UNVERIFIED>",
+            (Answer.GAME, Answer.MAYBE): "Will went from game to Maybe — <UNVERIFIED>",
+        }
+        for (previous, new), reply in expected.items():
+            with self.subTest(previous=previous, new=new):
+                self.assertEqual(build_vote_reply("Will", previous, new, unverified=True), reply)
+
 
 class BuildRetractionReplyTest(unittest.TestCase):
     def setUp(self):
@@ -172,6 +186,11 @@ class BuildRetractionReplyTest(unittest.TestCase):
         for previous, reply in expected.items():
             with self.subTest(previous=previous):
                 self.assertEqual(build_retraction_reply("Alice", previous), reply)
+
+    def test_unverified_retraction_is_roasted(self):
+        self.assertEqual(
+            build_retraction_reply("Will", Answer.GAME, unverified=True), "Will pulled their game vote — <UNVERIFIED>"
+        )
 
 
 if __name__ == "__main__":

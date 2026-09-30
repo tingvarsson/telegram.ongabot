@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/unverify @user` starts a one-hour group vote to revoke someone's age verification, and
+  `/verify` votes it back. Unverified members get a 🔞 next to their name and every vote they
+  cast gets roasted.
+
 ## [1.11.0] - 2026-09-29
 
 ### Changed

@@ -238,6 +238,36 @@ SHORT = CommandInfo(
     menu_description="Post a top YouTube Short [topics..]",
 )
 
+UNVERIFY = CommandInfo(
+    command="unverify",
+    brief="/unverify @user - Start a 1-hour group vote to revoke a member's age verification",
+    usage=(
+        "Usage: reply to a member's message with /unverify, or /unverify @username\n"
+        "  Starts a 1-hour Yes/No poll. It passes with at least 3 yes and more yes than no.\n"
+        "  An unverified member gets a 🔞 badge and the bot roasts their event votes.\n"
+        "  @username only works for members who have voted on an event before.\n\n"
+        "Examples:\n"
+        "  /unverify @william\n"
+        "  /unverify (as a reply to their message)"
+    ),
+    menu_description="Vote to revoke a member's age verification",
+)
+
+VERIFY = CommandInfo(
+    command="verify",
+    brief="/verify @user - Start a 1-hour group vote to restore a member's age verification",
+    usage=(
+        "Usage: reply to a member's message with /verify, or /verify @username\n"
+        "  Starts a 1-hour Yes/No poll. It passes with at least 3 yes and more yes than no,\n"
+        "  and removes the 🔞 badge.\n"
+        "  @username only works for members who have voted on an event before.\n\n"
+        "Examples:\n"
+        "  /verify @william\n"
+        "  /verify (as a reply to their message)"
+    ),
+    menu_description="Vote to restore a member's age verification",
+)
+
 BOT_SHORT_DESCRIPTION = "ONGAbot - the only bot you'll ever need"
 
 BOT_DESCRIPTION = (
@@ -264,6 +294,8 @@ ALL_COMMANDS = [
     CS2,
     CS2PATCHES,
     SHORT,
+    UNVERIFY,
+    VERIFY,
     LINKSTEAM,
     UNLINKSTEAM,
 ]

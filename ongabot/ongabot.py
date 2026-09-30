@@ -44,7 +44,9 @@ from handler import StartCommandHandler
 from handler import StatisticsCommandHandler
 from handler import StatisticsSortCallbackHandler
 from handler import UnLinkSteamCommandHandler
+from handler import UnverifyCommandHandler
 from handler import UpdateEventCommandHandler
+from handler import VerifyCommandHandler
 from userdata import UserData
 from utils import log
 from utils.changelog import get_changelog_delta, is_dev_version
@@ -52,6 +54,7 @@ from utils.changelogformat import render_changelog_html
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION, PRIVATE_COMMANDS
 from utils.htmlblocks import send_html_with_fallback
 from utils.points import render_event_recap_message
+from verification import reschedule_open_votes
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -364,7 +367,7 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
             if not event.completed and event.event_date < today:
                 event.mark_complete()
                 try:
-                    await event.update_status_message(context.bot)
+                    await event.update_status_message(context.bot, unverified=chat.unverified)
                 except TelegramError as e:
                     logger.error(
                         "Failed to update status message for chat_id=%s poll_id=%s: %s",
@@ -497,6 +500,9 @@ async def post_init(application: Application) -> None:
             e,
         )
 
+    # /unverify and /verify votes are persisted, their close jobs are not.
+    reschedule_open_votes(bot_data.chats.values(), application.job_queue)
+
     # Schedule daily cleanup of past events
     application.job_queue.run_once(complete_past_events_callback, when=5, name="complete_past_events_startup")
     application.job_queue.run_daily(
@@ -557,6 +563,8 @@ def register_handlers(application: Application) -> None:
     application.add_handler(LinkSteamCommandHandler())
     application.add_handler(UnLinkSteamCommandHandler())
     application.add_handler(ShortCommandHandler())
+    application.add_handler(UnverifyCommandHandler())
+    application.add_handler(VerifyCommandHandler())
 
 
 def main() -> None:

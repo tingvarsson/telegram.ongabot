@@ -57,6 +57,8 @@ class Banter(Enum):
     RETRACTED_GAME = "retracted_game"
     RETRACTED_MAYBE = "retracted_maybe"
     RETRACTED_NO_OP = "retracted_no_op"
+    # Not tied to a path: every vote by a member the group voted unverified (see verification.py).
+    UNVERIFIED = "unverified"
 
 
 # (previous answer, new answer) -> pool. None as previous means a first answer, None as new
@@ -441,6 +443,39 @@ POOLS: Dict[Banter, List[str]] = {
         "a no-op on the no-op",
         "the refusal has been refunded",
     ],
+    # Voted unverified by the group, so every vote gets carded.
+    Banter.UNVERIFIED: [
+        "does your mum know you're voting?",
+        "please hand the phone back to your parents",
+        "votes from minors are for decoration only",
+        "past your bedtime, isn't it?",
+        "the lobby is 18+, the ballot box apparently isn't",
+        "cute. Now go finish your homework.",
+        "ID please. No, the real one.",
+        "noted, in crayon",
+        "we'll need a note from a guardian for that",
+        "the kids' table has its own poll",
+        "adorable. Who taught you to vote?",
+        "sippy cup in one hand, poll in the other",
+        "recess is over, back to class",
+        "the council remembers what you did",
+        "your vote has been forwarded to your parents",
+        "someone check this one's birth certificate",
+        "big vote energy for someone this young",
+        "screen time is almost up",
+        "voting unsupervised again, are we?",
+        "the babysitter has been notified",
+        "that vote is pending age verification",
+        "fake ID detected, vote logged anyway",
+        "aww, they're learning democracy",
+        "grounded, but still voting",
+        "nap time first, games after",
+        "the unverified have spoken. Nobody listened.",
+        "mum said one game only",
+        "juice box break before the first round?",
+        "next time, put your age in the poll",
+        "carded at the poll box, again",
+    ],
 }
 
 # Per-pool shuffled decks, dealt from the end, and the line each pool dealt last. Kept in
@@ -469,8 +504,21 @@ def next_banter(kind: Banter) -> str:
     return line
 
 
-def build_vote_reply(name: str, previous: Optional[Answer], new: Answer) -> str:
-    """Build the reply to a vote. previous is None for a user's first answer to the poll."""
+def build_vote_reply(name: str, previous: Optional[Answer], new: Answer, unverified: bool = False) -> str:
+    """Build the reply to a vote. previous is None for a user's first answer to the poll.
+
+    An unverified voter gets the same lead on every path, including the ones that normally
+    keep a fixed line, followed by a line from the UNVERIFIED pool.
+    """
+    if unverified:
+        if previous is None:
+            lead = f"{name} votes {new.value}"
+        elif previous is new:
+            lead = f"{name} changed their vote"
+        else:
+            lead = f"{name} went from {previous.value} to {new.value}"
+        _logger.debug("Vote reply for unverified %s uses banter pool %s", name, Banter.UNVERIFIED.name)
+        return f"{lead} — {next_banter(Banter.UNVERIFIED)}"
     if previous is None and new is Answer.GAME:
         return f"Wow {name}, what a great job answering that poll!"
     if previous is new:
@@ -485,7 +533,7 @@ def build_vote_reply(name: str, previous: Optional[Answer], new: Answer) -> str:
     return f"{lead} — {next_banter(kind)}"
 
 
-def build_retraction_reply(name: str, previous: Answer) -> str:
+def build_retraction_reply(name: str, previous: Answer, unverified: bool = False) -> str:
     """Build the reply to a vote that was retracted and not replaced in time."""
-    kind = BANTER_BY_PATH[(previous, None)]
+    kind = Banter.UNVERIFIED if unverified else BANTER_BY_PATH[(previous, None)]
     return f"{name} pulled their {previous.value} vote — {next_banter(kind)}"

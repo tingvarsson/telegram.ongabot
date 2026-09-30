@@ -11,6 +11,7 @@ from telegram.helpers import escape_markdown
 
 from chat import Chat
 from event import Event
+from verification import unverified_footer
 
 _logger = logging.getLogger(__name__)
 
@@ -619,4 +620,8 @@ def render_statistics_message(
     in_private_chat makes the sort buttons carry chat's id, see build_sort_keyboard.
     """
     result = compute_statistics(chat)
-    return format_statistics(result, sort_by=sort_by), build_sort_keyboard(chat.chat_id if in_private_chat else None)
+    text = format_statistics(result, sort_by=sort_by)
+    footer = unverified_footer(chat.unverified.values())
+    if footer:
+        text = f"{text}\n\n{footer}"
+    return text, build_sort_keyboard(chat.chat_id if in_private_chat else None)
