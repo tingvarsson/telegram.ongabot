@@ -112,7 +112,7 @@ class EventJob:
 
         now is aware, in the chat's timezone. A trigger counts as missed when its most recent
         occurrence is due, the job has not run on or after that day, and the event it would have
-        created has not happened yet. Without a record of the last run nothing counts as missed,
+        created has not started yet. Without a record of the last run nothing counts as missed,
         so a job from before that was tracked never creates a poll on its own at startup.
         """
         if self.last_triggered_on is None:
@@ -128,7 +128,8 @@ class EventJob:
         if self.last_triggered_on >= trigger.date():
             return None
         event_date = helper.get_upcoming_date(trigger.date(), self.event_day)
-        if event_date < now.date():
+        # A poll for an evening that has already begun is no use to anyone.
+        if datetime.combine(event_date, self.start_time, tzinfo=now.tzinfo) <= now:
             return None
         return event_date
 

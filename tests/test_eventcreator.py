@@ -172,6 +172,22 @@ class CreateEventCallbackTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(create.await_args.args[2].event_date, date(2026, 10, 7))
         self.assertEqual(chat.event_job.last_triggered_on, sunday)
 
+    async def test_a_second_trigger_on_the_same_local_day_is_skipped(self):
+        """/timezone to a zone further west makes today's 20:00 come round again."""
+        sunday = date(2026, 10, 4)
+        chat = Chat(123)
+        chat.set_event_job(EventJob(123))
+        chat.event_job.last_triggered_on = sunday
+        context = MagicMock()
+        context.job.chat_id = 123
+        context.bot_data.get_chat.return_value = chat
+
+        with patch.object(Chat, "today", return_value=sunday):
+            with patch("ongabot.eventcreator.create_event", AsyncMock()) as create:
+                await eventcreator.create_event_callback(context)
+
+        create.assert_not_awaited()
+
     async def test_nothing_without_a_schedule(self):
         context = MagicMock()
         context.job.chat_id = 123

@@ -102,6 +102,10 @@ class MissedEventDateTest(unittest.TestCase):
         job = self._job(date(2026, 9, 27))
         self.assertIsNone(job.missed_event_date(self._at(SUNDAY, 19)))
 
+    def test_nothing_once_the_event_has_started(self):
+        job = self._job(date(2026, 9, 27))
+        self.assertIsNone(job.missed_event_date(self._at(WEDNESDAY, 23)))
+
     def test_nothing_once_the_event_day_has_passed(self):
         job = self._job(date(2026, 9, 27))
         self.assertIsNone(job.missed_event_date(self._at(date(2026, 10, 8), 9)))
@@ -111,7 +115,7 @@ class MissedEventDateTest(unittest.TestCase):
         self.assertIsNone(self._job(None).missed_event_date(self._at(SUNDAY, 21)))
 
     def test_same_weekday_trigger_and_event(self):
-        job = EventJob(chat_id=1, trigger_on="wednesday", event_day="wednesday")
+        job = EventJob(chat_id=1, trigger_on="wednesday", event_day="wednesday", start_time=time(22, 0))
         job.last_triggered_on = date(2026, 9, 30)
         self.assertEqual(job.missed_event_date(self._at(WEDNESDAY, 21)), WEDNESDAY)
 

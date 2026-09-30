@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On game day morning, if no slot has a full five-stack yet, the bot pokes the regulars who
   haven't voted.
 - `/timezone` shows or sets the group's timezone. Weekly polls, event times, game-day pokes,
-  the nightly wrap-up and CS2 results all follow it. Until set, the bot runs on UTC.
+  the nightly wrap-up and CS2 results all follow it. Until a group sets one, it gets the bot's
+  default (UTC unless configured).
 
 ### Fixed
 

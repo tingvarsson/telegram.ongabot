@@ -15,6 +15,8 @@ from typing import Dict
 _logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEZONE = "UTC"
+# Longest unknown zone name repeated back in an error; real IANA names are far shorter.
+_MAX_SHOWN_NAME = 64
 
 
 @functools.lru_cache(maxsize=1)
@@ -34,7 +36,9 @@ def resolve_timezone(name: str) -> zoneinfo.ZoneInfo:
     """
     canonical = _zone_names().get(name.strip().lower())
     if canonical is None:
-        raise ValueError(f"Unknown timezone: {name!r}. Use an IANA name, e.g. Europe/Stockholm or UTC.")
+        # Cut short, since the message is echoed back to the chat and must fit one message.
+        shown = name if len(name) <= _MAX_SHOWN_NAME else name[:_MAX_SHOWN_NAME] + "…"
+        raise ValueError(f"Unknown timezone: {shown!r}. Use an IANA name, e.g. Europe/Stockholm or UTC.")
     return zoneinfo.ZoneInfo(canonical)
 
 

@@ -412,5 +412,8 @@ class Chat:
                 self.event_job.last_triggered_on,
                 missed,
             )
-            job_queue.run_once(callback, when=0, chat_id=self.chat_id, name=f"{self.event_job.job_name}_catchup")
+            # A few seconds out, like the other startup jobs: at boot the scheduler only starts
+            # after polling does, and a job overdue by more than APScheduler's one-second
+            # misfire grace would be dropped.
+            job_queue.run_once(callback, when=5, chat_id=self.chat_id, name=f"{self.event_job.job_name}_catchup")
         return job

@@ -6,13 +6,16 @@ renders a builder with that input at its worst and runs the result through the c
 tests.telegram_markup.
 """
 
+import asyncio
 import unittest
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from ongabot import ongabot, poke, quips, shrink
+from ongabot.chat import Chat
 from ongabot.cs2.format import format_session
+from ongabot.handler import timezonecommandhandler
 from ongabot.cs2.patchnotesformat import render_patch_notes_html
 from ongabot.cs2.steamnews import SteamNewsItem
 from ongabot.utils import helper
@@ -141,6 +144,17 @@ class PlainTextBuildersTest(unittest.TestCase):
                     self.subTest(diagnosis=diagnosis, line=line),
                 ):
                     check_plain_text(shrink.render_shrink_message(chat, user=patient))
+
+    def test_timezone_replies_are_valid_plain_text(self):
+        # The zone name is the untrusted part: an unknown one is echoed back, however long.
+        for args in ([], ["Asia/Tokyo"], ["default"], [NASTY * 200]):
+            with self.subTest(args=args[:1] and args[0][:20]):
+                update = MagicMock()
+                update.message.reply_text = AsyncMock()
+                context = MagicMock(args=args)
+                context.bot_data.get_chat.return_value = Chat(message_fixtures.CHAT_ID)
+                asyncio.run(timezonecommandhandler.callback(update, context))
+                check_plain_text(update.message.reply_text.await_args.args[0])
 
 
 if __name__ == "__main__":

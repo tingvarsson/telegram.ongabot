@@ -28,6 +28,12 @@ async def create_event_callback(context: CallbackContext) -> None:
         return
 
     today = chat.today()
+    last = chat.event_job.last_triggered_on
+    if last is not None and last >= today:
+        # A /timezone move to a zone further west puts today's trigger time ahead again after
+        # it already ran; the week's poll exists, so the second firing is skipped quietly.
+        _logger.info("Weekly trigger for chat_id=%s already ran on %s; skipping", chat.chat_id, last)
+        return
     # Recorded before the poll is sent, so a restart never re-creates this week's poll; see
     # EventJob.missed_event_date.
     chat.event_job.last_triggered_on = today

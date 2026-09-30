@@ -485,7 +485,7 @@ class ChatScheduleEventJobTest(unittest.TestCase):
         with self.assertLogs("ongabot.chat", level="INFO") as logs:
             self.chat.schedule_event_job(self.job_queue, "callback", self.NOW)
 
-        self.job_queue.run_once.assert_called_once_with("callback", when=0, chat_id=1, name="weeky_event_1_catchup")
+        self.job_queue.run_once.assert_called_once_with("callback", when=5, chat_id=1, name="weeky_event_1_catchup")
         self.assertTrue(any("missed" in line for line in logs.output))
 
     def test_no_catch_up_when_the_event_already_has_a_poll(self):
