@@ -48,6 +48,7 @@ from handler import UnLinkSteamCommandHandler
 from handler import UnverifyCommandHandler
 from handler import UpdateEventCommandHandler
 from handler import VerifyCommandHandler
+from poke import schedule_todays_pokes_callback
 from userdata import UserData
 from utils import log
 from utils.changelog import get_changelog_delta, is_dev_version
@@ -518,6 +519,14 @@ async def post_init(application: Application) -> None:
         interval=datetime.timedelta(hours=1),
         first=10,
         name="cs2_sweeps",
+    )
+
+    # The morning poke at non-voters, re-derived hourly for the same reasons as the CS2 sweep.
+    application.job_queue.run_repeating(
+        schedule_todays_pokes_callback,
+        interval=datetime.timedelta(hours=1),
+        first=20,
+        name="poke_schedule",
     )
 
     # Valve ships patches at any hour, so this polls around the clock. Starts right after boot

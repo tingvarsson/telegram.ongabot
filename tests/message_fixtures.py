@@ -63,7 +63,7 @@ def event(event_date: date, members: List[User], picks: List[Tuple[int, ...]]) -
         answer = MagicMock()
         answer.option_ids = pick
         result.poll_answers[user] = answer
-    result.first_answer = members[0]
+    result.first_answer = members[0] if members else None
     result.user_played_streaks = {user.id: 3 for user in members}
     result.completed = True
     return result

@@ -57,6 +57,8 @@ class Event:
         cs2_message_id: id of the CS2 results message, once posted. The sweep edits this one
             message as the night's matches come in, so it must survive a restart.
         cs2_reported: whether the CS2 results are final, so the sweep job stops updating them
+        poked: whether the morning poke for this event is done - sent, or found unneeded
+            (see poke.py) - so a restart never pokes twice
     """
 
     def __init__(self, chat_id: int, poll: Poll, data: EventData) -> None:
@@ -74,6 +76,7 @@ class Event:
         self.cs2_played: Dict[int, bool] = {}
         self.cs2_message_id: int = 0
         self.cs2_reported: bool = False
+        self.poked: bool = False
 
     @property
     def event_date(self) -> date:
@@ -131,6 +134,9 @@ class Event:
             # Events that predate CS2 results are never swept - their matches have long since
             # fallen out of Leetify's ~4.5-month history window anyway.
             self.cs2_reported = False
+        if not hasattr(self, "poked"):
+            # Completed events are never poked anyway, and an open one still deserves its poke.
+            self.poked = False
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -225,6 +231,14 @@ class Event:
             message += "\n"
 
         return message
+
+    def has_full_stack(self, stack_size: int) -> bool:
+        """True when at least one time slot has stack_size votes or more."""
+        return any(option.voter_count >= stack_size for option in self.poll.options[: self.num_slots])
+
+    def voted_user_ids(self) -> Set[int]:
+        """Ids of the users with a vote on this poll. A retracted vote does not count."""
+        return {user.id for user, answer in self.poll_answers.items() if answer.option_ids}
 
     @log.method
     def update_poll(self, poll: Poll) -> None:

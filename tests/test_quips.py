@@ -79,8 +79,9 @@ class PoolsTest(unittest.TestCase):
 
 class BanterByPathTest(unittest.TestCase):
     def test_every_banter_kind_is_reachable_from_exactly_one_path(self):
-        # UNVERIFIED is picked by who votes, not by the path, see build_vote_reply.
-        path_kinds = [kind for kind in Banter if kind is not Banter.UNVERIFIED]
+        # UNVERIFIED is picked by who votes, not by the path, see build_vote_reply. POKE is the
+        # morning poke, not a vote reply at all.
+        path_kinds = [kind for kind in Banter if kind not in (Banter.UNVERIFIED, Banter.POKE)]
         self.assertCountEqual(BANTER_BY_PATH.values(), path_kinds)
 
     def test_covers_every_path_that_gets_banter(self):

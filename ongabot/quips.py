@@ -59,6 +59,8 @@ class Banter(Enum):
     RETRACTED_NO_OP = "retracted_no_op"
     # Not tied to a path: every vote by a member the group voted unverified (see verification.py).
     UNVERIFIED = "unverified"
+    # Not tied to a path either: the morning poke at everyone who has not voted (see poke.py).
+    POKE = "poke"
 
 
 # (previous answer, new answer) -> pool. None as previous means a first answer, None as new
@@ -475,6 +477,39 @@ POOLS: Dict[Banter, List[str]] = {
         "juice box break before the first round?",
         "next time, put your age in the poll",
         "carded at the poll box, again",
+    ],
+    # The morning poke: nudging the silent ones towards the poll box.
+    Banter.POKE: [
+        "the poll won't vote for itself",
+        "your thumbs still work, we checked",
+        "one tap. That's all we ask.",
+        "the lobby is lonely without you",
+        "silence is not a valid answer",
+        "the poll box misses you",
+        "No-op is an answer too, you know",
+        "we can see you reading this",
+        "tick a box, any box",
+        "four players is a sad number",
+        "the stack won't fill itself",
+        "vote now, apologise later",
+        "your seat is getting cold",
+        "the bot is watching. Always.",
+        "Maybe Baby is right there, just saying",
+        "democracy dies in darkness, and in unread polls",
+        "friendly reminder, with menace",
+        "the poll closes when the first round starts",
+        "you had all week. The poll is still open.",
+        "even the bot voted. Well, almost.",
+        "your absence has been noted",
+        "the CT spawn has a free spot",
+        "boot up the phone, then boot up the game",
+        "consider this your warmup round",
+        "the ONE sees all non-voters",
+        "rise and shine, it's game day",
+        "skipping the poll won't skip the shame",
+        "one vote closer to a full lobby",
+        "don't make us ping you twice",
+        "the scoreboard needs your name on it",
     ],
 }
 
