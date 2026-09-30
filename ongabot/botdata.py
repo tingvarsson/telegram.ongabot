@@ -84,8 +84,8 @@ class BotData:
         return None
 
     def is_verification_poll(self, poll_id: str) -> bool:
-        """Return True if poll_id belongs to an open /unverify or /verify vote in any chat"""
-        return any(poll_id in chat.verification_votes for chat in self.chats.values())
+        """Return True if poll_id belongs to an open or recently closed /unverify or /verify vote"""
+        return any(chat.has_verification_poll(poll_id) for chat in self.chats.values())
 
     @log.method
     def is_authorized(self, chat_id: int) -> bool:

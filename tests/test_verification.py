@@ -7,7 +7,7 @@ from telegram import User
 from telegram.error import TelegramError
 
 from ongabot.botdata import BotData
-from ongabot.chat import Chat
+from ongabot.chat import CLOSED_VERIFICATION_POLLS_KEPT, Chat
 from ongabot.utils.points import render_leaderboard_message
 from ongabot.utils.statistics import render_statistics_message
 from ongabot.verification import (
@@ -21,6 +21,7 @@ from ongabot.verification import (
     vote_passes,
 )
 from tests import message_fixtures
+from tests.telegram_markup import check_markdown_v2
 
 NOW = datetime(2026, 9, 30, 20, 0, tzinfo=timezone.utc)
 
@@ -83,6 +84,13 @@ class UnverifiedFooterTest(unittest.TestCase):
         self.assertTrue(render_leaderboard_message(chat).endswith("\n\n🔞 Unverified: Tommy"))
         self.assertTrue(render_statistics_message(chat)[0].endswith("\n\n🔞 Unverified: Tommy"))
 
+    def test_footer_markup_survives_a_hostile_name(self):
+        chat = message_fixtures.chat()
+        chat.set_unverified(4, message_fixtures.NASTY, True)
+
+        for text in (render_leaderboard_message(chat), render_statistics_message(chat)[0]):
+            self.assertIn(f"🔞 Unverified: {message_fixtures.NASTY}", check_markdown_v2(text))
+
     def test_no_footer_when_nobody_is_unverified(self):
         chat = message_fixtures.chat()
 
@@ -124,12 +132,29 @@ class ChatVerificationStateTest(unittest.TestCase):
         self.assertIsNone(self.chat.pop_verification_vote("vote1"))
         self.assertIsNone(self.chat.open_vote_for(42))
 
+    def test_a_closed_vote_is_still_recognised_as_a_verification_poll(self):
+        self.chat.add_verification_vote(_vote())
+        self.chat.pop_verification_vote("vote1")
+
+        self.assertTrue(self.chat.has_verification_poll("vote1"))
+        self.assertEqual(self.chat.closed_verification_polls, ["vote1"])
+
+    def test_only_the_most_recently_closed_polls_are_remembered(self):
+        for i in range(CLOSED_VERIFICATION_POLLS_KEPT + 2):
+            self.chat.add_verification_vote(_vote(poll_id=f"v{i}"))
+            self.chat.pop_verification_vote(f"v{i}")
+
+        self.assertEqual(len(self.chat.closed_verification_polls), CLOSED_VERIFICATION_POLLS_KEPT)
+        self.assertFalse(self.chat.has_verification_poll("v0"))
+        self.assertTrue(self.chat.has_verification_poll(f"v{CLOSED_VERIFICATION_POLLS_KEPT + 1}"))
+
     def test_defaults_state_missing_from_an_old_pickle(self):
         chat = Chat.__new__(Chat)
         chat.__setstate__({"chat_id": 1, "events": {}, "event_job": None, "pinned_polls": {}})
 
         self.assertEqual(chat.unverified, {})
         self.assertEqual(chat.verification_votes, {})
+        self.assertEqual(chat.closed_verification_polls, [])
 
     def test_state_survives_a_pickle_round_trip(self):
         self.chat.set_unverified(42, "Will", True)
@@ -271,6 +296,41 @@ class CloseVoteCallbackTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(args[0], 1)
         self.assertIn("officially unverified", args[1])
         self.assertEqual(kwargs["reply_parameters"].message_id, 100)
+
+    async def test_the_poll_update_sent_by_stopping_the_poll_logs_no_error(self):
+        # Stopping the poll makes Telegram send a final poll update, after the vote is closed.
+        context = self._context(_vote(), yes=3, no=1)
+
+        await close_vote_callback(context)
+
+        with self.assertNoLogs(level="ERROR"):
+            self.assertIsNone(context.bot_data.get_event("vote1"))
+        self.assertTrue(context.bot_data.is_verification_poll("vote1"))
+
+    async def test_passing_redraws_the_open_events_the_member_voted_on(self):
+        context = self._context(_vote(), yes=3, no=1)
+        voted, other = MagicMock(completed=False), MagicMock(completed=False)
+        voted.poll_answers = {User(id=42, first_name="Will", is_bot=False): MagicMock()}
+        other.poll_answers = {User(id=7, first_name="Anna", is_bot=False): MagicMock()}
+        voted.update_status_message = AsyncMock()
+        other.update_status_message = AsyncMock()
+        self.chat.events = {date(2026, 10, 7): voted, date(2026, 10, 8): other}
+
+        await close_vote_callback(context)
+
+        voted.update_status_message.assert_awaited_once_with(context.bot, unverified={42: "Will"})
+        other.update_status_message.assert_not_awaited()
+
+    async def test_a_failed_redraw_does_not_stop_the_verdict(self):
+        context = self._context(_vote(), yes=3, no=1)
+        voted = MagicMock(completed=False)
+        voted.poll_answers = {User(id=42, first_name="Will", is_bot=False): MagicMock()}
+        voted.update_status_message = AsyncMock(side_effect=TelegramError("message is not modified"))
+        self.chat.events = {date(2026, 10, 7): voted}
+
+        await close_vote_callback(context)
+
+        context.bot.send_message.assert_awaited_once()
 
     async def test_failed_unverify_changes_nothing(self):
         context = self._context(_vote(), yes=2, no=0)

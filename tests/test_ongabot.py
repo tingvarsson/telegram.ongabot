@@ -1,5 +1,5 @@
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram import BotCommandScopeAllPrivateChats
@@ -7,7 +7,9 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest, TelegramError
 
 from ongabot import ongabot
+from ongabot.chat import Chat
 from ongabot.ongabot import post_init, setup_bot_metadata
+from ongabot.verification import VerificationVote
 
 
 class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
@@ -206,6 +208,21 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
                 "cs2_sweeps",
             ],
         )
+
+
+class PostInitVerificationVotesTest(unittest.IsolatedAsyncioTestCase):
+    async def test_open_verification_votes_get_their_close_jobs_back(self):
+        chat = Chat(1)
+        chat.add_verification_vote(VerificationVote("vote1", 1, 100, 42, "Will", True, datetime.now(timezone.utc)))
+        application = MagicMock()
+        application.bot = AsyncMock()
+        application.bot_data.chats = {1: chat}
+        application.job_queue = MagicMock()
+
+        await post_init(application)
+
+        names = [call.kwargs["name"] for call in application.job_queue.run_once.call_args_list]
+        self.assertIn("verification_vote:vote1", names)
 
 
 class PostInitMetadataWiringTest(unittest.IsolatedAsyncioTestCase):

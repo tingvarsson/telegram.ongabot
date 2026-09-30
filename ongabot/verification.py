@@ -156,6 +156,20 @@ async def start_vote(
     return vote
 
 
+async def _redraw_status_messages(bot: Bot, chat: "Chat", user_id: int) -> None:
+    """Redraw the status message of every open event user_id has voted on, so the badge
+    appears (or goes) right away rather than on that event's next vote."""
+    for event in chat.active_events:
+        # Only events that list the member: redrawing any other would be an unchanged edit,
+        # which Telegram rejects.
+        if not any(user.id == user_id for user in event.poll_answers):
+            continue
+        try:
+            await event.update_status_message(bot, unverified=chat.unverified)
+        except TelegramError as e:
+            _logger.warning("Could not redraw status message of poll_id=%s: %s", event.poll_id, e)
+
+
 @log
 async def close_vote_callback(context: CallbackContext) -> None:
     """Stop a vote's poll, tally it, apply the result and post the verdict."""
@@ -190,6 +204,7 @@ async def close_vote_callback(context: CallbackContext) -> None:
     )
     if passed:
         chat.set_unverified(vote.target_id, vote.target_name, vote.unverify)
+        await _redraw_status_messages(context.bot, chat, vote.target_id)
 
     await context.bot.send_message(
         vote.chat_id,

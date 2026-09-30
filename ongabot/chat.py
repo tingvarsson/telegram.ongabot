@@ -2,7 +2,7 @@
 
 import logging
 from datetime import date, datetime, timedelta
-from typing import Callable, Dict, Optional, cast
+from typing import Callable, Dict, List, Optional, cast
 
 from telegram import Message, User
 from telegram.error import TelegramError
@@ -17,6 +17,8 @@ _logger = logging.getLogger(__name__)
 
 # How long a posted Short is remembered, so /short does not repeat one within this window.
 SHORTS_HISTORY_DAYS = 30
+# How many closed /unverify and /verify poll ids are remembered, see pop_verification_vote.
+CLOSED_VERIFICATION_POLLS_KEPT = 10
 
 
 class Chat:
@@ -35,6 +37,7 @@ class Chat:
         recent_video_ids: video_id -> date posted, for /short's 30-day no-repeat
         unverified: user_id -> first name of each member voted unverified (see verification.py)
         verification_votes: open /unverify and /verify votes indexed on poll_id
+        closed_verification_polls: poll_ids of the most recently closed votes, newest last
     """
 
     def __init__(self, chat_id: int) -> None:
@@ -46,6 +49,7 @@ class Chat:
         self.recent_video_ids: Dict[str, date] = {}
         self.unverified: Dict[int, str] = {}
         self.verification_votes: Dict[str, VerificationVote] = {}
+        self.closed_verification_polls: List[str] = []
 
     def __setstate__(self, state: dict) -> None:
         self.__dict__.update(state)
@@ -118,6 +122,8 @@ class Chat:
             self.unverified = {}
         if not hasattr(self, "verification_votes"):
             self.verification_votes = {}
+        if not hasattr(self, "closed_verification_polls"):
+            self.closed_verification_polls = []
 
     def _migrate_shorts_state(self) -> None:
         """Drop the daily-Short state that /short no longer uses and default recent_video_ids.
@@ -296,8 +302,21 @@ class Chat:
 
     @log.method
     def pop_verification_vote(self, poll_id: str) -> Optional[VerificationVote]:
-        """Remove and return the open vote for poll_id, or None if there is none."""
-        return self.verification_votes.pop(poll_id, None)
+        """Remove and return the open vote for poll_id, or None if there is none.
+
+        The poll_id is remembered in closed_verification_polls: stopping the poll makes
+        Telegram send one last poll update, which must still be recognised as a vote.
+        """
+        vote = self.verification_votes.pop(poll_id, None)
+        if vote is not None:
+            self.closed_verification_polls.append(poll_id)
+            # A stopped poll gets no further updates, so only the last few need remembering.
+            del self.closed_verification_polls[:-CLOSED_VERIFICATION_POLLS_KEPT]
+        return vote
+
+    def has_verification_poll(self, poll_id: str) -> bool:
+        """True when poll_id is an open or recently closed /unverify or /verify vote."""
+        return poll_id in self.verification_votes or poll_id in self.closed_verification_polls
 
     def find_user_by_username(self, username: str) -> Optional[User]:
         """Find a member by @username among everyone who has voted on this chat's events.
