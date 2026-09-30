@@ -2,9 +2,13 @@ import os
 import time
 import unittest
 from datetime import date
+from zoneinfo import ZoneInfo
 
 from ongabot.cs2.leetify import MatchDetail, MatchSummary, PlayerStats
 from ongabot.cs2.session import DEFAULT_MIN_MEMBERS, build_session, local_date, min_members
+
+UTC = ZoneInfo("UTC")
+STOCKHOLM = ZoneInfo("Europe/Stockholm")
 
 SCOUT = "76561198000000001"
 MATE = "76561198000000002"
@@ -68,43 +72,31 @@ class FakeClient:
 
 
 class LocalDateTest(unittest.TestCase):
-    """finished_at is UTC; the event date is a local calendar date."""
-
-    def setUp(self):
-        self._old_tz = os.environ.get("TZ")
-        os.environ["TZ"] = "Europe/Stockholm"
-        time.tzset()
-
-    def tearDown(self):
-        if self._old_tz is None:
-            del os.environ["TZ"]
-        else:
-            os.environ["TZ"] = self._old_tz
-        time.tzset()
+    """finished_at is UTC; the event date is a calendar date in the chat's zone."""
 
     def test_late_evening_utc_match_belongs_to_the_local_next_day(self):
         # 22:30Z in September is 00:30 the next morning in Stockholm (CEST, UTC+2).
-        self.assertEqual(local_date("2026-09-02T22:30:00.000Z"), date(2026, 9, 3))
+        self.assertEqual(local_date("2026-09-02T22:30:00.000Z", STOCKHOLM), date(2026, 9, 3))
+
+    def test_same_match_stays_on_its_day_in_utc(self):
+        self.assertEqual(local_date("2026-09-02T22:30:00.000Z", UTC), date(2026, 9, 2))
 
     def test_evening_match_stays_on_the_same_local_day(self):
-        self.assertEqual(local_date("2026-09-02T19:02:30.000Z"), date(2026, 9, 2))
+        self.assertEqual(local_date("2026-09-02T19:02:30.000Z", STOCKHOLM), date(2026, 9, 2))
 
     def test_returns_none_for_unparseable_timestamp(self):
-        self.assertIsNone(local_date("not-a-timestamp"))
+        self.assertIsNone(local_date("not-a-timestamp", STOCKHOLM))
 
 
 class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self._old_tz = os.environ.get("TZ")
-        os.environ["TZ"] = "UTC"
-        time.tzset()
-
-    def tearDown(self):
-        if self._old_tz is None:
-            del os.environ["TZ"]
-        else:
-            os.environ["TZ"] = self._old_tz
-        time.tzset()
+    async def test_match_end_time_is_shown_in_the_chat_zone(self):
+        client = FakeClient(
+            histories={SCOUT: [_summary("m1", "2026-09-02T19:00:00.000Z")]},
+            details={"m1": _detail("m1", [SCOUT, MATE, STRANGER])},
+        )
+        match = (await build_session(client, date(2026, 9, 2), LINKS, STOCKHOLM)).matches[0]
+        self.assertEqual(match.finished_at.tzinfo, STOCKHOLM)
+        self.assertEqual(match.finished_at.hour, 21)
 
     async def test_finds_a_match_two_linked_members_played(self):
         client = FakeClient(
@@ -112,7 +104,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": _detail("m1", [SCOUT, MATE, STRANGER])},
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertEqual(len(session.matches), 1)
         self.assertEqual(session.matches[0].map_name, "de_mirage")
@@ -124,7 +116,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": _detail("m1", [SCOUT, MATE])},
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertEqual(session.matches, [])
         self.assertEqual(client.detail_calls, [], "must not fetch details for matches on other days")
@@ -135,7 +127,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": _detail("m1", [SCOUT, MATE])},
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertEqual(session.matches, [])
 
@@ -145,7 +137,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": _detail("m1", [SCOUT, MATE])},
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertEqual(len(session.matches), 1)
 
@@ -155,7 +147,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": _detail("m1", [SCOUT, STRANGER])},
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertEqual(min_members(), 2)
         self.assertEqual(session.matches, [], "one linked member is a solo game, not an ONGA game")
@@ -167,7 +159,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": _detail("m1", [SCOUT, SECOND_SCOUT])},
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertEqual(len(session.matches), 1)
         self.assertEqual(client.detail_calls, ["m1"])
@@ -179,7 +171,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": _detail("m1", [SCOUT, MATE])},
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertEqual({m.user_id for m in session.matches[0].members}, {11, 22})
 
@@ -187,14 +179,14 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
         client = FakeClient(histories={}, details={})
 
         self.assertIsNone(
-            await build_session(client, date(2026, 9, 2), LINKS),
+            await build_session(client, date(2026, 9, 2), LINKS, UTC),
             "an all-failed sweep must be retryable, not reported as 'nobody played'",
         )
 
     async def test_returns_empty_session_when_reachable_but_nothing_was_played(self):
         client = FakeClient(histories={SCOUT: []}, details={})
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertIsNotNone(session)
         self.assertEqual(session.matches, [])
@@ -208,7 +200,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             },
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertEqual(session.played_user_ids, {11, 22, 33})
 
@@ -223,7 +215,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             },
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertEqual([m.id for m in session.matches], ["early", "late"])
 
@@ -233,7 +225,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             details={},
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         self.assertEqual(session.matches, [])
 
@@ -243,7 +235,7 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": _detail("m1", [SCOUT, MATE])},
         )
 
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
 
         # _detail puts every player on team 2, which won 13-7.
         self.assertEqual(session.matches[0].score, (13, 7))
@@ -251,18 +243,6 @@ class BuildSessionTest(unittest.IsolatedAsyncioTestCase):
 
 
 class SplitTeamScoreTest(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self._old_tz = os.environ.get("TZ")
-        os.environ["TZ"] = "UTC"
-        time.tzset()
-
-    def tearDown(self):
-        if self._old_tz is None:
-            del os.environ["TZ"]
-        else:
-            os.environ["TZ"] = self._old_tz
-        time.tzset()
-
     async def test_an_evenly_split_lobby_takes_the_first_members_side(self):
         """One member per side is a tie, broken by the first member - SCOUT, on team 2.
 
@@ -281,7 +261,7 @@ class SplitTeamScoreTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": detail},
         )
 
-        match = (await build_session(client, date(2026, 9, 2), LINKS)).matches[0]
+        match = (await build_session(client, date(2026, 9, 2), LINKS, UTC)).matches[0]
 
         self.assertEqual(match.our_team, 2)
         self.assertEqual(match.score, (7, 13))
@@ -290,7 +270,7 @@ class SplitTeamScoreTest(unittest.IsolatedAsyncioTestCase):
     async def test_returns_an_empty_session_when_nobody_has_linked_an_account(self):
         client = FakeClient(histories={}, details={})
 
-        session = await build_session(client, date(2026, 9, 2), {})
+        session = await build_session(client, date(2026, 9, 2), {}, UTC)
 
         self.assertEqual(session.matches, [])
         self.assertEqual(client.history_calls, [], "no links means no Leetify calls at all")
@@ -348,14 +328,14 @@ class SingleLinkedMemberTest(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_a_solo_game_is_hidden_by_default(self):
-        session = await build_session(self._client(), date(2026, 9, 2), {11: SCOUT})
+        session = await build_session(self._client(), date(2026, 9, 2), {11: SCOUT}, UTC)
 
         self.assertEqual(session.matches, [])
 
     async def test_a_solo_game_shows_up_when_the_threshold_is_lowered_to_one(self):
         os.environ["CS2_MIN_MEMBERS"] = "1"
 
-        session = await build_session(self._client(), date(2026, 9, 2), {11: SCOUT})
+        session = await build_session(self._client(), date(2026, 9, 2), {11: SCOUT}, UTC)
 
         self.assertEqual(len(session.matches), 1)
         self.assertEqual(session.played_user_ids, {11})
@@ -399,7 +379,7 @@ class AllPlayersTest(unittest.IsolatedAsyncioTestCase):
             histories={SCOUT: [_summary("m1", "2026-09-02T19:00:00.000Z")]},
             details={"m1": detail},
         )
-        return await build_session(client, date(2026, 9, 2), links if links is not None else LINKS)
+        return await build_session(client, date(2026, 9, 2), links if links is not None else LINKS, UTC)
 
     async def test_carries_every_player_in_the_lobby(self):
         session = await self._build(_detail_10("m1", [SCOUT, MATE]))
@@ -449,7 +429,7 @@ class MatchOutcomeTest(unittest.IsolatedAsyncioTestCase):
             histories={SCOUT: [_summary("m1", "2026-09-02T19:00:00.000Z")]},
             details={"m1": _detail_10("m1", [SCOUT, MATE], scores=scores, our_team=our_team)},
         )
-        session = await build_session(client, date(2026, 9, 2), LINKS)
+        session = await build_session(client, date(2026, 9, 2), LINKS, UTC)
         return session.matches[0]
 
     async def test_win(self):
@@ -511,7 +491,7 @@ class SplitTeamPerspectiveTest(unittest.IsolatedAsyncioTestCase):
         )
         client = FakeClient(histories={SCOUT: [_summary("m1", "2026-09-02T19:00:00.000Z")]}, details={"m1": detail})
 
-        match = (await build_session(client, date(2026, 9, 2), LINKS)).matches[0]
+        match = (await build_session(client, date(2026, 9, 2), LINKS, UTC)).matches[0]
 
         self.assertEqual(match.our_team, 2)
         self.assertEqual(match.score, (13, 7))
@@ -537,7 +517,7 @@ class PlayerStatFieldsTest(unittest.IsolatedAsyncioTestCase):
             details={"m1": _detail("m1", [SCOUT, MATE])},
         )
 
-        player = (await build_session(client, date(2026, 9, 2), LINKS)).matches[0].players[0]
+        player = (await build_session(client, date(2026, 9, 2), LINKS, UTC)).matches[0].players[0]
 
         self.assertEqual(player.total_assists, 4)
         self.assertEqual(player.adr, 82.5)

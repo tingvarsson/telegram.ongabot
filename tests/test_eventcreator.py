@@ -5,7 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from telegram.error import TelegramError
 
 from ongabot import eventcreator
+from ongabot.chat import Chat
 from ongabot.eventdata import EventData
+from ongabot.eventjob import EventJob
 
 
 class CreateEventSendPollFailsTest(unittest.IsolatedAsyncioTestCase):
@@ -150,6 +152,51 @@ class CreateEventCancelledConflictTest(unittest.IsolatedAsyncioTestCase):
 
         context.bot.send_poll.assert_called_once()
         chat.add_event.assert_called_once_with(mock_event, force=True)
+
+
+class CreateEventCallbackTest(unittest.IsolatedAsyncioTestCase):
+    """The weekly job's callback: the poll for the chat's coming event day, from its local today."""
+
+    async def test_creates_the_poll_for_the_coming_event_day_and_records_the_run(self):
+        sunday = date(2026, 10, 4)
+        chat = Chat(123)
+        chat.set_event_job(EventJob(123))
+        context = MagicMock()
+        context.job.chat_id = 123
+        context.bot_data.get_chat.return_value = chat
+
+        with patch.object(Chat, "today", return_value=sunday):
+            with patch("ongabot.eventcreator.create_event", AsyncMock()) as create:
+                await eventcreator.create_event_callback(context)
+
+        self.assertEqual(create.await_args.args[2].event_date, date(2026, 10, 7))
+        self.assertEqual(chat.event_job.last_triggered_on, sunday)
+
+    async def test_a_second_trigger_on_the_same_local_day_is_skipped(self):
+        """/timezone to a zone further west makes today's 20:00 come round again."""
+        sunday = date(2026, 10, 4)
+        chat = Chat(123)
+        chat.set_event_job(EventJob(123))
+        chat.event_job.last_triggered_on = sunday
+        context = MagicMock()
+        context.job.chat_id = 123
+        context.bot_data.get_chat.return_value = chat
+
+        with patch.object(Chat, "today", return_value=sunday):
+            with patch("ongabot.eventcreator.create_event", AsyncMock()) as create:
+                await eventcreator.create_event_callback(context)
+
+        create.assert_not_awaited()
+
+    async def test_nothing_without_a_schedule(self):
+        context = MagicMock()
+        context.job.chat_id = 123
+        context.bot_data.get_chat.return_value = Chat(123)
+
+        with patch("ongabot.eventcreator.create_event", AsyncMock()) as create:
+            await eventcreator.create_event_callback(context)
+
+        create.assert_not_awaited()
 
 
 if __name__ == "__main__":

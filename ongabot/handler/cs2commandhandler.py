@@ -11,9 +11,9 @@ from telegram.ext import CallbackContext, CommandHandler
 from chat import Chat
 from cs2.leetify import get_client
 from cs2.report import event_results, latest_reportable_event
-from utils import helper
+from utils import clock, helper
 from utils.commands import CS2
-from utils.dm import resolve_group
+from utils.dm import is_private_chat, resolve_group
 from utils.log import log
 
 _logger = logging.getLogger(__name__)
@@ -28,12 +28,24 @@ class Cs2CommandHandler(CommandHandler):
         super().__init__("cs2", callback)
 
 
-def _parse_target_date(args: List[str]) -> Optional[date]:
+def _parse_target_date(args: List[str], today: date) -> Optional[date]:
     """The date named in the command args, or None for the latest event. Raises ValueError."""
     if not args:
         return None
     named = helper.parse_named_args(args, _ALLOWED_ARGS)
-    return helper.parse_date(named["target_date"])
+    return helper.parse_date(named["target_date"], today)
+
+
+def _today(update: Update, context: CallbackContext) -> date:
+    """The local date a weekday name in /cs2 counts from.
+
+    In a private chat the group is not picked yet when the date is parsed (see callback), so
+    the bot default zone stands in; it only differs from the group's around midnight.
+    """
+    if update.effective_chat is None or is_private_chat(update):
+        return clock.today(clock.bot_timezone())
+    chat: Chat = context.bot_data.get_chat(update.effective_chat.id)
+    return chat.today()
 
 
 async def send_cs2(message: Message, context: CallbackContext, chat: Chat, event_date: Optional[date]) -> None:
@@ -72,7 +84,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
     # a group pick. The picker then carries the resolved ISO date, which keeps its button data
     # short however the user typed the date (a weekday resolves to the date it meant today).
     try:
-        event_date = _parse_target_date(context.args or [])
+        event_date = _parse_target_date(context.args or [], _today(update, context))
     except ValueError as e:
         await update.message.reply_text(f"{e}\n\n{CS2.usage}")
         return

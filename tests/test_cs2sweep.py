@@ -14,6 +14,7 @@ from telegram.error import BadRequest, TelegramError
 
 from ongabot import ongabot
 from ongabot.cs2.session import Cs2Match, Cs2Session, PlayerLine
+from tests.fake_clock import UTC, with_clock
 
 EVENT_DATE = date(2026, 9, 2)
 START_TIME = time(18, 30)
@@ -43,7 +44,7 @@ def _context(event=None, seen=None, quiet_since=None, deadline=None, message_id=
         event = MagicMock(cs2_reported=False, event_date=EVENT_DATE, cs2_message_id=message_id)
     event.chat_id = 123
 
-    chat = MagicMock()
+    chat = with_clock(MagicMock())
     chat.chat_id = 123
     chat.get_event_by_date.return_value = event
 
@@ -56,8 +57,8 @@ def _context(event=None, seen=None, quiet_since=None, deadline=None, message_id=
     context.job.data = {
         "event_date": EVENT_DATE,
         "seen": set(seen or []),
-        "quiet_since": quiet_since or datetime.now(),
-        "deadline": deadline or (datetime.now() + timedelta(hours=14)),
+        "quiet_since": quiet_since or datetime.now(UTC),
+        "deadline": deadline or (datetime.now(UTC) + timedelta(hours=14)),
     }
 
     return context, event
@@ -69,7 +70,7 @@ def _patch_session(session):
 
 def _settled():
     """A quiet_since far enough back that the night counts as over."""
-    return datetime.now() - ongabot.CS2_SWEEP_SETTLE - timedelta(minutes=1)
+    return datetime.now(UTC) - ongabot.CS2_SWEEP_SETTLE - timedelta(minutes=1)
 
 
 class Cs2SweepCallbackTest(unittest.IsolatedAsyncioTestCase):
@@ -161,7 +162,7 @@ class Cs2SweepCallbackTest(unittest.IsolatedAsyncioTestCase):
         context.job.schedule_removal.assert_not_called()
 
     async def test_gives_up_when_the_deadline_passes_with_leetify_still_unreachable(self):
-        context, _event = _context(deadline=datetime.now() - timedelta(minutes=1))
+        context, _event = _context(deadline=datetime.now(UTC) - timedelta(minutes=1))
 
         with _patch_session(None):
             await ongabot.cs2_sweep_callback(context)
@@ -169,7 +170,7 @@ class Cs2SweepCallbackTest(unittest.IsolatedAsyncioTestCase):
         context.job.schedule_removal.assert_called_once()
 
     async def test_gives_up_quietly_when_the_deadline_passes_with_nothing_found(self):
-        context, _event = _context(deadline=datetime.now() - timedelta(minutes=1))
+        context, _event = _context(deadline=datetime.now(UTC) - timedelta(minutes=1))
 
         with _patch_session(_session([])):
             await ongabot.cs2_sweep_callback(context)
@@ -179,7 +180,7 @@ class Cs2SweepCallbackTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_finalises_what_it_has_when_the_deadline_passes_with_matches_found(self):
         """Matches still arriving at 08:30 the next morning are not worth another 20 minutes."""
-        context, event = _context(deadline=datetime.now() - timedelta(minutes=1))
+        context, event = _context(deadline=datetime.now(UTC) - timedelta(minutes=1))
 
         with _patch_session(_session(["m1"])):
             await ongabot.cs2_sweep_callback(context)
@@ -246,48 +247,50 @@ class ScheduleCs2SweepTest(unittest.TestCase):
     def test_schedules_the_first_pass_at_the_events_start_time(self):
         job_queue = MagicMock()
         job_queue.get_jobs_by_name.return_value = []
-        upcoming = date.today() + timedelta(days=1)
+        upcoming = datetime.now(UTC).date() + timedelta(days=1)
 
-        ongabot.schedule_cs2_sweep(job_queue, 123, upcoming, START_TIME)
+        ongabot.schedule_cs2_sweep(job_queue, 123, upcoming, START_TIME, UTC)
 
         job_queue.run_repeating.assert_called_once()
         kwargs = job_queue.run_repeating.call_args.kwargs
         self.assertEqual(kwargs["chat_id"], 123)
-        self.assertEqual(kwargs["first"], datetime.combine(upcoming, START_TIME))
+        self.assertEqual(kwargs["first"], datetime.combine(upcoming, START_TIME, tzinfo=UTC))
         self.assertEqual(kwargs["interval"], ongabot.CS2_SWEEP_INTERVAL)
         self.assertEqual(kwargs["data"]["event_date"], upcoming)
         self.assertEqual(kwargs["data"]["seen"], set())
-        self.assertEqual(kwargs["data"]["deadline"], datetime.combine(upcoming, START_TIME) + ongabot.CS2_SWEEP_GIVE_UP)
+        self.assertEqual(
+            kwargs["data"]["deadline"], datetime.combine(upcoming, START_TIME, tzinfo=UTC) + ongabot.CS2_SWEEP_GIVE_UP
+        )
         self.assertIn(str(upcoming), kwargs["name"])
 
     def test_starts_immediately_when_the_start_time_has_already_passed(self):
         """A restart mid-evening must resume the sweep, not wait for tomorrow."""
         job_queue = MagicMock()
         job_queue.get_jobs_by_name.return_value = []
-        before = datetime.now()
+        before = datetime.now(UTC)
 
-        ongabot.schedule_cs2_sweep(job_queue, 123, date.today() - timedelta(days=1), START_TIME)
+        ongabot.schedule_cs2_sweep(job_queue, 123, datetime.now(UTC).date() - timedelta(days=1), START_TIME, UTC)
 
         first = job_queue.run_repeating.call_args.kwargs["first"]
         self.assertGreaterEqual(first, before)
-        self.assertLessEqual(first, datetime.now())
+        self.assertLessEqual(first, datetime.now(UTC))
 
     def test_does_not_schedule_a_second_sweep_for_the_same_event(self):
         """The daily scheduler and the completion fallback both reach for the same event."""
         job_queue = MagicMock()
         job_queue.get_jobs_by_name.return_value = [MagicMock()]
 
-        ongabot.schedule_cs2_sweep(job_queue, 123, EVENT_DATE, START_TIME)
+        ongabot.schedule_cs2_sweep(job_queue, 123, EVENT_DATE, START_TIME, UTC)
 
         job_queue.run_repeating.assert_not_called()
 
     def test_is_a_no_op_without_a_job_queue(self):
-        ongabot.schedule_cs2_sweep(None, 123, EVENT_DATE, START_TIME)
+        ongabot.schedule_cs2_sweep(None, 123, EVENT_DATE, START_TIME, UTC)
 
 
 class ScheduleTodaysCs2SweepsTest(unittest.IsolatedAsyncioTestCase):
     def _context(self, event=None):
-        chat = MagicMock()
+        chat = with_clock(MagicMock())
         chat.chat_id = 123
         chat.get_event_by_date.return_value = event
 
@@ -305,7 +308,7 @@ class ScheduleTodaysCs2SweepsTest(unittest.IsolatedAsyncioTestCase):
             await ongabot.schedule_todays_cs2_sweeps_callback(context)
 
         schedule.assert_called_once()
-        self.assertEqual(schedule.call_args.args[1:], (123, date.today(), START_TIME))
+        self.assertEqual(schedule.call_args.args[1:], (123, datetime.now(UTC).date(), START_TIME, UTC))
 
     async def test_skips_a_chat_without_an_event_today(self):
         context = self._context(None)
@@ -342,7 +345,7 @@ class CompletePastEventsSchedulesSweepTest(unittest.IsolatedAsyncioTestCase):
         event.poll_id = "poll1"
         event.update_status_message = AsyncMock()
 
-        chat = MagicMock()
+        chat = with_clock(MagicMock())
         chat.chat_id = 123
         chat.events = {event.event_date: event}
         chat.remove_pinned_poll = AsyncMock()
@@ -360,7 +363,7 @@ class CompletePastEventsSchedulesSweepTest(unittest.IsolatedAsyncioTestCase):
             await ongabot.complete_past_events_callback(context)
 
         schedule.assert_called_once()
-        self.assertEqual(schedule.call_args.args[1:], (123, date(2020, 1, 1), START_TIME))
+        self.assertEqual(schedule.call_args.args[1:], (123, date(2020, 1, 1), START_TIME, UTC))
 
     async def test_does_not_schedule_a_sweep_for_a_cancelled_event(self):
         context = self._context(cancelled=True)

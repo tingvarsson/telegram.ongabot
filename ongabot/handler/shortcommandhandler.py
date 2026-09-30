@@ -1,7 +1,6 @@
 """This module contains the ShortCommandHandler class."""
 
 import logging
-from datetime import datetime
 from typing import List, Sequence
 
 from telegram import Update
@@ -110,7 +109,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
     # Recorded before the send, with no await in between since the pick: this handler is
     # non-blocking, so a second /short sent while this one's send is in flight would otherwise
     # pick the same Short from the cached list and post it twice.
-    chat.record_shorts_post(video.video_id, datetime.now())
+    chat.record_shorts_post(video.video_id, chat.now())
     try:
         # A Short reads as a post of its own, not an answer to the command message itself.
         await update.message.reply_text(render_short_message(video, topics), do_quote=False)

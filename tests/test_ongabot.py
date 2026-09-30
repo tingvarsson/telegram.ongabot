@@ -10,6 +10,7 @@ from ongabot import ongabot
 from ongabot.chat import Chat
 from ongabot.ongabot import post_init, setup_bot_metadata
 from ongabot.verification import VerificationVote
+from tests.fake_clock import with_clock
 
 
 class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
@@ -26,7 +27,7 @@ class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
         event2.poll_id = "poll2"
         event2.update_status_message = AsyncMock()
 
-        chat = MagicMock()
+        chat = with_clock(MagicMock())
         chat.events = {date(2020, 1, 1): event1, date(2020, 1, 2): event2}
         chat.remove_pinned_poll = AsyncMock()
 
@@ -53,7 +54,7 @@ class CompletePastEventsCallbackTest(unittest.IsolatedAsyncioTestCase):
         event2.poll_id = "poll2"
         event2.update_status_message = AsyncMock()
 
-        chat = MagicMock()
+        chat = with_clock(MagicMock())
         chat.events = {date(2020, 1, 1): event1, date(2020, 1, 2): event2}
         chat.remove_pinned_poll = AsyncMock(side_effect=[TelegramError("forbidden"), None])
 
@@ -74,7 +75,7 @@ class CompletePastEventsHappyPathTest(unittest.IsolatedAsyncioTestCase):
         event.poll_id = "poll1"
         event.update_status_message = AsyncMock()
 
-        chat = MagicMock()
+        chat = with_clock(MagicMock())
         chat.events = {date(2020, 1, 1): event}
         chat.remove_pinned_poll = AsyncMock()
 
@@ -86,6 +87,28 @@ class CompletePastEventsHappyPathTest(unittest.IsolatedAsyncioTestCase):
         event.mark_complete.assert_called_once()
         event.update_status_message.assert_called_once_with(context.bot, unverified=chat.unverified)
         chat.remove_pinned_poll.assert_called_once_with("poll1")
+
+    async def test_each_chat_completes_at_its_own_midnight(self):
+        """Tokyo is already on the next day while UTC is still on the event's day."""
+        event_date = date(2026, 10, 7)
+
+        def chat_on(today):
+            event = MagicMock(completed=False, cancelled=True, event_date=event_date, poll_id="poll")
+            event.update_status_message = AsyncMock()
+            chat = MagicMock(events={event_date: event})
+            chat.today.return_value = today
+            chat.remove_pinned_poll = AsyncMock()
+            return chat, event
+
+        tokyo_chat, tokyo_event = chat_on(date(2026, 10, 8))
+        utc_chat, utc_event = chat_on(event_date)
+        context = MagicMock()
+        context.bot_data.chats = {1: tokyo_chat, 2: utc_chat}
+
+        await ongabot.complete_past_events_callback(context)
+
+        tokyo_event.mark_complete.assert_called_once()
+        utc_event.mark_complete.assert_not_called()
 
 
 def _make_past_event(poll_id: str, day: int, cancelled: bool = False):
@@ -114,7 +137,7 @@ class CompletePastEventsRecapTest(unittest.IsolatedAsyncioTestCase):
     """The Banger Points recap posted when the daily sweep completes an event."""
 
     def _make_chat(self, *events):
-        chat = MagicMock()
+        chat = with_clock(MagicMock())
         chat.chat_id = 42
         chat.events = {event.event_date: event for event in events}
         chat.remove_pinned_poll = AsyncMock()
@@ -188,8 +211,8 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
         # Should not raise
         await post_init(application)
 
-        # Event cleanup (startup + daily), the hourly CS2 sweep and poke schedulers, and the
-        # CS2 patch-notes poll are all registered.
+        # Hourly event cleanup (from right after boot), the hourly CS2 sweep and poke
+        # schedulers, and the CS2 patch-notes poll are all registered.
         scheduled = [
             call.kwargs["name"]
             for calls in (
@@ -203,7 +226,6 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
             sorted(scheduled),
             [
                 "complete_past_events",
-                "complete_past_events_startup",
                 "cs2_patchnotes_sweep",
                 "cs2_sweeps",
                 "poke_schedule",

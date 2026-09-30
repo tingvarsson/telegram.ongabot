@@ -17,17 +17,27 @@ _logger = logging.getLogger(__name__)
 @log
 async def create_event_callback(context: CallbackContext) -> None:
     """Create the event on callback, after extracting chat_id from job.context"""
-    _logger.debug("Poll creation is triggered by timer on %s", datetime.now())
     if context.job is None or context.job.chat_id is None:
         _logger.error("Received event creation callback without job or chat_id in context")
         return
 
     chat: Chat = context.bot_data.get_chat(context.job.chat_id)
+    _logger.debug("Poll creation for chat_id=%s is triggered by timer at %s", chat.chat_id, chat.now())
     if chat.event_job is None:
         _logger.error("No event job found for chat_id %s in create_event_callback", context.job.chat_id)
         return
 
-    await create_event(context, context.job.chat_id, chat.event_job.to_event_data())
+    today = chat.today()
+    last = chat.event_job.last_triggered_on
+    if last is not None and last >= today:
+        # A /timezone move to a zone further west puts today's trigger time ahead again after
+        # it already ran; the week's poll exists, so the second firing is skipped quietly.
+        _logger.info("Weekly trigger for chat_id=%s already ran on %s; skipping", chat.chat_id, last)
+        return
+    # Recorded before the poll is sent, so a restart never re-creates this week's poll; see
+    # EventJob.missed_event_date.
+    chat.event_job.last_triggered_on = today
+    await create_event(context, context.job.chat_id, chat.event_job.to_event_data(today))
 
 
 @log
@@ -113,7 +123,8 @@ def _create_poll_text(event_date: date, start_time: time) -> str:
 
 def _create_poll_options(start_time: time, num_slots: int) -> list[str]:
     """Create poll options: num_slots time options at 40-min intervals, then No-op and Maybe Baby"""
-    dt = datetime.combine(date.today(), start_time)
+    # Any date will do: only the times are formatted.
+    dt = datetime.combine(date.min, start_time)
     options = []
     for _ in range(num_slots):
         options.append(dt.strftime("%H.%M"))

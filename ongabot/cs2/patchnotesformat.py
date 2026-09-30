@@ -13,6 +13,7 @@ from typing import List, Tuple
 
 from cs2.bbcode import render_bbcode_to_lines
 from cs2.steamnews import SteamNewsItem
+from utils import clock
 from utils.htmlblocks import pack_sections
 
 _logger = logging.getLogger(__name__)
@@ -23,10 +24,10 @@ FULL_NOTES_LABEL = "Full notes on Steam"
 def _render_header(item: SteamNewsItem) -> str:
     """The one line that stays visible when the body is collapsed.
 
-    The date is in the server's local time, like event dates: the bot runs in the group's
-    timezone, so a late-evening patch shows the date the group saw it.
+    The date is in the bot's default zone (BOT_TIMEZONE): one rendering goes to every
+    subscribed chat, so it cannot follow each chat's own /timezone.
     """
-    posted = datetime.date.fromtimestamp(item.date).isoformat()
+    posted = datetime.datetime.fromtimestamp(item.date, clock.bot_timezone()).date().isoformat()
     return f"<b>{html.escape(item.title, quote=False)}</b> · <i>{posted}</i>"
 
 

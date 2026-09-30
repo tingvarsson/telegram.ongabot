@@ -14,7 +14,7 @@ one person uses Leetify still gets full results, which is the point.
 import logging
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone, tzinfo
 from typing import TYPE_CHECKING, Dict, List, Mapping, Optional, Protocol, Sequence, Set, Tuple
 
 from telegram import User
@@ -181,21 +181,21 @@ def steam_links(chat: "Chat", user_data: Mapping[int, "UserData"]) -> Dict[int, 
     return links
 
 
-def local_date(finished_at: str) -> Optional[date]:
-    """Convert a Leetify UTC timestamp to the calendar date it falls on in server local time.
+def local_date(finished_at: str, tz: tzinfo) -> Optional[date]:
+    """Convert a Leetify UTC timestamp to the calendar date it falls on in the chat's zone tz.
 
-    Leetify reports finished_at as "...Z"; events are dated in local time. Comparing the two
-    without converting is silently wrong for evening games under CEST - a 22:30Z match is
-    already the next morning locally.
+    Leetify reports finished_at as "...Z"; events are dated in the chat's local time. Comparing
+    the two without converting is silently wrong for evening games under CEST - a 22:30Z match
+    is already the next morning locally.
     """
-    parsed = _parse_finished_at(finished_at)
+    parsed = _parse_finished_at(finished_at, tz)
     return None if parsed is None else parsed.date()
 
 
-def _parse_finished_at(finished_at: str) -> Optional[datetime]:
-    """Parse a Leetify UTC timestamp into a local-time datetime, or None if malformed."""
+def _parse_finished_at(finished_at: str, tz: tzinfo) -> Optional[datetime]:
+    """Parse a Leetify UTC timestamp into a datetime in the chat's zone tz, or None if malformed."""
     try:
-        return datetime.fromisoformat(finished_at.replace("Z", "+00:00")).astimezone()
+        return datetime.fromisoformat(finished_at.replace("Z", "+00:00")).astimezone(tz)
     except (AttributeError, ValueError):
         _logger.warning("Could not parse Leetify finished_at=%r", finished_at)
         return None
@@ -245,8 +245,9 @@ async def _candidate_match_ids(
     client: MatchSource,
     event_date: date,
     steam64_ids: Sequence[str],
+    tz: tzinfo,
 ) -> Tuple[Optional[List[str]], int]:
-    """Collect ids of qualifying matches on event_date, plus how many histories we could read.
+    """Collect ids of qualifying matches on event_date in zone tz, plus how many histories we could read.
 
     Returns (None, 0) only when nobody's history could be read at all - the caller treats
     that as "Leetify unreachable" rather than "nobody played". Order is preserved so the
@@ -262,7 +263,7 @@ async def _candidate_match_ids(
         for summary in history:
             if summary.data_source not in QUALIFYING_SOURCES:
                 continue
-            if local_date(summary.finished_at) != event_date:
+            if local_date(summary.finished_at, tz) != event_date:
                 continue
             seen.setdefault(summary.id, None)
 
@@ -276,12 +277,14 @@ async def build_session(
     client: MatchSource,
     event_date: date,
     links: Mapping[int, str],
+    tz: tzinfo,
 ) -> Optional[Cs2Session]:
     """Build the session for event_date from the chat's Telegram-user-id -> Steam64 links.
 
     Returns None when Leetify could not be reached for a single linked member, so a sweep can
     retry instead of announcing that nobody played. Returns a session with no matches when
-    Leetify answered but nothing qualifying was found.
+    Leetify answered but nothing qualifying was found. tz is the chat's zone: it decides which
+    calendar day a match belongs to, and match end times are shown in it.
     """
     if not links:
         _logger.debug("No linked members, nothing to look up for %s", event_date)
@@ -289,7 +292,7 @@ async def build_session(
 
     user_by_steam64 = {steam64_id: user_id for user_id, steam64_id in links.items()}
 
-    match_ids, reachable = await _candidate_match_ids(client, event_date, list(links.values()))
+    match_ids, reachable = await _candidate_match_ids(client, event_date, list(links.values()), tz)
     if match_ids is None:
         _logger.warning("No Leetify history could be read for any of %d linked members", len(links))
         return None
@@ -315,7 +318,7 @@ async def build_session(
             Cs2Match(
                 id=detail.id,
                 map_name=detail.map_name,
-                finished_at=_parse_finished_at(detail.finished_at),
+                finished_at=_parse_finished_at(detail.finished_at, tz),
                 score=_score_for(detail, our_team),
                 our_team=our_team,
                 players=players,
@@ -324,7 +327,7 @@ async def build_session(
 
     # datetime.min keeps a match with an unparseable timestamp in the list rather than
     # crashing the sort; it simply sorts first.
-    matches.sort(key=lambda match: match.finished_at or datetime.min.astimezone())
+    matches.sort(key=lambda match: match.finished_at or datetime.min.replace(tzinfo=timezone.utc))
 
     _logger.info(
         "CS2 session for %s: %d qualifying match(es) from %d readable history/histories",

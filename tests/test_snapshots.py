@@ -214,13 +214,17 @@ def code_blocks(markdown_v2: str) -> List[List[str]]:
 
 
 _saved_tz = None
+_saved_bot_tz = None
 
 
 def setUpModule():  # pylint: disable=invalid-name  # unittest's hook name
-    global _saved_tz  # pylint: disable=global-statement
+    global _saved_tz, _saved_bot_tz  # pylint: disable=global-statement
     _saved_tz = os.environ.get("TZ")
     os.environ["TZ"] = SNAPSHOT_TZ
     time.tzset()
+    # Patch-note dates are rendered in the bot's default zone rather than the host's.
+    _saved_bot_tz = os.environ.get("BOT_TIMEZONE")
+    os.environ["BOT_TIMEZONE"] = SNAPSHOT_TZ
 
 
 def tearDownModule():  # pylint: disable=invalid-name  # unittest's hook name
@@ -229,6 +233,10 @@ def tearDownModule():  # pylint: disable=invalid-name  # unittest's hook name
     else:
         os.environ["TZ"] = _saved_tz
     time.tzset()
+    if _saved_bot_tz is None:
+        os.environ.pop("BOT_TIMEZONE", None)
+    else:
+        os.environ["BOT_TIMEZONE"] = _saved_bot_tz
 
 
 class SnapshotTest(unittest.TestCase):

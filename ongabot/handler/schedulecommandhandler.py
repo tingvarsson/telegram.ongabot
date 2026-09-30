@@ -46,7 +46,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
         return
 
     event_job = EventJob(update.effective_chat.id, trigger_on, event_day, start_time, num_slots)
-    job = event_job.schedule(context.job_queue, create_event_callback)
+    job = event_job.schedule(context.job_queue, create_event_callback, chat.tz)
     chat.set_event_job(event_job)
 
     if job.next_t is None:
