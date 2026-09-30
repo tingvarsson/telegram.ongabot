@@ -188,8 +188,8 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
         # Should not raise
         await post_init(application)
 
-        # Event cleanup (startup + daily), the hourly CS2 sweep scheduler, and the CS2
-        # patch-notes poll are all registered.
+        # Event cleanup (startup + daily), the hourly CS2 sweep and poke schedulers, and the
+        # CS2 patch-notes poll are all registered.
         scheduled = [
             call.kwargs["name"]
             for calls in (
@@ -206,6 +206,7 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
                 "complete_past_events_startup",
                 "cs2_patchnotes_sweep",
                 "cs2_sweeps",
+                "poke_schedule",
             ],
         )
 

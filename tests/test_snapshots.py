@@ -26,6 +26,7 @@ from ongabot.chat import Chat
 from ongabot.cs2.format import format_session
 from ongabot.cs2.patchnotesformat import render_patch_notes_html
 from ongabot.handler.shortcommandhandler import render_short_message
+from ongabot.poke import render_poke_message
 from ongabot.shrink import render_shrink_message
 from ongabot.utils import helper
 from ongabot.utils.changelogformat import CHANGELOG_HEADING, render_changelog_html
@@ -131,6 +132,14 @@ def _vote_replies() -> List[str]:
     return replies
 
 
+def _poke() -> List[str]:
+    """The morning poke at every fixture user, with the unverified ones badged."""
+    chat = _unverified_chat()
+    event = message_fixtures.latest_event(chat)
+    with patch("ongabot.poke.next_banter", return_value=quips.POOLS[quips.Banter.POKE][0]):
+        return [render_poke_message(event, message_fixtures.users(), chat.unverified)]
+
+
 def _shorts() -> List[str]:
     """Both /short header shapes: the weekly Gaming chart, and topics widened to the month."""
     weekly = SelectedVideo(
@@ -187,6 +196,7 @@ RENDERS: Dict[str, Render] = {
     "help": (check_plain_text, _help),
     "help_private": (check_plain_text, lambda: _help(private=True)),
     "vote_replies": (check_plain_text, _vote_replies),
+    "poke": (check_html, _poke),
     "short": (check_plain_text, _shorts),
     "shrink": (check_plain_text, _shrink_sessions),
 }

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- On game day morning, if no slot has a full five-stack yet, the bot pokes the regulars who
+  haven't voted.
+
 ## [1.12.0] - 2026-09-30
 
 ### Added
