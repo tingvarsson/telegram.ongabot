@@ -28,6 +28,7 @@ from chat import Chat
 from event import Event
 from utils.codeblock import pad_for_phone
 from utils.statistics import NO_OP_TEXT, display_names, format_name_cell, group_slot_texts
+from verification import unverified_footer
 
 _logger = logging.getLogger(__name__)
 
@@ -492,7 +493,9 @@ def format_event_recap(result: PointsResult, event: Event, previous: Optional[Po
 
 def render_leaderboard_message(chat: Chat) -> str:
     """Compute Banger Points fresh and render the /leaderboard reply text."""
-    return format_leaderboard(compute_points(chat))
+    text = format_leaderboard(compute_points(chat))
+    footer = unverified_footer(chat.unverified.values())
+    return f"{text}\n\n{footer}" if footer else text
 
 
 def render_event_recap_message(chat: Chat, event: Event) -> str:

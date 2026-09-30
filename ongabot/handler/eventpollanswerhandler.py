@@ -2,13 +2,16 @@
 
 import logging
 from datetime import timedelta
+from typing import Optional, cast
 
-from telegram import Update
+from telegram import PollAnswer, Update, User
 from telegram.ext import CallbackContext, JobQueue, PollAnswerHandler
 
-from quips import build_retraction_reply, build_vote_reply, categorize
+from chat import Chat
+from quips import Answer, build_retraction_reply, build_vote_reply, categorize
 from userdata import UserData
 from utils.log import log
+from verification import badged
 
 _logger = logging.getLogger(__name__)
 
@@ -33,7 +36,11 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     event = context.bot_data.get_event(update.poll_answer.poll_id)
     if event is None:
-        _logger.error("Received poll answer update for unknown poll_id=%s", update.poll_answer.poll_id)
+        if context.bot_data.is_verification_poll(update.poll_answer.poll_id):
+            # /unverify and /verify polls are tallied when they close, see verification.py.
+            _logger.debug("Ignoring poll answer for verification poll_id=%s", update.poll_answer.poll_id)
+        else:
+            _logger.error("Received poll answer update for unknown poll_id=%s", update.poll_answer.poll_id)
         return
 
     if context.user_data is None:
@@ -46,6 +53,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     poll_id = update.poll_answer.poll_id
     user_id = update.poll_answer.user.id
+    chat = context.bot_data.get_chat(event.chat_id)
     job_queue = context.job_queue
     if job_queue is None:
         _logger.warning("No job queue for poll_id=%s; retraction replies are disabled", poll_id)
@@ -61,9 +69,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     response = None
     if update.poll_answer.option_ids:
-        new = categorize(update.poll_answer.option_ids, event.num_slots)
-        _logger.debug("Vote by user_id=%s on poll_id=%s: %s -> %s", user_id, poll_id, previous, new)
-        response = build_vote_reply(update.poll_answer.user.name, previous, new)
+        response = _build_reply(chat, update.poll_answer, previous, event.num_slots)
     elif previous is not None and job_queue is not None:
         # A retraction is usually the first half of a vote change, so only reply if no new
         # vote follows within RETRACTION_REPLY_DELAY.
@@ -72,7 +78,6 @@ async def callback(update: Update, context: CallbackContext) -> None:
     user_data.set_poll_answer(poll_id, update.poll_answer.option_ids)
 
     if update.poll_answer.option_ids:
-        chat = context.bot_data.get_chat(event.chat_id)
         # Cancelled events are excluded so they neither count towards nor break a streak.
         active_events = [e for e in chat.events.values() if not e.cancelled]
         poll_id_to_date = {e.poll_id: e.event_date for e in active_events}
@@ -87,10 +92,27 @@ async def callback(update: Update, context: CallbackContext) -> None:
             event.user_played_streaks[user_id],
         )
 
-    await event.update_status_message(context.bot)
+    await event.update_status_message(context.bot, unverified=chat.unverified)
 
     if response:
         await context.bot.send_message(event.chat_id, response)
+
+
+def _build_reply(chat: Chat, poll_answer: PollAnswer, previous: Optional[Answer], num_slots: int) -> str:
+    """Build the reply to a (non-empty) vote; a voter the group voted unverified gets roasted."""
+    # The callback only gets here with a user, see its guard at the top.
+    user = cast(User, poll_answer.user)
+    unverified = chat.is_unverified(user.id)
+    new = categorize(poll_answer.option_ids, num_slots)
+    _logger.debug(
+        "Vote by user_id=%s on poll_id=%s: %s -> %s (unverified=%s)",
+        user.id,
+        poll_answer.poll_id,
+        previous,
+        new,
+        unverified,
+    )
+    return build_vote_reply(badged(user.name, unverified), previous, new, unverified)
 
 
 def _retraction_job_name(poll_id: str, user_id: int) -> str:
@@ -151,5 +173,13 @@ async def retraction_reply_callback(context: CallbackContext) -> None:
         return
 
     previous = categorize(last_ids, event.num_slots)
-    _logger.info("Sending retraction reply for user_id=%s on poll_id=%s (%s)", user_data.user.id, poll_id, previous)
-    await context.bot.send_message(event.chat_id, build_retraction_reply(user_data.user.name, previous))
+    unverified = context.bot_data.get_chat(event.chat_id).is_unverified(user_data.user.id)
+    _logger.info(
+        "Sending retraction reply for user_id=%s on poll_id=%s (%s, unverified=%s)",
+        user_data.user.id,
+        poll_id,
+        previous,
+        unverified,
+    )
+    name = badged(user_data.user.name, unverified)
+    await context.bot.send_message(event.chat_id, build_retraction_reply(name, previous, unverified))

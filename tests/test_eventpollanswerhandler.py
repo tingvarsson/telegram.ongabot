@@ -47,6 +47,8 @@ def _make_context(user_data, event, chat_events=None):
 
     chat = MagicMock()
     chat.events = chat_events or {}
+    chat.unverified = {}
+    chat.is_unverified.return_value = False
     context.bot_data.get_chat.return_value = chat
 
     return context
@@ -118,7 +120,7 @@ class EventPollAnswerStreakTest(unittest.IsolatedAsyncioTestCase):
 
         streaks_at_call_time = {}
 
-        async def capture_streaks(bot):
+        async def capture_streaks(bot, **_kwargs):
             streaks_at_call_time.update(event.user_streaks)
 
         event.update_status_message = capture_streaks
@@ -242,7 +244,7 @@ class EventPollAnswerPlayedStreakTest(unittest.IsolatedAsyncioTestCase):
 
         played_at_call_time = {}
 
-        async def capture_played_streaks(bot):
+        async def capture_played_streaks(bot, **_kwargs):
             played_at_call_time.update(event.user_played_streaks)
 
         event.update_status_message = capture_played_streaks
@@ -359,6 +361,35 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
 
         context.bot.send_message.assert_not_called()
 
+    async def test_unverified_voter_gets_the_badge_and_a_roast(self):
+        user_data, event = UserData(), self._make_event()
+        context = self._context(user_data, event)
+        chat = context.bot_data.get_chat.return_value
+        chat.is_unverified.side_effect = lambda user_id: user_id == 42
+        chat.unverified = {42: "Will"}
+
+        await callback(self._make_update("poll1", 42, (0,), user_name="Will"), context)
+
+        context.bot.send_message.assert_called_once_with(event.chat_id, "🔞 Will votes game — <UNVERIFIED>")
+        event.update_status_message.assert_awaited_once_with(context.bot, unverified={42: "Will"})
+
+
+class EventPollAnswerVerificationPollTest(unittest.IsolatedAsyncioTestCase):
+    """Answers to /unverify and /verify polls reach this handler too, and are ignored quietly."""
+
+    async def test_verification_poll_is_ignored_without_an_error(self):
+        update = MagicMock()
+        update.poll_answer.poll_id = "vote1"
+        context = MagicMock()
+        context.bot_data.get_event.return_value = None
+        context.bot_data.is_verification_poll.return_value = True
+
+        with self.assertNoLogs(level="ERROR"):
+            await callback(update, context)
+
+        context.bot_data.is_verification_poll.assert_called_once_with("vote1")
+        context.bot.send_message.assert_not_called()
+
 
 class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
     """A vote that is retracted and not replaced within RETRACTION_REPLY_DELAY gets a reply."""
@@ -430,6 +461,7 @@ class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
         context.job.data = "poll1"
         context.user_data = user_data
         context.bot_data.get_event.return_value = event
+        context.bot_data.get_chat.return_value.is_unverified.return_value = False
         context.bot.send_message = AsyncMock()
         return context
 

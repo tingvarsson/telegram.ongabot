@@ -190,5 +190,25 @@ class EventStatusMessageStarTest(unittest.TestCase):
         self.assertNotIn("★", event._create_status_message_text(5))
 
 
+class EventStatusMessageUnverifiedBadgeTest(unittest.TestCase):
+    """A member the group voted unverified gets the 🔞 badge next to their mention."""
+
+    def setUp(self):
+        self.user = User(id=42, first_name="Alice", is_bot=False)
+
+    def test_unverified_voter_and_first_answer_get_the_badge(self):
+        event = _make_event_with_answer(self.user, [0])
+        event.first_answer = self.user
+
+        message = event._create_status_message_text(5, unverified={42: "Alice"})
+
+        self.assertEqual(message.count("🔞 [Alice](tg://user?id=42)"), 2)
+
+    def test_verified_voter_has_no_badge(self):
+        event = _make_event_with_answer(self.user, [0])
+
+        self.assertNotIn("🔞", event._create_status_message_text(5, unverified={7: "Bob"}))
+
+
 if __name__ == "__main__":
     unittest.main()

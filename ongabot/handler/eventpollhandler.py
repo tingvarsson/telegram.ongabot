@@ -26,7 +26,12 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     event = context.bot_data.get_event(update.poll.id)
     if event is None:
-        _logger.error("Received poll update for unknown poll_id=%s", update.poll.id)
+        if context.bot_data.is_verification_poll(update.poll.id):
+            # /unverify and /verify polls are tallied when they close, see verification.py.
+            _logger.debug("Ignoring poll update for verification poll_id=%s", update.poll.id)
+        else:
+            _logger.error("Received poll update for unknown poll_id=%s", update.poll.id)
         return
     event.update_poll(update.poll)
-    await event.update_status_message(context.bot)
+    chat = context.bot_data.get_chat(event.chat_id)
+    await event.update_status_message(context.bot, unverified=chat.unverified)
