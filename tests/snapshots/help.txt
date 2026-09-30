@@ -17,6 +17,7 @@ Commandments:
 /schedule [trigger_on=<weekday>] [day=<weekday>] [time=<HH:MM>] [slots=<n>] - Schedule weekly poll creation (defaults: sunday → wednesday, 18:30, 5 slots)
 /reschedule [trigger_on=<weekday>] [day=<weekday>] [time=<HH:MM>] [slots=<n>] - Update the weekly schedule
 /deschedule - Remove the weekly schedule
+/timezone [<zone>|default] - Show or set the chat's timezone
 /authorize - Authorize this chat to use ONGAbot (bot admins only)
 /deauthorize - Deauthorize this chat from using ONGAbot (bot admins only)
 /statistics - Show all-time participation statistics for the group

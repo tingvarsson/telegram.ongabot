@@ -5,6 +5,7 @@ import unittest
 from datetime import date, datetime, time, timedelta
 from typing import Dict, List, Tuple
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 from telegram import User
 from telegram.constants import ChatMemberStatus, ParseMode
@@ -15,6 +16,8 @@ from ongabot.chat import Chat
 from ongabot.event import Event
 from tests import message_fixtures
 
+# Not UTC, so a time read in the wrong zone shows up as hours off.
+TOKYO = ZoneInfo("Asia/Tokyo")
 # Always a week ahead, so the poke's has-it-started check never sees it as over.
 EVENT_DATE = date.today() + timedelta(weeks=1)
 CHAT_ID = message_fixtures.CHAT_ID
@@ -78,13 +81,15 @@ class PokeLeadTimeTest(unittest.TestCase):
 class PokeTimeTest(unittest.TestCase):
     def test_default_start_pokes_in_the_morning(self):
         with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(poke.poke_time(_event(EVENT_DATE, {})), datetime.combine(EVENT_DATE, time(8, 30)))
+            self.assertEqual(
+                poke.poke_time(_event(EVENT_DATE, {}), TOKYO), datetime.combine(EVENT_DATE, time(8, 30), tzinfo=TOKYO)
+            )
 
     def test_never_pokes_the_day_before(self):
         event = _event(EVENT_DATE, {})
         event.data.start_time = time(9, 0)
         with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(poke.poke_time(event), datetime.combine(EVENT_DATE, time(0, 0)))
+            self.assertEqual(poke.poke_time(event, TOKYO), datetime.combine(EVENT_DATE, time(0, 0), tzinfo=TOKYO))
 
 
 class SchedulePokeTest(unittest.TestCase):
@@ -100,22 +105,26 @@ class SchedulePokeTest(unittest.TestCase):
         kwargs = self.job_queue.run_once.call_args.kwargs
         self.assertEqual(kwargs["name"], poke.poke_job_name(CHAT_ID, EVENT_DATE))
         self.assertEqual(kwargs["data"], EVENT_DATE)
-        # Aware in local time, so the JobQueue does not read a local wall-clock time as UTC.
-        self.assertIsNotNone(kwargs["when"].tzinfo)
-        return kwargs["when"].replace(tzinfo=None)
+        # Aware in the chat's zone, so the JobQueue does not read a local wall-clock time as UTC.
+        self.assertEqual(kwargs["when"].tzinfo, TOKYO)
+        return kwargs["when"]
 
     def test_schedules_at_the_poke_time(self):
-        poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime.combine(EVENT_DATE, time(0, 5)))
-        self.assertEqual(self._scheduled_at(), datetime.combine(EVENT_DATE, time(8, 30)))
+        poke.schedule_poke(
+            self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime.combine(EVENT_DATE, time(0, 5), tzinfo=TOKYO)
+        )
+        self.assertEqual(self._scheduled_at(), datetime.combine(EVENT_DATE, time(8, 30), tzinfo=TOKYO))
 
     def test_runs_right_away_when_the_poke_time_has_passed(self):
         """A restart at noon still gets the poke out before the game."""
-        now = datetime.combine(EVENT_DATE, time(12, 0))
+        now = datetime.combine(EVENT_DATE, time(12, 0), tzinfo=TOKYO)
         poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), now)
         self.assertEqual(self._scheduled_at(), now)
 
     def test_nothing_once_the_event_has_started(self):
-        poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime.combine(EVENT_DATE, time(18, 30)))
+        poke.schedule_poke(
+            self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime.combine(EVENT_DATE, time(18, 30), tzinfo=TOKYO)
+        )
         self.job_queue.run_once.assert_not_called()
 
     def test_nothing_for_a_poked_cancelled_or_completed_event(self):
@@ -123,12 +132,16 @@ class SchedulePokeTest(unittest.TestCase):
             with self.subTest(flag=flag):
                 event = _event(EVENT_DATE, {})
                 setattr(event, flag, True)
-                poke.schedule_poke(self.job_queue, CHAT_ID, event, datetime.combine(EVENT_DATE, time(0, 5)))
+                poke.schedule_poke(
+                    self.job_queue, CHAT_ID, event, datetime.combine(EVENT_DATE, time(0, 5), tzinfo=TOKYO)
+                )
                 self.job_queue.run_once.assert_not_called()
 
     def test_scheduling_twice_is_a_no_op(self):
         self.job_queue.get_jobs_by_name.return_value = [MagicMock()]
-        poke.schedule_poke(self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime.combine(EVENT_DATE, time(0, 5)))
+        poke.schedule_poke(
+            self.job_queue, CHAT_ID, _event(EVENT_DATE, {}), datetime.combine(EVENT_DATE, time(0, 5), tzinfo=TOKYO)
+        )
         self.job_queue.run_once.assert_not_called()
 
 

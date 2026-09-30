@@ -1,12 +1,17 @@
+import os
 import pickle
 import unittest
 from datetime import date, datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo
 
 from ongabot.chat import SHORTS_HISTORY_DAYS, Chat
 from ongabot.event import Event
 from ongabot.eventdata import EventData
+from ongabot.eventjob import EventJob
 from ongabot.youtube.selection import PostedShort
+
+TOKYO = ZoneInfo("Asia/Tokyo")
 
 # The daily-Short attributes /short no longer keeps; Chat drops them when an old pickle loads.
 STALE_SHORTS_ATTRS = ("topic_scores", "posted_shorts", "last_shorts_posted_date")
@@ -414,6 +419,93 @@ class ChatSetStateShortsMigrationTest(unittest.TestCase):
         self.assertEqual(restored.recent_video_ids, {"abc": date(2026, 9, 1)})
         for stale in STALE_SHORTS_ATTRS:
             self.assertFalse(hasattr(restored, stale), stale)
+
+
+class ChatTimezoneTest(unittest.TestCase):
+    def setUp(self):
+        env = patch.dict(os.environ, {}, clear=True)
+        env.start()
+        self.addCleanup(env.stop)
+
+    def test_follows_the_bot_default_until_set(self):
+        with patch.dict(os.environ, {"BOT_TIMEZONE": "Europe/Stockholm"}):
+            self.assertEqual(Chat(1).tz, ZoneInfo("Europe/Stockholm"))
+
+    def test_own_zone_wins_over_the_bot_default(self):
+        chat = Chat(1)
+        chat.set_timezone("Asia/Tokyo")
+        with patch.dict(os.environ, {"BOT_TIMEZONE": "Europe/Stockholm"}):
+            self.assertEqual(chat.tz, TOKYO)
+
+    def test_reset_follows_the_bot_default_again(self):
+        chat = Chat(1)
+        chat.set_timezone("Asia/Tokyo")
+        chat.set_timezone(None)
+        self.assertEqual(chat.tz, ZoneInfo("UTC"))
+
+    def test_a_zone_no_longer_known_falls_back_with_a_warning(self):
+        chat = Chat(1)
+        chat.timezone_name = "Atlantis/Lost"
+        with self.assertLogs("ongabot.chat", level="WARNING"):
+            self.assertEqual(chat.tz, ZoneInfo("UTC"))
+
+    def test_now_and_today_are_in_the_chat_zone(self):
+        chat = Chat(1)
+        chat.set_timezone("Asia/Tokyo")
+        self.assertEqual(chat.now().tzinfo, TOKYO)
+        self.assertEqual(chat.today(), chat.now().date())
+
+    def test_old_pickle_follows_the_bot_default(self):
+        chat = Chat.__new__(Chat)
+        chat.__setstate__({"chat_id": 1, "events": {}, "event_job": None, "pinned_polls": {}})
+        self.assertIsNone(chat.timezone_name)
+
+
+class ChatScheduleEventJobTest(unittest.TestCase):
+    """The weekly job is scheduled in the chat's zone, and a missed trigger is caught up (Q15)."""
+
+    # Sunday 21:00 in Tokyo: the default Sunday 20:00 trigger has just passed.
+    NOW = datetime(2026, 10, 4, 21, 0, tzinfo=TOKYO)
+    WEDNESDAY = date(2026, 10, 7)
+
+    def setUp(self):
+        self.chat = Chat(1)
+        self.chat.set_timezone("Asia/Tokyo")
+        self.chat.set_event_job(EventJob(1))
+        self.chat.event_job.last_triggered_on = date(2026, 9, 27)
+        self.job_queue = MagicMock()
+
+    def test_schedules_in_the_chat_zone(self):
+        job = self.chat.schedule_event_job(self.job_queue, "callback", self.NOW)
+
+        self.assertIs(job, self.job_queue.run_daily.return_value)
+        self.assertEqual(self.job_queue.run_daily.call_args.kwargs["time"].tzinfo, TOKYO)
+
+    def test_creates_the_missed_poll_right_away(self):
+        with self.assertLogs("ongabot.chat", level="INFO") as logs:
+            self.chat.schedule_event_job(self.job_queue, "callback", self.NOW)
+
+        self.job_queue.run_once.assert_called_once_with("callback", when=0, chat_id=1, name="weeky_event_1_catchup")
+        self.assertTrue(any("missed" in line for line in logs.output))
+
+    def test_no_catch_up_when_the_event_already_has_a_poll(self):
+        self.chat.add_event(_make_event("p1", self.WEDNESDAY))
+
+        self.chat.schedule_event_job(self.job_queue, "callback", self.NOW)
+
+        self.job_queue.run_once.assert_not_called()
+
+    def test_no_catch_up_once_the_trigger_has_run(self):
+        self.chat.event_job.last_triggered_on = date(2026, 10, 4)
+
+        self.chat.schedule_event_job(self.job_queue, "callback", self.NOW)
+
+        self.job_queue.run_once.assert_not_called()
+
+    def test_nothing_without_a_schedule(self):
+        chat = Chat(2)
+        self.assertIsNone(chat.schedule_event_job(self.job_queue, "callback", self.NOW))
+        self.job_queue.run_daily.assert_not_called()
 
 
 if __name__ == "__main__":

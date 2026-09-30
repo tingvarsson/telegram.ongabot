@@ -51,7 +51,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
             return
         if "target_date" in named:
             try:
-                target_date = helper.parse_date(named["target_date"])
+                target_date = helper.parse_date(named["target_date"], chat.today())
             except ValueError as e:
                 await update.message.reply_text(f"{e}\n\n{CANCELEVENT.usage}")
                 return

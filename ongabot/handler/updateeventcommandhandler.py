@@ -26,8 +26,11 @@ class UpdateEventCommandHandler(CommandHandler):
         super().__init__("updateevent", callback)
 
 
-def _parse_args(args: list) -> Tuple[Optional[date], Optional[date], Optional[time], Optional[int]]:
-    """Parse named args for /updateevent. Raises ValueError with usage on invalid input."""
+def _parse_args(args: list, today: date) -> Tuple[Optional[date], Optional[date], Optional[time], Optional[int]]:
+    """Parse named args for /updateevent. Raises ValueError with usage on invalid input.
+
+    today is the chat's local date, which weekday names count from.
+    """
     named = helper.parse_named_args(args, _ALLOWED_ARGS)
 
     target_date: Optional[date] = None
@@ -37,12 +40,12 @@ def _parse_args(args: list) -> Tuple[Optional[date], Optional[date], Optional[ti
 
     if "target_date" in named:
         try:
-            target_date = helper.parse_date(named["target_date"])
+            target_date = helper.parse_date(named["target_date"], today)
         except ValueError:
             raise ValueError(UPDATEEVENT.usage) from None
     if "day" in named:
         try:
-            new_date = helper.parse_date(named["day"])
+            new_date = helper.parse_date(named["day"], today)
         except ValueError:
             raise ValueError(UPDATEEVENT.usage) from None
     if "time" in named:
@@ -77,7 +80,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
         return
 
     try:
-        target_date, new_date, new_time, new_slots = _parse_args(context.args)
+        target_date, new_date, new_time, new_slots = _parse_args(context.args, chat.today())
     except ValueError as e:
         await update.message.reply_text(str(e))
         return

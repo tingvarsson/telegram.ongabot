@@ -1,13 +1,14 @@
 """This module contains the NewEventCommandHandler class."""
 
 import logging
+from datetime import date
 from typing import Tuple
 
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 
 from eventcreator import create_event
-from eventdata import EventData
+from eventdata import DEFAULT_EVENT_DAY, EventData
 from utils import helper
 from utils.commands import NEWEVENT
 from utils.log import log
@@ -24,17 +25,18 @@ class NewEventCommandHandler(CommandHandler):
         super().__init__("newevent", callback)
 
 
-def _parse_args(args: list) -> Tuple[EventData, bool]:
+def _parse_args(args: list, today: date) -> Tuple[EventData, bool]:
     """Parse named args for /newevent. Raises ValueError with usage on invalid input.
 
+    today is the chat's local date, which the default day and weekday names count from.
     Returns a tuple of (EventData, force).
     """
-    event_data = EventData()
+    event_data = EventData(helper.get_upcoming_date(today, DEFAULT_EVENT_DAY))
     force = False
 
     named = helper.parse_named_args(args, _ALLOWED_ARGS)
     if "day" in named:
-        event_data.event_date = helper.parse_date(named["day"])
+        event_data.event_date = helper.parse_date(named["day"], today)
     if "time" in named:
         event_data.start_time = helper.parse_time(named["time"])
     if "slots" in named:
@@ -52,8 +54,9 @@ async def callback(update: Update, context: CallbackContext) -> None:
         _logger.error("Received /newevent command without message or effective chat")
         return
 
+    today = context.bot_data.get_chat(update.effective_chat.id).today()
     try:
-        event_data, force = _parse_args(context.args or [])
+        event_data, force = _parse_args(context.args or [], today)
     except ValueError as e:
         await update.message.reply_text(f"{e}\n\n{NEWEVENT.usage}")
         return

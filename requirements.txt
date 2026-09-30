@@ -2,3 +2,6 @@ python-telegram-bot[all]==22.8
 # Already pulled in by python-telegram-bot; pinned explicitly because ongabot/cs2
 # imports it directly to talk to the Leetify API.
 httpx==0.28.1
+# IANA zone database for zoneinfo. The slim Docker image ships no system zone files, so
+# without it /timezone and BOT_TIMEZONE could only resolve UTC.
+tzdata==2026.4

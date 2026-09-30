@@ -23,6 +23,7 @@ from .shrinkcommandhandler import ShrinkCommandHandler
 from .startcommandhandler import StartCommandHandler
 from .statisticscommandhandler import StatisticsCommandHandler
 from .statisticssortcallbackhandler import StatisticsSortCallbackHandler
+from .timezonecommandhandler import TimezoneCommandHandler
 from .unlinksteamcommandhandler import UnLinkSteamCommandHandler
 from .updateeventcommandhandler import UpdateEventCommandHandler
 from .verifycommandhandler import UnverifyCommandHandler, VerifyCommandHandler
@@ -51,6 +52,7 @@ __all__ = (
     "StartCommandHandler",
     "StatisticsCommandHandler",
     "StatisticsSortCallbackHandler",
+    "TimezoneCommandHandler",
     "UnLinkSteamCommandHandler",
     "UnverifyCommandHandler",
     "UpdateEventCommandHandler",

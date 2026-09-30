@@ -44,6 +44,7 @@ from handler import ShrinkCommandHandler
 from handler import StartCommandHandler
 from handler import StatisticsCommandHandler
 from handler import StatisticsSortCallbackHandler
+from handler import TimezoneCommandHandler
 from handler import UnLinkSteamCommandHandler
 from handler import UnverifyCommandHandler
 from handler import UpdateEventCommandHandler
@@ -91,11 +92,12 @@ def schedule_cs2_sweep(
     chat_id: int,
     event_date: datetime.date,
     start_time: datetime.time,
+    tz: datetime.tzinfo,
 ) -> None:
     """Start the repeating job that posts and updates CS2 results for one event.
 
-    The first pass runs at the event's start time, or immediately if that has already passed -
-    which is what makes the job resumable after a restart mid-evening.
+    The first pass runs at the event's start time in the chat's zone tz, or immediately if that
+    has already passed - which is what makes the job resumable after a restart mid-evening.
     """
     if job_queue is None:
         logger.error("No job queue available; CS2 results for %s will not be posted", event_date)
@@ -108,8 +110,9 @@ def schedule_cs2_sweep(
         logger.debug("CS2 sweep %s is already scheduled", name)
         return
 
-    now = datetime.datetime.now()
-    starts_at = datetime.datetime.combine(event_date, start_time)
+    # Aware in the chat's zone: the JobQueue would read a naive start time as UTC.
+    now = datetime.datetime.now(tz)
+    starts_at = datetime.datetime.combine(event_date, start_time, tzinfo=tz)
     job_queue.run_repeating(
         cs2_sweep_callback,
         interval=CS2_SWEEP_INTERVAL,
@@ -143,13 +146,13 @@ async def schedule_todays_cs2_sweeps_callback(context: CallbackContext) -> None:
     restart killed halfway through the evening.
     """
     bot_data: BotData = context.bot_data
-    today = datetime.date.today()
 
     for chat in bot_data.chats.values():
+        today = chat.today()
         event = chat.get_event_by_date(today)
         if event is None or event.cancelled or event.cs2_reported:
             continue
-        schedule_cs2_sweep(context.job_queue, chat.chat_id, today, event.start_time)
+        schedule_cs2_sweep(context.job_queue, chat.chat_id, today, event.start_time, chat.tz)
 
 
 DEFAULT_CS2_PATCHNOTES_POLL_MINUTES = 20
@@ -297,7 +300,8 @@ async def cs2_sweep_callback(context: CallbackContext) -> None:
         job.schedule_removal()
         return
 
-    now = datetime.datetime.now()
+    # Aware, like the deadline and quiet_since set by schedule_cs2_sweep.
+    now = chat.now()
     expired = now >= data["deadline"]
     session = await event_session(get_client(), chat, event_date, context.application.user_data)
 
@@ -359,12 +363,16 @@ async def cs2_sweep_callback(context: CallbackContext) -> None:
 
 @log.log
 async def complete_past_events_callback(context: CallbackContext) -> None:
-    """Auto-complete any events whose date has passed: mark complete, update status, unpin poll."""
+    """Auto-complete any events whose date has passed: mark complete, update status, unpin poll.
+
+    "Passed" is per chat, in its own zone, so this runs hourly rather than at one midnight:
+    each chat's events complete within an hour of its local midnight.
+    """
     bot_data: BotData = context.bot_data
-    today = datetime.date.today()
 
     # Iterate through all chats and their events to find and complete past events
     for chat in bot_data.chats.values():
+        today = chat.today()
         for event in list(chat.events.values()):
             if not event.completed and event.event_date < today:
                 event.mark_complete()
@@ -407,7 +415,7 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
                     # Safety net for an event whose sweep never ran - the bot was down all
                     # evening, say. Normally the sweep started at the event's start time and
                     # is either still running or already done, and this is a no-op.
-                    schedule_cs2_sweep(context.job_queue, chat.chat_id, event.event_date, event.start_time)
+                    schedule_cs2_sweep(context.job_queue, chat.chat_id, event.event_date, event.start_time, chat.tz)
                 logger.info(
                     "Auto-completed past event poll_id=%s (date=%s) in chat_id=%s",
                     event.poll_id,
@@ -505,10 +513,13 @@ async def post_init(application: Application) -> None:
     # /unverify and /verify votes are persisted, their close jobs are not.
     reschedule_open_votes(bot_data.chats.values(), application.job_queue)
 
-    # Schedule daily cleanup of past events
-    application.job_queue.run_once(complete_past_events_callback, when=5, name="complete_past_events_startup")
-    application.job_queue.run_daily(
-        complete_past_events_callback, time=datetime.time(0, 0, 0), name="complete_past_events"
+    # Complete past events, starting right after boot. Hourly because each chat's day ends at
+    # its own local midnight; see complete_past_events_callback.
+    application.job_queue.run_repeating(
+        complete_past_events_callback,
+        interval=datetime.timedelta(hours=1),
+        first=5,
+        name="complete_past_events",
     )
 
     # Start the CS2 sweep for any event happening today. Hourly rather than daily so it also
@@ -562,6 +573,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(EventPollAnswerHandler())
     application.add_handler(ScheduleCommandHandler())
     application.add_handler(DeScheduleCommandHandler())
+    application.add_handler(TimezoneCommandHandler())
     application.add_handler(UpdateEventCommandHandler())
     application.add_handler(RescheduleCommandHandler())
     application.add_handler(StatisticsCommandHandler())

@@ -1,10 +1,12 @@
+import os
 import unittest
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
-from telegram.constants import ParseMode
+from telegram.constants import ChatType, ParseMode
 
-from ongabot.handler.cs2commandhandler import callback
+from ongabot.handler.cs2commandhandler import _today, callback
 
 
 def _event(event_date, completed=True, cancelled=False):
@@ -148,6 +150,27 @@ class Cs2PrivateChatTest(unittest.IsolatedAsyncioTestCase):
             await callback(update, context)
 
         self.assertEqual(resolve.await_args.args[2:], ("cs2", ""))
+
+
+class Cs2TodayTest(unittest.TestCase):
+    """Which local date a weekday name in /cs2 counts from."""
+
+    def test_a_group_counts_from_its_own_today(self):
+        update, context, chat = _make()
+        update.effective_chat.type = ChatType.GROUP
+        chat.today.return_value = date(2026, 10, 4)
+
+        self.assertEqual(_today(update, context), date(2026, 10, 4))
+
+    def test_a_private_chat_counts_from_the_bot_default_zone(self):
+        """The group is not picked yet when the date is parsed."""
+        update, context, chat = _make()
+        update.effective_chat.type = ChatType.PRIVATE
+        tokyo = ZoneInfo("Asia/Tokyo")
+
+        with patch.dict(os.environ, {"BOT_TIMEZONE": "Asia/Tokyo"}):
+            self.assertEqual(_today(update, context), datetime.now(tokyo).date())
+        chat.today.assert_not_called()
 
 
 if __name__ == "__main__":

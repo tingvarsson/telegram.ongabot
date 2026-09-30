@@ -53,7 +53,8 @@ NEWEVENT = CommandInfo(
         "  day: weekday name (next occurrence), YYYY-MM-DD, or dd.mm.yyyy (default: wednesday)\n"
         "  time: start time of first slot, e.g. 18:30 (default: 18:30)\n"
         "  slots: number of 40-min time slots (default: 5)\n"
-        "  force: set to true to replace a cancelled event on the same date\n\n"
+        "  force: set to true to replace a cancelled event on the same date\n"
+        "  Times are in the chat's timezone (see /timezone).\n\n"
         "Examples:\n"
         "  /newevent\n"
         "  /newevent day=friday\n"
@@ -89,7 +90,8 @@ UPDATEEVENT = CommandInfo(
         "  day: new event date — weekday name (next occurrence), YYYY-MM-DD, or dd.mm.yyyy\n"
         "  time: new start time, e.g. 20:00\n"
         "  slots: new number of 40-min slots\n"
-        "  At least one of day/time/slots must be provided.\n\n"
+        "  At least one of day/time/slots must be provided.\n"
+        "  Times are in the chat's timezone (see /timezone).\n\n"
         "Examples:\n"
         "  /updateevent time=20:00\n"
         "  /updateevent target_date=2026-05-07 day=2026-05-14\n"
@@ -107,7 +109,8 @@ SCHEDULE = CommandInfo(
         "  trigger_on: weekday to trigger poll creation (default: sunday)\n"
         "  day: weekday the poll refers to (default: wednesday)\n"
         "  time: start time of first slot (default: 18:30)\n"
-        "  slots: number of 40-min time slots (default: 5)\n\n"
+        "  slots: number of 40-min time slots (default: 5)\n"
+        "  Times are in the chat's timezone (see /timezone).\n\n"
         "Examples:\n"
         "  /schedule\n"
         "  /schedule trigger_on=sunday day=wednesday\n"
@@ -125,7 +128,8 @@ RESCHEDULE = CommandInfo(
         "  trigger_on: weekday to trigger poll creation\n"
         "  day: weekday the poll refers to\n"
         "  time: start time of first slot\n"
-        "  slots: number of 40-min time slots\n\n"
+        "  slots: number of 40-min time slots\n"
+        "  Times are in the chat's timezone (see /timezone).\n\n"
         "Examples:\n"
         "  /reschedule time=20:00\n"
         "  /reschedule trigger_on=monday day=thursday"
@@ -138,6 +142,23 @@ DESCHEDULE = CommandInfo(
     brief="/deschedule - Remove the weekly schedule",
     usage="/deschedule",
     menu_description="Remove the weekly schedule",
+)
+
+TIMEZONE = CommandInfo(
+    command="timezone",
+    brief="/timezone [<zone>|default] - Show or set the chat's timezone",
+    usage=(
+        "Usage: /timezone [<zone>|default]\n"
+        "  No argument: show the chat's timezone and local time.\n"
+        "  zone: an IANA timezone name, e.g. Europe/Stockholm or UTC\n"
+        "  default: follow the bot's default timezone again\n"
+        "  Weekly polls, event times, game-day pokes and CS2 results all follow it.\n\n"
+        "Examples:\n"
+        "  /timezone\n"
+        "  /timezone Europe/Stockholm\n"
+        "  /timezone default"
+    ),
+    menu_description="Show or set the chat's timezone [zone|default]",
 )
 
 AUTHORIZE = CommandInfo(
@@ -304,6 +325,7 @@ ALL_COMMANDS = [
     SCHEDULE,
     RESCHEDULE,
     DESCHEDULE,
+    TIMEZONE,
     AUTHORIZE,
     DEAUTHORIZE,
     STATISTICS,

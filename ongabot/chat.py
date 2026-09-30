@@ -3,14 +3,15 @@
 import logging
 from datetime import date, datetime, timedelta
 from typing import Callable, Dict, List, Optional, cast
+from zoneinfo import ZoneInfo
 
 from telegram import Message, User
 from telegram.error import TelegramError
-from telegram.ext import JobQueue
+from telegram.ext import Job, JobQueue
 
 from event import Event, parse_event_date_from_poll_question
 from eventjob import EventJob
-from utils import log
+from utils import clock, log
 from verification import VerificationVote
 
 _logger = logging.getLogger(__name__)
@@ -38,6 +39,8 @@ class Chat:
         unverified: user_id -> first name of each member voted unverified (see verification.py)
         verification_votes: open /unverify and /verify votes indexed on poll_id
         closed_verification_polls: poll_ids of the most recently closed votes, newest last
+        timezone_name: IANA zone set with /timezone, or None to follow the bot default
+            (BOT_TIMEZONE), so a later change to that default still reaches this chat
     """
 
     def __init__(self, chat_id: int) -> None:
@@ -50,6 +53,7 @@ class Chat:
         self.unverified: Dict[int, str] = {}
         self.verification_votes: Dict[str, VerificationVote] = {}
         self.closed_verification_polls: List[str] = []
+        self.timezone_name: Optional[str] = None
 
     def __setstate__(self, state: dict) -> None:
         self.__dict__.update(state)
@@ -112,9 +116,41 @@ class Chat:
 
         self._migrate_shorts_state()
         self._default_verification_state()
+        # Pickles from before /timezone follow the bot default.
+        self.__dict__.setdefault("timezone_name", None)
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
+
+    @property
+    def tz(self) -> ZoneInfo:
+        """The zone this chat's times are in: its own /timezone, else the bot default.
+
+        A stored zone the zone database no longer knows (renamed in a tzdata update, say) logs
+        a warning and falls back to the bot default rather than breaking every job for the chat.
+        """
+        if self.timezone_name:
+            try:
+                return clock.resolve_timezone(self.timezone_name)
+            except ValueError:
+                _logger.warning(
+                    "chat_id=%s has unknown timezone %r; using the bot default", self.chat_id, self.timezone_name
+                )
+        return clock.bot_timezone()
+
+    def now(self) -> datetime:
+        """The current time in this chat's zone, timezone-aware."""
+        return clock.now(self.tz)
+
+    def today(self) -> date:
+        """The current date in this chat's zone."""
+        return clock.today(self.tz)
+
+    @log.method
+    def set_timezone(self, name: Optional[str]) -> None:
+        """Set this chat's zone by canonical IANA name, or None to follow the bot default again."""
+        _logger.info("Timezone for chat_id=%s changed from %s to %s", self.chat_id, self.timezone_name, name)
+        self.timezone_name = name
 
     def _default_verification_state(self) -> None:
         """Default the /unverify and /verify state missing from pickles written before it existed."""
@@ -354,7 +390,27 @@ class Chat:
         return result
 
     @log.method
-    def schedule_event_job(self, job_queue: JobQueue, callback: Callable) -> None:
-        """Schedule the event job if it exist"""
-        if self.event_job:
-            self.event_job.schedule(job_queue, callback)
+    def schedule_event_job(
+        self, job_queue: JobQueue, callback: Callable, now: Optional[datetime] = None
+    ) -> Optional[Job]:
+        """Schedule the event job, if there is one, in this chat's zone.
+
+        Also creates a poll right away when the weekly trigger passed while the bot was down
+        (a restart on Sunday evening after 20:00, say) and that week's event has no poll yet.
+        Returns the weekly job, or None when the chat has no schedule.
+        """
+        if not self.event_job:
+            return None
+
+        job = self.event_job.schedule(job_queue, callback, self.tz)
+
+        missed = self.event_job.missed_event_date(now or self.now())
+        if missed is not None and self.get_event_by_date(missed) is None:
+            _logger.info(
+                "Weekly trigger for chat_id=%s was missed (last run %s); creating the poll for %s now",
+                self.chat_id,
+                self.event_job.last_triggered_on,
+                missed,
+            )
+            job_queue.run_once(callback, when=0, chat_id=self.chat_id, name=f"{self.event_job.job_name}_catchup")
+        return job

@@ -1,6 +1,7 @@
 import unittest
 from datetime import date
 from unittest.mock import MagicMock
+from zoneinfo import ZoneInfo
 
 from telegram import User
 
@@ -39,6 +40,7 @@ def _event(event_date, users, completed=True, cancelled=False, cs2_reported=Fals
 def _chat(events):
     chat = MagicMock()
     chat.events = {event.event_date: event for event in events}
+    chat.tz = ZoneInfo("UTC")
     return chat
 
 

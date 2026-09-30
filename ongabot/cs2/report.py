@@ -36,7 +36,7 @@ async def event_session(
     if not links:
         _logger.debug("No linked members in chat_id=%s; nothing to report", chat.chat_id)
 
-    return await build_session(client, event_date, links)
+    return await build_session(client, event_date, links, chat.tz)
 
 
 def render_results(session: Cs2Session, live: bool = False) -> str:

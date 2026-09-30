@@ -29,6 +29,10 @@ class HelperTest(unittest.TestCase):
         )
 
 
+# A Thursday, so every weekday name resolves to a date after it.
+TODAY = date(2026, 5, 7)
+
+
 class ParseDateTest(unittest.TestCase):
     @parameterized.expand(
         [
@@ -37,7 +41,7 @@ class ParseDateTest(unittest.TestCase):
         ]
     )
     def test_parse_date_concrete(self, _, token, expected):
-        self.assertEqual(helper.parse_date(token), expected)
+        self.assertEqual(helper.parse_date(token, TODAY), expected)
 
     @parameterized.expand(
         [
@@ -47,7 +51,11 @@ class ParseDateTest(unittest.TestCase):
         ]
     )
     def test_parse_date_weekday(self, _, token, expected_weekday):
-        self.assertEqual(helper.parse_date(token).weekday(), expected_weekday)
+        self.assertEqual(helper.parse_date(token, TODAY).weekday(), expected_weekday)
+
+    def test_parse_date_weekday_counts_from_today(self):
+        self.assertEqual(helper.parse_date("thursday", TODAY), TODAY)
+        self.assertEqual(helper.parse_date("wednesday", TODAY), date(2026, 5, 13))
 
     @parameterized.expand(
         [
@@ -59,7 +67,7 @@ class ParseDateTest(unittest.TestCase):
     )
     def test_parse_date_raises(self, _, token):
         with self.assertRaises(ValueError):
-            helper.parse_date(token)
+            helper.parse_date(token, TODAY)
 
 
 class ParseTimeTest(unittest.TestCase):

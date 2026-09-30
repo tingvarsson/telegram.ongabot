@@ -75,16 +75,17 @@ def get_weekday_index_from_name(day_name: str) -> int:
     }[day_name.lower()]
 
 
-def parse_date(token: str) -> date:
+def parse_date(token: str, today: date) -> date:
     """
     Parse a day-or-date token into a concrete date.
 
     Accepts weekday names ("wednesday"), ISO dates ("2026-05-10"), or dd.mm.yyyy dates.
-    Returns the next upcoming occurrence for weekday names.
+    Returns the next upcoming occurrence from today for weekday names; today is the chat's
+    local date, so "wednesday" means the same day to the bot as to the group.
     Raises ValueError if the token cannot be parsed.
     """
     if is_valid_weekday(token):
-        return get_upcoming_date(date.today(), token.lower())
+        return get_upcoming_date(today, token.lower())
     for fmt in ("%Y-%m-%d", "%d.%m.%Y"):
         try:
             return datetime.strptime(token, fmt).date()

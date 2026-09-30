@@ -63,14 +63,19 @@ def poke_lead_time() -> datetime.timedelta:
     return datetime.timedelta(hours=hours)
 
 
-def poke_time(event: Event) -> datetime.datetime:
-    """When the poke for event is due: the lead time before its start, but never before its day.
+def _starts_at(event: Event, tz: datetime.tzinfo) -> datetime.datetime:
+    """When event starts, as an aware datetime in the chat's zone tz."""
+    return datetime.datetime.combine(event.event_date, event.start_time, tzinfo=tz)
+
+
+def poke_time(event: Event, tz: datetime.tzinfo) -> datetime.datetime:
+    """When the poke for event is due, in the chat's zone tz: the lead time before its start,
+    but never before its day.
 
     The clamp keeps an early start, or a long lead time, from poking the evening before.
     """
-    starts_at = datetime.datetime.combine(event.event_date, event.start_time)
-    day_start = datetime.datetime.combine(event.event_date, datetime.time.min)
-    return max(starts_at - poke_lead_time(), day_start)
+    day_start = datetime.datetime.combine(event.event_date, datetime.time.min, tzinfo=tz)
+    return max(_starts_at(event, tz) - poke_lead_time(), day_start)
 
 
 def poke_job_name(chat_id: int, event_date: datetime.date) -> str:
@@ -81,13 +86,14 @@ def poke_job_name(chat_id: int, event_date: datetime.date) -> str:
 def schedule_poke(job_queue: JobQueue, chat_id: int, event: Event, now: datetime.datetime) -> None:
     """Schedule the poke for event, or run it right away if it is already due.
 
-    A no-op for an event that is already poked, cancelled, completed or under way, and when the
-    job is already scheduled.
+    now is aware, in the chat's zone, which the event's wall-clock times are read in. A no-op
+    for an event that is already poked, cancelled, completed or under way, and when the job is
+    already scheduled.
     """
     if event.poked or event.cancelled or event.completed:
         return
-    starts_at = datetime.datetime.combine(event.event_date, event.start_time)
-    if now >= starts_at:
+    tz = now.tzinfo
+    if now >= _starts_at(event, tz):
         _logger.debug("Event on %s in chat_id=%s has started; no poke scheduled", event.event_date, chat_id)
         return
 
@@ -96,10 +102,9 @@ def schedule_poke(job_queue: JobQueue, chat_id: int, event: Event, now: datetime
         _logger.debug("Poke %s is already scheduled", name)
         return
 
-    when = max(now, poke_time(event))
-    # A naive datetime is read as UTC by the JobQueue (no Defaults.tzinfo is set). Event times
-    # are local wall-clock times, so make it aware in the server's local zone.
-    job_queue.run_once(poke_callback, when=when.astimezone(), chat_id=chat_id, name=name, data=event.event_date)
+    # Aware in the chat's zone: the JobQueue would read a naive datetime as UTC.
+    when = max(now, poke_time(event, tz))
+    job_queue.run_once(poke_callback, when=when, chat_id=chat_id, name=name, data=event.event_date)
     _logger.info("Scheduled poke for chat_id=%s event_date=%s at %s", chat_id, event.event_date, when)
 
 
@@ -111,9 +116,9 @@ async def schedule_todays_pokes_callback(context: CallbackContext) -> None:
     well as the daily rollover, and resumes a poke a restart dropped.
     """
     bot_data: BotData = context.bot_data
-    now = datetime.datetime.now()
 
     for chat in bot_data.chats.values():
+        now = chat.now()
         event = chat.get_event_by_date(now.date())
         if event is None:
             continue
@@ -186,7 +191,7 @@ async def poke_callback(context: CallbackContext) -> None:
     if event is None or event.poked or event.cancelled or event.completed:
         _logger.info("Skipping poke for chat_id=%s on %s: event gone, poked or closed", job.chat_id, event_date)
         return
-    if datetime.datetime.now() >= datetime.datetime.combine(event.event_date, event.start_time):
+    if chat.now() >= _starts_at(event, chat.tz):
         _logger.info("Skipping poke for chat_id=%s on %s: the event has started", job.chat_id, event_date)
         return
 
