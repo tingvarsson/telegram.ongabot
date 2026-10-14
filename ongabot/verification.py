@@ -206,10 +206,12 @@ async def close_vote_callback(context: CallbackContext) -> None:
         chat.set_unverified(vote.target_id, vote.target_name, vote.unverify)
         await _redraw_status_messages(context.bot, chat, vote.target_id)
 
+    # The verdict lands an hour after the vote started, possibly in quiet hours.
     await context.bot.send_message(
         vote.chat_id,
         verdict_text(vote, yes, no),
         reply_parameters=ReplyParameters(vote.message_id, allow_sending_without_reply=True),
+        disable_notification=chat.is_quiet(),
     )
 
 

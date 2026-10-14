@@ -90,6 +90,29 @@ class CreateEventHappyPathTest(unittest.IsolatedAsyncioTestCase):
         poll_message.pin.assert_called_once_with(disable_notification=True)
         chat.set_pinned_poll.assert_called_once()
 
+    async def test_poll_and_status_follow_quiet_hours(self):
+        """A catch-up poll after a night-time restart must not buzz the group."""
+        for quiet in (False, True):
+            with self.subTest(quiet=quiet):
+                poll_message = MagicMock()
+                poll_message.pin = AsyncMock()
+                context = MagicMock()
+                context.bot.send_poll = AsyncMock(return_value=poll_message)
+                chat = MagicMock()
+                chat.get_event_by_date.return_value = None
+                chat.is_quiet.return_value = quiet
+                context.bot_data.get_chat.return_value = chat
+
+                with patch("ongabot.eventcreator.Event") as MockEvent:
+                    mock_event = MagicMock()
+                    mock_event.send_status_message = AsyncMock()
+                    MockEvent.return_value = mock_event
+
+                    await eventcreator.create_event(context, 123, EventData(date(2026, 6, 3), time(18, 30), 5))
+
+                self.assertIs(context.bot.send_poll.call_args.kwargs["disable_notification"], quiet)
+                mock_event.send_status_message.assert_awaited_once_with(context.bot, disable_notification=quiet)
+
 
 class CreateEventActiveConflictTest(unittest.IsolatedAsyncioTestCase):
     async def test_rejects_when_active_event_exists_for_date(self):

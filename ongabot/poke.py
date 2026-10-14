@@ -1,9 +1,9 @@
 """Poke the regulars who have not voted yet, on the morning of an event that is short a stack.
 
-POKE_LEAD_HOURS before an event starts, if no time slot has a full five-stack yet, the bot
-posts one message that @-mentions everyone who voted in one of the chat's recent polls but not
-in this one. The Bot API cannot list a group's members, so "recent voters" is the closest thing
-to the group's roster the bot has.
+POKE_LEAD_HOURS before an event starts, but not before quiet hours end on the event day, if no
+time slot has a full five-stack yet, the bot posts one message that @-mentions everyone who
+voted in one of the chat's recent polls but not in this one. The Bot API cannot list a group's
+members, so "recent voters" is the closest thing to the group's roster the bot has.
 
 Like the CS2 sweep, the job lives in memory only: an hourly pass re-derives it for today's
 events, which is also what resumes a poke a restart dropped. Event.poked is persisted, so a
@@ -26,7 +26,7 @@ from botdata import BotData
 from chat import Chat
 from event import Event
 from quips import Banter, next_banter
-from utils import log
+from utils import clock, log
 from verification import badged
 
 _logger = logging.getLogger(__name__)
@@ -70,12 +70,12 @@ def _starts_at(event: Event, tz: datetime.tzinfo) -> datetime.datetime:
 
 def poke_time(event: Event, tz: datetime.tzinfo) -> datetime.datetime:
     """When the poke for event is due, in the chat's zone tz: the lead time before its start,
-    but never before its day.
+    but never before quiet hours end on its day.
 
-    The clamp keeps an early start, or a long lead time, from poking the evening before.
+    The clamp keeps an early start, or a long lead time, from poking the evening before or in
+    the middle of the night: a ping nobody hears does no good.
     """
-    day_start = datetime.datetime.combine(event.event_date, datetime.time.min, tzinfo=tz)
-    return max(_starts_at(event, tz) - poke_lead_time(), day_start)
+    return max(_starts_at(event, tz) - poke_lead_time(), clock.quiet_end(event.event_date, tz))
 
 
 def poke_job_name(chat_id: int, event_date: datetime.date) -> str:

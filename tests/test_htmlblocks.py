@@ -113,6 +113,19 @@ class SendHtmlWithFallbackTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second_kwargs["text"], "hi")
         self.assertNotIn("parse_mode", second_kwargs)
 
+    async def test_notifies_by_default(self) -> None:
+        bot = AsyncMock()
+        await send_html_with_fallback(bot, 123, "<b>hi</b>")
+        self.assertIs(bot.send_message.call_args.kwargs["disable_notification"], False)
+
+    async def test_silent_send_stays_silent_on_the_fallback(self) -> None:
+        bot = MagicMock()
+        bot.send_message = AsyncMock(side_effect=[BadRequest("bad entity"), None])
+        await send_html_with_fallback(bot, 123, "<b>hi</b>", disable_notification=True)
+        self.assertEqual(
+            [call.kwargs["disable_notification"] for call in bot.send_message.call_args_list], [True, True]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

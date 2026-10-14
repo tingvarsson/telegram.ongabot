@@ -142,13 +142,19 @@ class Event:
         return str(self.__class__) + ": " + str(self.__dict__)
 
     @log.method
-    async def send_status_message(self, bot: Bot, unverified: Collection[int] = ()) -> None:
-        """Send status message for the event poll. unverified user ids get the 🔞 badge."""
+    async def send_status_message(
+        self, bot: Bot, unverified: Collection[int] = (), disable_notification: bool = False
+    ) -> None:
+        """Send status message for the event poll. unverified user ids get the 🔞 badge.
+
+        disable_notification sends it without a sound, for quiet hours.
+        """
         chat_member_count = await bot.get_chat_member_count(self.chat_id)
         status_message = await bot.send_message(
             chat_id=self.chat_id,
             text=self._create_status_message_text(chat_member_count, unverified),
             parse_mode=ParseMode.MARKDOWN_V2,
+            disable_notification=disable_notification,
         )
         self.status_message_id = status_message.message_id
 

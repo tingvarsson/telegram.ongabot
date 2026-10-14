@@ -7,7 +7,7 @@ from telegram.ext import JobQueue
 
 from chat import Chat
 from event import Event
-from utils import log
+from utils import clock, log
 
 _logger = logging.getLogger(__name__)
 
@@ -67,6 +67,16 @@ class BotData:
             self.chats.update({chat_id: chat})
 
         return chat
+
+    def is_quiet(self, chat_id: int) -> bool:
+        """Whether it is quiet hours in chat_id, read in the bot default zone for an unknown chat.
+
+        Unlike get_chat, never creates a Chat: broadcasts look this up for every recipient.
+        """
+        chat = self.chats.get(chat_id)
+        if chat is not None:
+            return chat.is_quiet()
+        return clock.is_quiet(clock.now(clock.bot_timezone()))
 
     @log.method
     def get_event(self, poll_id: str) -> Optional[Event]:

@@ -1,4 +1,7 @@
+import os
 import unittest
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from ongabot.botdata import BotData
 
@@ -76,6 +79,23 @@ class BotDataCs2PatchnotesSubscriptionTest(unittest.TestCase):
         bd = BotData()
         bd.unsubscribe_from_cs2_patchnotes(101)
         self.assertEqual(bd.cs2_patchnotes_subscribers, set())
+
+
+class BotDataIsQuietTest(unittest.TestCase):
+    def test_asks_a_known_chat(self):
+        bd = BotData()
+        chat = bd.get_chat(1)
+        with patch.object(chat, "is_quiet", return_value=True):
+            self.assertTrue(bd.is_quiet(1))
+
+    def test_unknown_chat_uses_the_bot_default_zone_and_is_not_created(self):
+        bd = BotData()
+        with patch.dict(os.environ, {"BOT_TIMEZONE": "Asia/Tokyo"}), patch(
+            "ongabot.botdata.clock.is_quiet", return_value=True
+        ) as is_quiet:
+            self.assertTrue(bd.is_quiet(99))
+        self.assertEqual(is_quiet.call_args.args[0].tzinfo, ZoneInfo("Asia/Tokyo"))
+        self.assertNotIn(99, bd.chats)
 
 
 if __name__ == "__main__":

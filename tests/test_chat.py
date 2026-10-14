@@ -455,6 +455,13 @@ class ChatTimezoneTest(unittest.TestCase):
         self.assertEqual(chat.now().tzinfo, TOKYO)
         self.assertEqual(chat.today(), chat.now().date())
 
+    def test_quiet_hours_are_read_in_the_chat_zone(self):
+        chat = Chat(1)
+        chat.set_timezone("Asia/Tokyo")
+        with patch("ongabot.chat.clock.is_quiet", return_value=True) as is_quiet:
+            self.assertTrue(chat.is_quiet())
+        self.assertEqual(is_quiet.call_args.args[0].tzinfo, TOKYO)
+
     def test_old_pickle_follows_the_bot_default(self):
         chat = Chat.__new__(Chat)
         chat.__setstate__({"chat_id": 1, "events": {}, "event_job": None, "pinned_polls": {}})

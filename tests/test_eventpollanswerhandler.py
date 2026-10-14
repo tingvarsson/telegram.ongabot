@@ -49,6 +49,7 @@ def _make_context(user_data, event, chat_events=None):
     chat.events = chat_events or {}
     chat.unverified = {}
     chat.is_unverified.return_value = False
+    chat.is_quiet.return_value = False
     context.bot_data.get_chat.return_value = chat
 
     return context
@@ -294,8 +295,17 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
         await callback(self._make_update("poll1", 42, (0,)), context)
 
         context.bot.send_message.assert_called_once_with(
-            event.chat_id, "Wow Alice, what a great job answering that poll!"
+            event.chat_id, "Wow Alice, what a great job answering that poll!", disable_notification=False
         )
+
+    async def test_vote_in_quiet_hours_is_answered_silently(self):
+        user_data, event = UserData(), self._make_event()
+        context = self._context(user_data, event)
+        context.bot_data.get_chat.return_value.is_quiet.return_value = True
+
+        await callback(self._make_update("poll1", 42, (0,)), context)
+
+        self.assertIs(context.bot.send_message.call_args.kwargs["disable_notification"], True)
 
     async def test_first_no_op_vote(self):
         user_data, event = UserData(), self._make_event()
@@ -304,7 +314,9 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
         # 5 slots means option id 5 is No-op.
         await callback(self._make_update("poll1", 42, (5,)), context)
 
-        context.bot.send_message.assert_called_once_with(event.chat_id, "Alice votes No-op — <FIRST_NO_OP>")
+        context.bot.send_message.assert_called_once_with(
+            event.chat_id, "Alice votes No-op — <FIRST_NO_OP>", disable_notification=False
+        )
 
     async def test_first_maybe_vote(self):
         user_data, event = UserData(), self._make_event()
@@ -313,7 +325,9 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
         # 5 slots means option id 6 is Maybe Baby.
         await callback(self._make_update("poll1", 42, (6,)), context)
 
-        context.bot.send_message.assert_called_once_with(event.chat_id, "Alice votes Maybe — <FIRST_MAYBE>")
+        context.bot.send_message.assert_called_once_with(
+            event.chat_id, "Alice votes Maybe — <FIRST_MAYBE>", disable_notification=False
+        )
 
     async def test_slot_to_slot_change_keeps_the_suspicious_line(self):
         user_data, event = UserData(), self._make_event()
@@ -323,7 +337,7 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
         await callback(self._make_update("poll1", 42, (1,)), context)
 
         context.bot.send_message.assert_called_once_with(
-            event.chat_id, "Hmm suspicious, looks like Alice changed their vote..."
+            event.chat_id, "Hmm suspicious, looks like Alice changed their vote...", disable_notification=False
         )
 
     async def test_change_through_a_retraction_names_both_ends(self):
@@ -349,7 +363,7 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
         await callback(self._make_update("poll1", 42, (3,)), context)
 
         context.bot.send_message.assert_called_once_with(
-            event.chat_id, "Alice went from No-op to game — <NO_OP_TO_GAME>"
+            event.chat_id, "Alice went from No-op to game — <NO_OP_TO_GAME>", disable_notification=False
         )
 
     async def test_a_retraction_sends_nothing_right_away(self):
@@ -370,7 +384,9 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
 
         await callback(self._make_update("poll1", 42, (0,), user_name="Will"), context)
 
-        context.bot.send_message.assert_called_once_with(event.chat_id, "🔞 Will votes game — <UNVERIFIED>")
+        context.bot.send_message.assert_called_once_with(
+            event.chat_id, "🔞 Will votes game — <UNVERIFIED>", disable_notification=False
+        )
         event.update_status_message.assert_awaited_once_with(context.bot, unverified={42: "Will"})
 
 
@@ -462,6 +478,7 @@ class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
         context.user_data = user_data
         context.bot_data.get_event.return_value = event
         context.bot_data.get_chat.return_value.is_unverified.return_value = False
+        context.bot_data.get_chat.return_value.is_quiet.return_value = False
         context.bot.send_message = AsyncMock()
         return context
 
@@ -480,7 +497,17 @@ class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
 
         await retraction_reply_callback(context)
 
-        context.bot.send_message.assert_called_once_with(1, "Alice pulled their Maybe vote — <RETRACTED_MAYBE>")
+        context.bot.send_message.assert_called_once_with(
+            1, "Alice pulled their Maybe vote — <RETRACTED_MAYBE>", disable_notification=False
+        )
+
+    async def test_reply_in_quiet_hours_is_silent(self):
+        context = self._job_context(self._retracted_user_data((6,)), self._make_event())
+        context.bot_data.get_chat.return_value.is_quiet.return_value = True
+
+        await retraction_reply_callback(context)
+
+        self.assertIs(context.bot.send_message.call_args.kwargs["disable_notification"], True)
 
     async def test_no_reply_when_the_user_voted_again(self):
         user_data = self._retracted_user_data((0,))

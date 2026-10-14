@@ -146,6 +146,10 @@ class Chat:
         """The current date in this chat's zone."""
         return clock.today(self.tz)
 
+    def is_quiet(self) -> bool:
+        """Whether it is quiet hours in this chat, when the bot posts without a sound."""
+        return clock.is_quiet(self.now())
+
     @log.method
     def set_timezone(self, name: Optional[str]) -> None:
         """Set this chat's zone by canonical IANA name, or None to follow the bot default again."""

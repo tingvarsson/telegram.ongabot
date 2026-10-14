@@ -157,6 +157,18 @@ class CompletePastEventsRecapTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(args[0], 42)
         self.assertEqual(args[1], "RECAP")
         self.assertEqual(kwargs["parse_mode"], ParseMode.MARKDOWN_V2)
+        self.assertIs(kwargs["disable_notification"], False)
+
+    async def test_recap_in_quiet_hours_is_silent(self):
+        # Completion runs just after the chat's midnight, so this is the usual case.
+        chat = self._make_chat(_make_past_event("poll1", 1))
+        chat.is_quiet.return_value = True
+        context = _make_context(chat)
+
+        with patch("ongabot.ongabot.render_event_recap_message", return_value="RECAP"):
+            await ongabot.complete_past_events_callback(context)
+
+        self.assertIs(context.bot.send_message.call_args.kwargs["disable_notification"], True)
 
     async def test_recap_not_resent_on_a_second_sweep(self):
         event = _make_past_event("poll1", 1)
@@ -325,6 +337,19 @@ class AnnounceNewVersionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bot.send_message.call_count, 2)
         sent_chat_ids = {call.kwargs["chat_id"] for call in bot.send_message.call_args_list}
         self.assertEqual(sent_chat_ids, {101, 202})
+
+    async def test_a_chat_in_quiet_hours_gets_it_silently(self):
+        bot = AsyncMock()
+        bot_data = MagicMock()
+        bot_data.authorized_chats = {101, 202}
+        bot_data.is_quiet.side_effect = lambda chat_id: chat_id == 101
+
+        await ongabot._announce_new_version(bot, bot_data, "1.1.0", "1.2.0")
+
+        silent = {
+            call.kwargs["chat_id"]: call.kwargs["disable_notification"] for call in bot.send_message.call_args_list
+        }
+        self.assertEqual(silent, {101: True, 202: False})
 
     async def test_continues_when_one_chat_raises_telegram_error(self):
         from telegram.error import TelegramError
