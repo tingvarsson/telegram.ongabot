@@ -53,9 +53,9 @@ async def callback(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(f"{e}\n\n{RESCHEDULE.usage}")
         return
 
-    if not chat.remove_event_job(context.job_queue):
-        await update.message.reply_text("Failed to remove existing schedule. Try /deschedule first.")
-        return
+    # Cannot fail here: chat.event_job is set, and a schedule whose job already left the
+    # queue is still cleared.
+    chat.remove_event_job(context.job_queue)
     event_job = EventJob(update.effective_chat.id, trigger_on, event_day, start_time, num_slots)
     job = event_job.schedule(context.job_queue, create_event_callback, chat.tz)
     chat.set_event_job(event_job)

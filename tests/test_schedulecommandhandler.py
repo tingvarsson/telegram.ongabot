@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from ongabot.chat import Chat
 from ongabot.eventjob import EventJob
-from ongabot.handler import deschedulecommandhandler, schedulecommandhandler
+from ongabot.handler import deschedulecommandhandler, reschedulecommandhandler, schedulecommandhandler
 
 CHAT_ID = 42
 
@@ -105,3 +105,34 @@ class DeScheduleCommandTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(self.chat.event_job)
         self.assertIn("Job cancelled successfully.", self._reply())
+
+
+class RescheduleCommandTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        env = patch.dict(os.environ, {}, clear=True)
+        env.start()
+        self.addCleanup(env.stop)
+        self.chat = Chat(CHAT_ID)
+        self.chat.set_event_job(EventJob(CHAT_ID))
+        self.update = _update()
+
+    def _reply(self) -> str:
+        self.update.message.reply_text.assert_awaited_once()
+        return self.update.message.reply_text.await_args.args[0]
+
+    async def test_replaces_a_queued_schedule(self):
+        old_job = MagicMock()
+
+        await reschedulecommandhandler.callback(
+            self.update, _context(self.chat, ["day=thursday"], queued_jobs=[old_job])
+        )
+
+        old_job.schedule_removal.assert_called_once()
+        self.assertEqual(self.chat.event_job.event_day, "thursday")
+        self.assertIn("Schedule updated", self._reply())
+
+    async def test_replaces_a_schedule_whose_job_was_already_gone(self):
+        await reschedulecommandhandler.callback(self.update, _context(self.chat, ["day=thursday"], queued_jobs=[]))
+
+        self.assertEqual(self.chat.event_job.event_day, "thursday")
+        self.assertIn("Schedule updated", self._reply())
