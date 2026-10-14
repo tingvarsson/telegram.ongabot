@@ -139,6 +139,8 @@ class ParseNamedArgsTest(unittest.TestCase):
             ("empty_key", ["=value"], {"known"}),
             ("bare_value_multiple_allowed_keys", ["value"], {"a", "b"}),
             ("too_many_bare_args", ["one", "two"], {"known"}),
+            ("duplicate_key", ["day=monday", "day=tuesday"], {"day"}),
+            ("duplicate_key_case_variant", ["Day=monday", "day=tuesday"], {"day"}),
         ]
     )
     def test_parse_named_args_raises(self, _, args, allowed_keys):

@@ -388,14 +388,17 @@ class Chat:
 
     @log.method
     def remove_event_job(self, job_queue: JobQueue) -> bool:
-        """Remove the event job"""
+        """Remove the event job. Returns False only when the chat has no schedule to remove."""
         if not self.event_job:
             _logger.debug("Trying to remove event_job=None")
             return False
 
-        result = self.event_job.deschedule(job_queue)
+        # The stored schedule is cleared either way, so report success even when its job
+        # was already gone from the queue.
+        if not self.event_job.deschedule(job_queue):
+            _logger.warning("event_job for chat_id=%s had no queued job; clearing the schedule anyway", self.chat_id)
         self.event_job = None
-        return result
+        return True
 
     @log.method
     def schedule_event_job(

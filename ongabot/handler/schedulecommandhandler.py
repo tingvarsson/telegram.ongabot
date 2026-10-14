@@ -27,7 +27,7 @@ class ScheduleCommandHandler(CommandHandler):
 async def callback(update: Update, context: CallbackContext) -> None:
     """Schedule a event creation job to run every week"""
     if update.effective_chat is None or update.message is None or context.job_queue is None:
-        logging.error("Invalid update or missing job queue in ScheduleCommandHandler callback")
+        _logger.error("Invalid update or missing job queue in ScheduleCommandHandler callback")
         return
 
     chat: Chat = context.bot_data.get_chat(update.effective_chat.id)
@@ -47,12 +47,16 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     event_job = EventJob(update.effective_chat.id, trigger_on, event_day, start_time, num_slots)
     job = event_job.schedule(context.job_queue, create_event_callback, chat.tz)
-    chat.set_event_job(event_job)
 
+    # Only store the schedule once the job has a next run, so a failed attempt neither
+    # leaves a dead job in the queue nor blocks a retry with "Scheduled job already exists".
     if job.next_t is None:
         _logger.error("Failed to schedule job for chat_id=%s", update.effective_chat.id)
+        event_job.deschedule(context.job_queue)
         await update.message.reply_text("Failed to schedule job. Please try again.")
         return
+
+    chat.set_event_job(event_job)
 
     _logger.info(
         "Scheduled job for chat_id=%s with trigger_on=%s, event_day=%s, start_time=%s, num_slots=%s",
