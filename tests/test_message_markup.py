@@ -124,6 +124,27 @@ class PlainTextBuildersTest(unittest.TestCase):
                     else:
                         check_plain_text(quips.build_vote_reply(NASTY, previous, new))
 
+    def test_every_slot_verdict_is_valid_plain_text(self):
+        # Every slot-verdict shape on a 5-slot poll, with every line of the verdict pools.
+        game = quips.Answer.GAME
+        shapes = [
+            (None, 5, 0),
+            (None, 2, 0),
+            (game, 5, 2),
+            (game, 3, 5),
+            (quips.Answer.MAYBE, 5, 0),
+            (quips.Answer.NO_OP, 1, 0),
+        ]
+        for kind in (quips.Banter.ALL_SLOTS, quips.Banter.SOME_SLOTS):
+            for line in quips.POOLS[kind]:
+                for previous, slots, previous_slots in shapes:
+                    with patch("ongabot.quips.next_banter", return_value=line), self.subTest(line=line):
+                        check_plain_text(
+                            quips.build_vote_reply(
+                                NASTY, previous, game, slots=slots, previous_slots=previous_slots, num_slots=5
+                            )
+                        )
+
     def test_every_poke_is_valid_html(self):
         chat = message_fixtures.chat()
         event = message_fixtures.latest_event(chat)
