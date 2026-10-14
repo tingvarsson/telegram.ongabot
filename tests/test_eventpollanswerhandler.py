@@ -55,6 +55,19 @@ def _make_context(user_data, event, chat_events=None):
     return context
 
 
+def _patch_randomness(test: unittest.TestCase) -> None:
+    """Swap the random banter for its pool name and the random headline for a template that
+    shows what it was filled in with. The handler imports quips as a top-level module
+    (pythonpath is ongabot/)."""
+    for target, fake in (
+        ("quips.next_banter", lambda kind: f"<{kind.name}>"),
+        ("quips.next_headline", lambda path: "<{name}|{previous}|{new}>"),
+    ):
+        patcher = patch(target, side_effect=fake)
+        test.addCleanup(patcher.stop)
+        patcher.start()
+
+
 class EventPollAnswerStreakTest(unittest.IsolatedAsyncioTestCase):
     def _make_update(self, poll_id, user_id, option_ids=(0,)):
         update = MagicMock()
@@ -257,14 +270,11 @@ class EventPollAnswerPlayedStreakTest(unittest.IsolatedAsyncioTestCase):
 
 class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
     """Every vote gets a chat reply saying what happened (first answer or a change, from what to
-    what), plus banter for that exact path. See quips.build_vote_reply for the matrix."""
+    what), plus banter for that exact path, and game votes are judged on how many slots they
+    pick. See quips.build_vote_reply for the matrix."""
 
     def setUp(self):
-        # Swap the random banter for its pool name, so a reply shows which pool it drew from.
-        # The handler imports quips as a top-level module (pythonpath is ongabot/).
-        patcher = patch("quips.next_banter", side_effect=lambda kind: f"<{kind.name}>")
-        self.addCleanup(patcher.stop)
-        patcher.start()
+        _patch_randomness(self)
 
     def _make_update(self, poll_id, user_id, option_ids, user_name="Alice"):
         update = MagicMock()
@@ -288,14 +298,35 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
     def _sent(self, context):
         return [c.args[1] for c in context.bot.send_message.call_args_list]
 
-    async def test_first_game_vote_gets_the_classic_praise(self):
+    async def test_first_vote_for_some_slots_is_shamed(self):
         user_data, event = UserData(), self._make_event()
+        context = self._context(user_data, event)
+
+        # A slot plus Maybe Baby still only picks 1 of the 5 slots.
+        await callback(self._make_update("poll1", 42, (0, 6)), context)
+
+        context.bot.send_message.assert_called_once_with(
+            event.chat_id, "🤨 Alice votes 1 of 5 slots\n— <SOME_SLOTS>", disable_notification=False
+        )
+
+    async def test_first_vote_for_every_slot_is_praised(self):
+        user_data, event = UserData(), self._make_event()
+        context = self._context(user_data, event)
+
+        await callback(self._make_update("poll1", 42, (0, 1, 2, 3, 4)), context)
+
+        context.bot.send_message.assert_called_once_with(
+            event.chat_id, "👑 Alice votes ALL 5 slots!\n— <ALL_SLOTS>", disable_notification=False
+        )
+
+    async def test_first_game_vote_on_a_single_slot_poll_gets_the_classic_praise(self):
+        user_data, event = UserData(), self._make_event(num_slots=1)
         context = self._context(user_data, event)
 
         await callback(self._make_update("poll1", 42, (0,)), context)
 
         context.bot.send_message.assert_called_once_with(
-            event.chat_id, "Wow Alice, what a great job answering that poll!", disable_notification=False
+            event.chat_id, "🎉 Wow Alice, what a great job answering that poll!", disable_notification=False
         )
 
     async def test_vote_in_quiet_hours_is_answered_silently(self):
@@ -315,7 +346,7 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
         await callback(self._make_update("poll1", 42, (5,)), context)
 
         context.bot.send_message.assert_called_once_with(
-            event.chat_id, "Alice votes No-op — <FIRST_NO_OP>", disable_notification=False
+            event.chat_id, "<Alice||No-op>\n— <FIRST_NO_OP>", disable_notification=False
         )
 
     async def test_first_maybe_vote(self):
@@ -326,10 +357,10 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
         await callback(self._make_update("poll1", 42, (6,)), context)
 
         context.bot.send_message.assert_called_once_with(
-            event.chat_id, "Alice votes Maybe — <FIRST_MAYBE>", disable_notification=False
+            event.chat_id, "<Alice||Maybe>\n— <FIRST_MAYBE>", disable_notification=False
         )
 
-    async def test_slot_to_slot_change_keeps_the_suspicious_line(self):
+    async def test_slot_to_slot_change_gets_the_suspicious_line(self):
         user_data, event = UserData(), self._make_event()
         user_data.set_poll_answer("poll1", (0,))
         context = self._context(user_data, event)
@@ -337,7 +368,20 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
         await callback(self._make_update("poll1", 42, (1,)), context)
 
         context.bot.send_message.assert_called_once_with(
-            event.chat_id, "Hmm suspicious, looks like Alice changed their vote...", disable_notification=False
+            event.chat_id, "🕵️ Hmm, suspicious... Alice changed their vote", disable_notification=False
+        )
+
+    async def test_adding_the_remaining_slots_is_praised(self):
+        # Telegram changes a vote as retract-then-vote, so the previous pick is the last one.
+        user_data, event = UserData(), self._make_event()
+        user_data.set_poll_answer("poll1", (0, 1))
+        user_data.set_poll_answer("poll1", ())
+        context = self._context(user_data, event)
+
+        await callback(self._make_update("poll1", 42, (0, 1, 2, 3, 4)), context)
+
+        context.bot.send_message.assert_called_once_with(
+            event.chat_id, "👑 Alice went from 2 to ALL 5 slots!\n— <ALL_SLOTS>", disable_notification=False
         )
 
     async def test_change_through_a_retraction_names_both_ends(self):
@@ -351,10 +395,10 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             self._sent(context),
-            ["Wow Alice, what a great job answering that poll!", "Alice went from game to No-op — <GAME_TO_NO_OP>"],
+            ["🤨 Alice votes 1 of 5 slots\n— <SOME_SLOTS>", "<Alice|game|No-op>\n— <GAME_TO_NO_OP>"],
         )
 
-    async def test_switching_to_game_from_no_op(self):
+    async def test_switching_to_game_from_no_op_judges_the_slots(self):
         user_data, event = UserData(), self._make_event()
         user_data.set_poll_answer("poll1", (5,))
         user_data.set_poll_answer("poll1", ())
@@ -363,7 +407,9 @@ class EventPollAnswerReplyTest(unittest.IsolatedAsyncioTestCase):
         await callback(self._make_update("poll1", 42, (3,)), context)
 
         context.bot.send_message.assert_called_once_with(
-            event.chat_id, "Alice went from No-op to game — <NO_OP_TO_GAME>", disable_notification=False
+            event.chat_id,
+            "<Alice|No-op|game>\n— <NO_OP_TO_GAME>\n🤨 Only 1 of 5 slots though — <SOME_SLOTS>",
+            disable_notification=False,
         )
 
     async def test_a_retraction_sends_nothing_right_away(self):
@@ -411,9 +457,7 @@ class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
     """A vote that is retracted and not replaced within RETRACTION_REPLY_DELAY gets a reply."""
 
     def setUp(self):
-        patcher = patch("quips.next_banter", side_effect=lambda kind: f"<{kind.name}>")
-        self.addCleanup(patcher.stop)
-        patcher.start()
+        _patch_randomness(self)
 
     def _make_update(self, option_ids):
         update = MagicMock()
@@ -498,7 +542,7 @@ class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
         await retraction_reply_callback(context)
 
         context.bot.send_message.assert_called_once_with(
-            1, "Alice pulled their Maybe vote — <RETRACTED_MAYBE>", disable_notification=False
+            1, "<Alice|Maybe|>\n— <RETRACTED_MAYBE>", disable_notification=False
         )
 
     async def test_reply_in_quiet_hours_is_silent(self):

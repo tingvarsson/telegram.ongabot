@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Between 23:00 and 07:00 group time the bot posts silently, so the nightly wrap-up, patch
   notes and other late messages no longer buzz anyone's phone. The game-day poke never goes
   out before 07:00.
+- Vote replies are far more dramatic, and game votes are now judged on slots: tick every slot
+  and you're praised, tick only some and you're shamed.
 
 ## [1.13.0] - 2026-09-30
 

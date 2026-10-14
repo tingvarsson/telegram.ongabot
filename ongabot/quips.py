@@ -1,9 +1,11 @@
 """This module builds the chat reply sent right after someone votes in an event poll.
 
-Every reply states what happened - a first answer or a change, and from what to what - and
-most add a hand-written line of banter for that exact path, e.g. bailing from game to No-op,
-or a motivational one for coming back from No-op to game. See build_vote_reply for the
-matrix and BANTER_BY_PATH for which pool each path draws from.
+Every reply opens with a theatrical headline stating what happened - a first answer or a
+change, and from what to what - followed by a hand-written line of banter for that exact path,
+e.g. bailing from game to No-op, or a motivational one for coming back from No-op to game. A
+game vote is also judged on how many of the poll's time slots it covers: every slot is
+praised, only some is shamed. See build_vote_reply for the matrix, HEADLINES for the headlines
+and BANTER_BY_PATH for which pool each path draws from.
 """
 
 import logging
@@ -15,9 +17,13 @@ _logger = logging.getLogger(__name__)
 
 # Every pool holds exactly this many lines, so no path gets noticeably more repetitive.
 POOL_SIZE = 30
-# The banter follows a lead like "Alice went from Maybe to No-op — ", so it is kept to well
-# under one phone line on its own.
+# The banter follows a "— " on the line below the headline (or a short slot verdict lead), so
+# it is kept to about one phone line on its own.
 MAX_LINE_LENGTH = 60
+# Every path rotates through this many headlines, see HEADLINES.
+HEADLINES_PER_PATH = 3
+# A headline, without the voter's name, stays within one phone line.
+MAX_HEADLINE_LENGTH = 50
 
 
 class Answer(Enum):
@@ -43,6 +49,29 @@ def categorize(option_ids: Sequence[int], num_slots: int) -> Answer:
     return Answer.NO_OP
 
 
+def slot_count(option_ids: Sequence[int], num_slots: int) -> int:
+    """How many of the poll's time slots an answer picks; see categorize for the option layout."""
+    return sum(1 for option_id in option_ids if option_id < num_slots)
+
+
+class Coverage(Enum):
+    """How much of the evening a game vote covers."""
+
+    ALL = "all"
+    SOME = "some"
+
+
+def _coverage(answer: Optional[Answer], slots: int, num_slots: int) -> Optional[Coverage]:
+    """The slot coverage of a game answer, or None when there is nothing to judge.
+
+    A non-game answer has no slots, a single-slot poll has nothing to choose between, and a
+    caller that passes no slot count (slots=0) gets no verdict.
+    """
+    if answer is not Answer.GAME or num_slots < 2 or slots < 1:
+        return None
+    return Coverage.ALL if slots >= num_slots else Coverage.SOME
+
+
 class Banter(Enum):
     """One pool of banter per path that gets one. Named after the path it is written for."""
 
@@ -61,12 +90,16 @@ class Banter(Enum):
     UNVERIFIED = "unverified"
     # Not tied to a path either: the morning poke at everyone who has not voted (see poke.py).
     POKE = "poke"
+    # Not tied to a path: the verdict on a game vote that picks every slot, or only some.
+    ALL_SLOTS = "all_slots"
+    SOME_SLOTS = "some_slots"
 
 
 # (previous answer, new answer) -> pool. None as previous means a first answer, None as new
 # means the vote was retracted (and not replaced in time). Spelled out path by path rather
 # than assembled, so every path that gets banter is visible here. A first game vote and a
-# change within the same category keep their classic fixed lines, so they are absent.
+# change within the same category are about the slots instead, see build_vote_reply, so they
+# are absent.
 BANTER_BY_PATH: Dict[Tuple[Optional[Answer], Optional[Answer]], Banter] = {
     (None, Answer.MAYBE): Banter.FIRST_MAYBE,
     (None, Answer.NO_OP): Banter.FIRST_NO_OP,
@@ -80,6 +113,88 @@ BANTER_BY_PATH: Dict[Tuple[Optional[Answer], Optional[Answer]], Banter] = {
     (Answer.MAYBE, None): Banter.RETRACTED_MAYBE,
     (Answer.NO_OP, None): Banter.RETRACTED_NO_OP,
 }
+
+# The theatrical headline that opens the reply, per path in BANTER_BY_PATH. These are format
+# templates: {name} is the voter, and {previous} and {new} are the answers at either end
+# wherever the path has them, so every headline still says what was answered or switched.
+HEADLINES: Dict[Tuple[Optional[Answer], Optional[Answer]], List[str]] = {
+    (None, Answer.MAYBE): [
+        "🎭 {name} steps into the spotlight... with a {new}",
+        "🌫️ A mysterious {new} emerges from {name}",
+        "🎻 Cue the violins: {name} votes {new}",
+    ],
+    (None, Answer.NO_OP): [
+        "💀 TRAGEDY! {name} votes {new}",
+        "🥀 Alas, poor {name} votes {new}",
+        "📰 BREAKING: {name} votes {new}",
+    ],
+    (Answer.GAME, Answer.MAYBE): [
+        "😰 GASP! {name} wobbles from {previous} to {new}",
+        "🎭 Doubt creeps in! {name}: {previous} → {new}",
+        "📉 {name} retreats from {previous} to {new}!",
+    ],
+    (Answer.GAME, Answer.NO_OP): [
+        "🎭 BETRAYAL! {name} abandons {previous} for {new}!",
+        "🔪 A knife in the back! {name}: {previous} → {new}",
+        "💔 HEARTBREAK! {name} goes from {previous} to {new}",
+    ],
+    (Answer.MAYBE, Answer.NO_OP): [
+        "🥀 The fence collapses! {name}: {previous} → {new}",
+        "⚰️ RIP hope. {name} drops from {previous} to {new}",
+        "🎭 The mask slips! {name}: {previous} → {new}",
+    ],
+    (Answer.NO_OP, Answer.MAYBE): [
+        "👀 WAIT! {name} creeps from {previous} to {new}",
+        "🌅 A glimmer! {name} goes from {previous} to {new}",
+        "🎭 Hold the phone! {name}: {previous} → {new}",
+    ],
+    (Answer.MAYBE, Answer.GAME): [
+        "🎺 HARK! {name} rises from {previous} to {new}!",
+        "🔥 The crowd roars! {name}: {previous} → {new}!",
+        "🦸 A hero steps up! {name}: {previous} → {new}!",
+    ],
+    (Answer.NO_OP, Answer.GAME): [
+        "🚨 PLOT TWIST! {name} crawls back from {previous} to {new}!",
+        "⚡ IT'S ALIVE! {name} rises from {previous} to {new}!",
+        "🎆 MIRACLE! {name} flips from {previous} to {new}!",
+    ],
+    (Answer.GAME, None): [
+        "😱 {name} yanks their {previous} vote into the void",
+        "🕳️ VANISHED! {name}'s {previous} vote is gone",
+        "🚪 {name} slips out, {previous} vote and all",
+    ],
+    (Answer.MAYBE, None): [
+        "💨 POOF! {name}'s {previous} vote has evaporated",
+        "👻 {name} ghosts their own {previous} vote",
+        "🌫️ {name}'s {previous} vote fades into the mist",
+    ],
+    (Answer.NO_OP, None): [
+        "🤯 SHOCK! {name} takes back their {previous} vote",
+        "🎭 A twist! {name}'s {previous} vote is no more",
+        "😮 {name} un-votes their {previous}. What now?",
+    ],
+}
+
+# Fixed headlines for the replies that are about the slots rather than a path: a first game
+# vote, and a change within game that moves up to every slot or down from it.
+FIRST_GAME_HEADLINES: Dict[Coverage, str] = {
+    Coverage.ALL: "👑 {name} votes ALL {num_slots} slots!",
+    Coverage.SOME: "🤨 {name} votes {slots} of {num_slots} slots",
+}
+SLOT_CHANGE_HEADLINES: Dict[Coverage, str] = {
+    Coverage.ALL: "👑 {name} went from {previous_slots} to ALL {num_slots} slots!",
+    Coverage.SOME: "📉 {name} went from all {num_slots} to {slots} of {num_slots} slots",
+}
+# The lead of the verdict line appended when someone switches to game from Maybe or No-op.
+VERDICT_LEADS: Dict[Coverage, str] = {
+    Coverage.ALL: "👑 ALL {num_slots} slots, too",
+    Coverage.SOME: "🤨 Only {slots} of {num_slots} slots though",
+}
+# A first game vote on a single-slot poll, and a change that stays within one category.
+CLASSIC_PRAISE = "🎉 Wow {name}, what a great job answering that poll!"
+SUSPICIOUS = "🕵️ Hmm, suspicious... {name} changed their vote"
+
+VERDICT_POOL: Dict[Coverage, Banter] = {Coverage.ALL: Banter.ALL_SLOTS, Coverage.SOME: Banter.SOME_SLOTS}
 
 POOLS: Dict[Banter, List[str]] = {
     # Fence-sitting.
@@ -511,6 +626,72 @@ POOLS: Dict[Banter, List[str]] = {
         "don't make us ping you twice",
         "the scoreboard needs your name on it",
     ],
+    # Every slot ticked: a standing ovation.
+    Banter.ALL_SLOTS: [
+        "a true servant of the squad",
+        "now THAT is commitment",
+        "every slot, every time. Legendary.",
+        "the calendar bows before you",
+        "flexibility so strong it should be illegal",
+        "available from warmup to last call",
+        "the scheduler's dream come true",
+        "a full house of availability",
+        "whenever we play, you're there. Hero.",
+        "no slot left behind",
+        "the hall of fame has a new plaque",
+        "this is what peak teammate looks like",
+        "an open calendar and an open heart",
+        "the squad salutes you 🫡",
+        "maximum availability unlocked",
+        "the poll box sheds a single proud tear",
+        "any time, any place, any round",
+        "the ultimate yes",
+        "free all night. As it should be.",
+        "the five-stack's best friend",
+        "time slots? You took them all.",
+        "a clean sweep of the schedule",
+        "flexible like a pro player's wrists",
+        "the lobby can start whenever. Bless you.",
+        "this vote deserves a standing ovation",
+        "MVP of the poll, no contest",
+        "the bot is genuinely moved",
+        "no excuses, no limits, all slots",
+        "the gold standard of voting",
+        "the whole evening, pledged to the squad",
+    ],
+    # Only some slots ticked: available, with conditions.
+    Banter.SOME_SLOTS: [
+        "picky, picky. The lobby has a schedule too",
+        "the other slots would like a word",
+        "playing hard to get with the calendar",
+        "a part-time hero, apparently",
+        "available, terms and conditions apply",
+        "commitment, but with an asterisk",
+        "cherry-picking slots like it's a buffet",
+        "the rest of the evening is mysteriously booked",
+        "half in, half 'I have a thing'",
+        "the unpicked slots weep in silence",
+        "the fine print says: some restrictions apply",
+        "a limited-time offer, apparently",
+        "we'll schedule around your majesty",
+        "the squad must bend to your timetable",
+        "selective availability, how exclusive",
+        "what's wrong with the other slots, hmm?",
+        "would it kill you to tick one more?",
+        "the scheduler sighs heavily",
+        "a VIP with a very tight agenda",
+        "slots left on the table, tsk tsk",
+        "the flexibility of a brick wall",
+        "only on your terms, as always",
+        "trimming the evening like a bonsai",
+        "shows up, but by appointment only",
+        "so close to a full sweep. So close.",
+        "the other slots were never even considered",
+        "an availability window the size of a keyhole",
+        "it's a start. A narrow one.",
+        "we'll take what we can get, apparently",
+        "the calendar has spoken, and it's stingy",
+    ],
 }
 
 # Per-pool shuffled decks, dealt from the end, and the line each pool dealt last. Kept in
@@ -545,36 +726,82 @@ def next_banter(kind: Banter) -> str:
     return deal(kind, POOLS[kind])
 
 
-def build_vote_reply(name: str, previous: Optional[Answer], new: Answer, unverified: bool = False) -> str:
+def next_headline(path: Tuple[Optional[Answer], Optional[Answer]]) -> str:
+    """Deal the next headline template for path, rotating through all of them before repeats."""
+    return deal(("headline", path), HEADLINES[path])
+
+
+def _with_banter(headline: str, banter: str) -> str:
+    """Put the banter on its own line under the headline."""
+    return f"{headline}\n— {banter}"
+
+
+def build_vote_reply(  # pylint: disable=too-many-arguments
+    name: str,
+    previous: Optional[Answer],
+    new: Answer,
+    unverified: bool = False,
+    *,
+    slots: int = 0,
+    previous_slots: int = 0,
+    num_slots: int = 0,
+) -> str:
     """Build the reply to a vote. previous is None for a user's first answer to the poll.
 
-    An unverified voter gets the same lead on every path, including the ones that normally
-    keep a fixed line, followed by a line from the UNVERIFIED pool.
+    slots and previous_slots are how many time slots the new and the previous answer pick, out
+    of the poll's num_slots, see slot_count. They decide the slot verdict on a game vote:
+    - a first game vote is all about the slots: praise for every slot, shame for only some
+    - a change within game that crosses between every slot and only some is judged the same
+      way; any other change within one category gets the suspicious line
+    - every other path gets its headline and banter, plus a verdict line if it ends on game
+    A single-slot poll has no verdict, and its first game vote gets the classic praise.
+
+    An unverified voter gets a plain lead on every path, including the ones that normally
+    keep a fixed line, followed by a line from the UNVERIFIED pool and no verdict.
     """
     if unverified:
-        if previous is None:
-            lead = f"{name} votes {new.value}"
-        elif previous is new:
-            lead = f"{name} changed their vote"
-        else:
-            lead = f"{name} went from {previous.value} to {new.value}"
-        _logger.debug("Vote reply for unverified %s uses banter pool %s", name, Banter.UNVERIFIED.name)
-        return f"{lead} — {next_banter(Banter.UNVERIFIED)}"
+        return _unverified_vote_reply(name, previous, new)
+
+    counts = {"name": name, "slots": slots, "previous_slots": previous_slots, "num_slots": num_slots}
+    coverage = _coverage(new, slots, num_slots)
+    _logger.debug("Vote reply for %s: %s of %s slots, coverage=%s", name, slots, num_slots, coverage)
     if previous is None and new is Answer.GAME:
-        return f"Wow {name}, what a great job answering that poll!"
+        if coverage is None:
+            return CLASSIC_PRAISE.format(**counts)
+        return _with_banter(FIRST_GAME_HEADLINES[coverage].format(**counts), next_banter(VERDICT_POOL[coverage]))
     if previous is new:
+        before = _coverage(previous, previous_slots, num_slots)
+        if coverage is not None and before is not None and coverage is not before:
+            return _with_banter(SLOT_CHANGE_HEADLINES[coverage].format(**counts), next_banter(VERDICT_POOL[coverage]))
         # Covers slot-to-slot moves, like 19.00 -> 19.40, as well as re-voting the same thing.
-        return f"Hmm suspicious, looks like {name} changed their vote..."
+        return SUSPICIOUS.format(**counts)
+
+    path = (previous, new)
+    _logger.debug("Vote reply for %s uses banter pool %s", name, BANTER_BY_PATH[path].name)
+    headline = next_headline(path).format(name=name, previous=previous.value if previous else "", new=new.value)
+    reply = _with_banter(headline, next_banter(BANTER_BY_PATH[path]))
+    if coverage is not None:
+        # Switching to game from Maybe or No-op: the hype line stays, the slots get judged too.
+        reply += f"\n{VERDICT_LEADS[coverage].format(**counts)} — {next_banter(VERDICT_POOL[coverage])}"
+    return reply
+
+
+def _unverified_vote_reply(name: str, previous: Optional[Answer], new: Answer) -> str:
+    """A plain lead saying what happened, followed by a roast from the UNVERIFIED pool."""
     if previous is None:
         lead = f"{name} votes {new.value}"
+    elif previous is new:
+        lead = f"{name} changed their vote"
     else:
         lead = f"{name} went from {previous.value} to {new.value}"
-    kind = BANTER_BY_PATH[(previous, new)]
-    _logger.debug("Vote reply for %s uses banter pool %s", name, kind.name)
-    return f"{lead} — {next_banter(kind)}"
+    _logger.debug("Vote reply for unverified %s uses banter pool %s", name, Banter.UNVERIFIED.name)
+    return f"{lead} — {next_banter(Banter.UNVERIFIED)}"
 
 
 def build_retraction_reply(name: str, previous: Answer, unverified: bool = False) -> str:
     """Build the reply to a vote that was retracted and not replaced in time."""
-    kind = Banter.UNVERIFIED if unverified else BANTER_BY_PATH[(previous, None)]
-    return f"{name} pulled their {previous.value} vote — {next_banter(kind)}"
+    if unverified:
+        return f"{name} pulled their {previous.value} vote — {next_banter(Banter.UNVERIFIED)}"
+    path = (previous, None)
+    headline = next_headline(path).format(name=name, previous=previous.value, new="")
+    return _with_banter(headline, next_banter(BANTER_BY_PATH[path]))
