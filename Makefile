@@ -52,7 +52,7 @@ black:
 	$(BLACK) .
 
 test:
-	$(PYTEST) -v --cov=ongabot --cov-report=term-missing --cov-fail-under=94
+	$(PYTEST) -v --cov=ongabot --cov-report=term-missing --cov-fail-under=95
 
 # Rewrite tests/snapshots/ from the current renderers; review the diff before committing.
 snapshots:

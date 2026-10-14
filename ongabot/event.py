@@ -1,7 +1,7 @@
 """This module contains the Event class."""
 
 import logging
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import Collection, Dict, Optional, Set
 
 
@@ -14,6 +14,10 @@ from utils import log
 from verification import badged
 
 _logger = logging.getLogger(__name__)
+
+# Votes one slot needs before the event counts as a full stack: nobody is poked any more, and
+# the stack is celebrated.
+FULL_STACK = 5
 
 
 def parse_event_date_from_poll_question(question: str) -> Optional[date]:
@@ -59,6 +63,8 @@ class Event:
         cs2_reported: whether the CS2 results are final, so the sweep job stops updating them
         poked: whether the morning poke for this event is done - sent, or found unneeded
             (see poke.py) - so a restart never pokes twice
+        stack_celebrated: whether a slot reaching FULL_STACK has been celebrated, so it is
+            celebrated once per event, even when the slot drops below and climbs back
     """
 
     def __init__(self, chat_id: int, poll: Poll, data: EventData) -> None:
@@ -77,6 +83,7 @@ class Event:
         self.cs2_message_id: int = 0
         self.cs2_reported: bool = False
         self.poked: bool = False
+        self.stack_celebrated: bool = False
 
     @property
     def event_date(self) -> date:
@@ -137,6 +144,9 @@ class Event:
         if not hasattr(self, "poked"):
             # Completed events are never poked anyway, and an open one still deserves its poke.
             self.poked = False
+        if not hasattr(self, "stack_celebrated"):
+            # A stack already full when the celebration shipped is not celebrated after the fact.
+            self.stack_celebrated = self.has_full_stack(FULL_STACK)
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)
@@ -241,6 +251,31 @@ class Event:
     def has_full_stack(self, stack_size: int) -> bool:
         """True when at least one time slot has stack_size votes or more."""
         return any(option.voter_count >= stack_size for option in self.poll.options[: self.num_slots])
+
+    def full_stack_slot(self) -> Optional[str]:
+        """The text of the first time slot with FULL_STACK votes or more, e.g. "19.10", or None."""
+        for option in self.poll.options[: self.num_slots]:
+            if option.voter_count >= FULL_STACK:
+                return option.text
+        return None
+
+    def claim_stack_celebration(self, now: datetime) -> Optional[str]:
+        """Claim the once-per-event full-stack celebration, returning the slot it is for.
+
+        None when there is nothing to celebrate: no full slot, a closed event, one that was
+        celebrated already, or one that has started - a slot filling up after the fact, say to
+        keep a played streak, is no news. now is aware, in the chat's zone. Synchronous, so a
+        caller claims it before its first await and two poll updates in a row can never both
+        celebrate.
+        """
+        if self.stack_celebrated or self.completed or self.cancelled:
+            return None
+        if now >= datetime.combine(self.event_date, self.start_time, tzinfo=now.tzinfo):
+            return None
+        slot = self.full_stack_slot()
+        if slot is not None:
+            self.stack_celebrated = True
+        return slot
 
     def voted_user_ids(self) -> Set[int]:
         """Ids of the users with a vote on this poll. A retracted vote does not count."""

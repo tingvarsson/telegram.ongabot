@@ -277,6 +277,21 @@ SHORT = CommandInfo(
     menu_description="Post a top YouTube Short [topics..]",
 )
 
+GIFS = CommandInfo(
+    command="gifs",
+    brief="/gifs [on|off] - Show or switch the GIFs the bot adds to its big moments",
+    usage=(
+        "Usage: /gifs [on|off]\n"
+        "  No argument: show whether GIFs are on in this chat.\n"
+        "  on: add a GIF to the big moments - a full five-stack,\n"
+        "  bails and comebacks, the CS2 night's verdict and the\n"
+        "  game-day poke. On by default.\n"
+        "  off: no GIFs - the moments go out as plain text,\n"
+        "  and the CS2 verdict is skipped"
+    ),
+    menu_description="Show or switch GIFs at big moments [on|off]",
+)
+
 UNVERIFY = CommandInfo(
     command="unverify",
     brief="/unverify @user - Start a 1-hour group vote to revoke a member's age verification",
@@ -335,6 +350,7 @@ ALL_COMMANDS = [
     CS2,
     CS2PATCHES,
     SHORT,
+    GIFS,
     UNVERIFY,
     VERIFY,
     LINKSTEAM,

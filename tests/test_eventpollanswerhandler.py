@@ -1,3 +1,4 @@
+import importlib
 import unittest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -46,6 +47,7 @@ def _make_context(user_data, event, chat_events=None):
     context.bot_data.get_event.return_value = event
 
     chat = MagicMock()
+    chat.chat_id = event.chat_id
     chat.events = chat_events or {}
     chat.unverified = {}
     chat.is_unverified.return_value = False
@@ -521,6 +523,8 @@ class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
         context.job.data = "poll1"
         context.user_data = user_data
         context.bot_data.get_event.return_value = event
+        # The chat_id every event from _make_event has.
+        context.bot_data.get_chat.return_value.chat_id = 1
         context.bot_data.get_chat.return_value.is_unverified.return_value = False
         context.bot_data.get_chat.return_value.is_quiet.return_value = False
         context.bot.send_message = AsyncMock()
@@ -586,6 +590,91 @@ class EventPollAnswerRetractionReplyTest(unittest.IsolatedAsyncioTestCase):
 
         await retraction_reply_callback(context)
 
+        context.bot.send_message.assert_not_called()
+
+
+class EventPollAnswerGifTest(unittest.IsolatedAsyncioTestCase):
+    """Dramatic swings sometimes go out as a GIF with the reply as its caption."""
+
+    def setUp(self):
+        _patch_randomness(self)
+        # The handler sees the top-level gifs modules (pythonpath is ongabot/).
+        moments = importlib.import_module("gifs.moments")
+        moments.reset()
+        self.addCleanup(moments.reset)
+        for target, kwargs in (
+            ("gifs.moments.random.random", {"return_value": 0.0}),
+            ("gifs.send.pick_gif", {"new": AsyncMock(return_value=MagicMock(gif=MagicMock(mp4_url="u.mp4")))}),
+        ):
+            patcher = patch(target, **kwargs)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _event(self):
+        event = MagicMock()
+        event.chat_id = 1
+        event.num_slots = 5
+        event.completed = False
+        event.cancelled = False
+        event.user_streaks = {}
+        event.user_played_streaks = {}
+        return event
+
+    def _update(self, option_ids):
+        update = MagicMock()
+        update.poll_answer.poll_id = "poll1"
+        update.poll_answer.option_ids = option_ids
+        update.poll_answer.user.id = 42
+        update.poll_answer.user.name = "Alice"
+        return update
+
+    async def test_a_bail_goes_out_as_a_gif(self):
+        user_data, event = UserData(), self._event()
+        user_data.set_poll_answer("poll1", (0,))
+        user_data.set_poll_answer("poll1", ())
+        context = _make_context(user_data, event)
+        context.bot.send_animation = AsyncMock()
+
+        await callback(self._update((5,)), context)
+
+        context.bot.send_animation.assert_awaited_once()
+        args, kwargs = context.bot.send_animation.call_args
+        self.assertEqual(args, (1, "u.mp4"))
+        self.assertEqual(kwargs["caption"], "<Alice|game|No-op>\n— <GAME_TO_NO_OP>")
+        self.assertIs(kwargs["disable_notification"], False)
+        context.bot.send_message.assert_not_called()
+
+    async def test_a_calm_vote_stays_text(self):
+        context = _make_context(UserData(), self._event())
+        context.bot.send_animation = AsyncMock()
+
+        await callback(self._update((5,)), context)
+
+        context.bot.send_animation.assert_not_awaited()
+        context.bot.send_message.assert_awaited_once()
+
+    async def test_a_pulled_game_vote_goes_out_as_a_gif(self):
+        user_data = UserData()
+        user = MagicMock()
+        user.name = "Alice"
+        user_data.init_or_update(user)
+        user_data.set_poll_answer("poll1", (0,))
+        user_data.set_poll_answer("poll1", ())
+        context = MagicMock()
+        context.job.data = "poll1"
+        context.user_data = user_data
+        context.bot_data.get_event.return_value = self._event()
+        chat = context.bot_data.get_chat.return_value
+        chat.chat_id = 1
+        chat.is_unverified.return_value = False
+        chat.is_quiet.return_value = False
+        context.bot.send_animation = AsyncMock()
+        context.bot.send_message = AsyncMock()
+
+        await retraction_reply_callback(context)
+
+        context.bot.send_animation.assert_awaited_once()
+        self.assertEqual(context.bot.send_animation.call_args.kwargs["caption"], "<Alice|game|>\n— <RETRACTED_GAME>")
         context.bot.send_message.assert_not_called()
 
 

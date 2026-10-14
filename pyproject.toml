@@ -9,7 +9,7 @@ pythonpath = ["ongabot"]
 
 [tool.pylint.design]
 max-args = 10
-max-attributes = 15  # UserStatRow is a flat stats row (one attribute per table column); Event carries the CS2 fields and poked
+max-attributes = 16  # UserStatRow is a flat stats row (one attribute per table column); Event carries the CS2 fields, poked and stack_celebrated
 max-public-methods = 25  # Chat is the per-chat aggregate: events, schedule, Shorts, verification votes, its timezone and quiet hours
 max-positional-arguments=10
 

@@ -25,6 +25,8 @@ from ongabot import quips
 from ongabot.chat import Chat
 from ongabot.cs2.format import format_session
 from ongabot.cs2.patchnotesformat import render_patch_notes_html
+from ongabot.cs2.session import Cs2Session
+from ongabot.gifs.moments import cs2_verdict, stack_full_text
 from ongabot.handler.shortcommandhandler import render_short_message
 from ongabot.poke import render_poke_message
 from ongabot.shrink import render_shrink_message
@@ -155,6 +157,14 @@ def _poke() -> List[str]:
         return [render_poke_message(event, message_fixtures.users(), chat.unverified)]
 
 
+def _gif_captions() -> List[str]:
+    """The texts only the GIF moments send: the full-stack celebration, and the CS2 verdict for
+    a won and a lost night (the other moments caption a message that is pinned elsewhere)."""
+    session = message_fixtures.cs2_session()
+    nights = [Cs2Session(session.event_date, [match]) for match in session.matches]
+    return [stack_full_text("19.10")] + [cs2_verdict(night)[1] for night in nights]
+
+
 def _shorts() -> List[str]:
     """Both /short header shapes: the weekly Gaming chart, and topics widened to the month."""
     weekly = SelectedVideo(
@@ -212,6 +222,7 @@ RENDERS: Dict[str, Render] = {
     "help_private": (check_plain_text, lambda: _help(private=True)),
     "vote_replies": (check_plain_text, _vote_replies),
     "poke": (check_html, _poke),
+    "gif_captions": (check_plain_text, _gif_captions),
     "short": (check_plain_text, _shorts),
     "shrink": (check_plain_text, _shrink_sessions),
 }

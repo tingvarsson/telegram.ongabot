@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The bot marks the big moments with a GIF: a slot hitting a full five-stack (now announced
+  too), bails and comebacks, the CS2 night's verdict and the game-day poke. `/gifs off` turns
+  them off.
+
 ### Changed
 
 - Between 23:00 and 07:00 group time the bot posts silently, so the nightly wrap-up, patch

@@ -41,6 +41,7 @@ class Chat:
         closed_verification_polls: poll_ids of the most recently closed votes, newest last
         timezone_name: IANA zone set with /timezone, or None to follow the bot default
             (BOT_TIMEZONE), so a later change to that default still reaches this chat
+        gifs_enabled: whether the bot's big moments come with a GIF, toggled with /gifs
     """
 
     def __init__(self, chat_id: int) -> None:
@@ -54,6 +55,7 @@ class Chat:
         self.verification_votes: Dict[str, VerificationVote] = {}
         self.closed_verification_polls: List[str] = []
         self.timezone_name: Optional[str] = None
+        self.gifs_enabled: bool = True
 
     def __setstate__(self, state: dict) -> None:
         self.__dict__.update(state)
@@ -118,6 +120,8 @@ class Chat:
         self._default_verification_state()
         # Pickles from before /timezone follow the bot default.
         self.__dict__.setdefault("timezone_name", None)
+        # GIFs are on by default, for chats from before /gifs too.
+        self.__dict__.setdefault("gifs_enabled", True)
 
     def __repr__(self) -> str:
         return str(self.__class__) + ": " + str(self.__dict__)

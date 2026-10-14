@@ -1,0 +1,64 @@
+{
+  "data": [
+    {
+      "type": "gif",
+      "id": "l0HlBO7eyXzSZkJri",
+      "title": "Rage Quit GIF",
+      "rating": "pg",
+      "images": {
+        "original": {
+          "url": "https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif",
+          "mp4": "https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.mp4",
+          "mp4_size": "412345"
+        }
+      }
+    },
+    {
+      "type": "gif",
+      "id": "3o7TKSjRrfIPjeiVyM",
+      "title": "Abandon Ship GIF",
+      "rating": "g",
+      "images": {
+        "original": {
+          "url": "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif",
+          "mp4": "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.mp4",
+          "mp4_size": "98765"
+        }
+      }
+    },
+    {
+      "type": "gif",
+      "id": "noMp4Here",
+      "title": "Sticker without an mp4",
+      "rating": "g",
+      "images": {
+        "original": {
+          "url": "https://media.giphy.com/media/noMp4Here/giphy.gif"
+        }
+      }
+    },
+    {
+      "type": "gif",
+      "id": "wayTooBig",
+      "title": "Huge GIF",
+      "rating": "g",
+      "images": {
+        "original": {
+          "url": "https://media.giphy.com/media/wayTooBig/giphy.gif",
+          "mp4": "https://media.giphy.com/media/wayTooBig/giphy.mp4",
+          "mp4_size": "31457280"
+        }
+      }
+    }
+  ],
+  "pagination": {
+    "total_count": 4,
+    "count": 4,
+    "offset": 0
+  },
+  "meta": {
+    "status": 200,
+    "msg": "OK",
+    "response_id": "fixture"
+  }
+}
