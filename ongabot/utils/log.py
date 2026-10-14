@@ -14,14 +14,14 @@ F = TypeVar("F", bound=Callable[..., Any])  # pylint: disable=invalid-name
 # httpx at INFO, and HTTP errors carry them in exception messages.
 _BOT_TOKEN = re.compile(r"\d{5,}:[A-Za-z0-9_-]{30,}")
 TOKEN_PLACEHOLDER = "<bot-token>"
-# Google APIs (YouTube Data API) take their key as a "key=" query parameter, so httpx's INFO
-# request log would otherwise print it with every search.
-_API_KEY_PARAM = re.compile(r"([?&]key=)[^&\s'\"]+")
+# Google APIs (YouTube Data API) take their key as a "key=" query parameter and Giphy as
+# "api_key=", so httpx's INFO request log would otherwise print it with every search.
+_API_KEY_PARAM = re.compile(r"([?&](?:api_)?key=)[^&\s'\"]+")
 API_KEY_PLACEHOLDER = "<api-key>"
 
 
 def _redact(text: str) -> str:
-    """Mask bot tokens and key= query parameters in text."""
+    """Mask bot tokens and key= and api_key= query parameters in text."""
     return _API_KEY_PARAM.sub(r"\g<1>" + API_KEY_PLACEHOLDER, _BOT_TOKEN.sub(TOKEN_PLACEHOLDER, text))
 
 

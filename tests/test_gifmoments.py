@@ -49,44 +49,53 @@ class SwingGateTest(unittest.TestCase):
         clock.start()
         self.addCleanup(clock.stop)
         self.roll = 0.0
-        dice = patch.object(moments.random, "random", side_effect=lambda: self.roll)
-        dice.start()
-        self.addCleanup(dice.stop)
+        self.dice = patch.object(moments.random, "random", side_effect=lambda: self.roll).start()
+        self.addCleanup(patch.stopall)
+        self.chat = Chat(CHAT_ID)
 
     def test_a_winning_roll_gets_a_gif(self):
         with self.assertLogs("gifs.moments", level="INFO"):
-            self.assertIs(moments.gated_swing_mood(CHAT_ID, Answer.GAME, Answer.NO_OP), Mood.BAIL)
+            self.assertIs(moments.gated_swing_mood(self.chat, Answer.GAME, Answer.NO_OP), Mood.BAIL)
 
     def test_a_losing_roll_does_not(self):
         self.roll = moments.SWING_GIF_CHANCE
         with self.assertLogs("gifs.moments", level="INFO") as logs:
-            self.assertIsNone(moments.gated_swing_mood(CHAT_ID, Answer.GAME, Answer.NO_OP))
+            self.assertIsNone(moments.gated_swing_mood(self.chat, Answer.GAME, Answer.NO_OP))
         self.assertIn("roll", "\n".join(logs.output))
 
     def test_the_cooldown_holds_back_the_next_one(self):
-        moments.gated_swing_mood(CHAT_ID, Answer.GAME, Answer.NO_OP)
+        moments.gated_swing_mood(self.chat, Answer.GAME, Answer.NO_OP)
         self.now += moments.SWING_GIF_COOLDOWN_SECONDS - 1
 
         with self.assertLogs("gifs.moments", level="INFO") as logs:
-            self.assertIsNone(moments.gated_swing_mood(CHAT_ID, Answer.NO_OP, Answer.GAME))
+            self.assertIsNone(moments.gated_swing_mood(self.chat, Answer.NO_OP, Answer.GAME))
         self.assertIn("cooldown", "\n".join(logs.output))
 
         self.now += 1
-        self.assertIs(moments.gated_swing_mood(CHAT_ID, Answer.NO_OP, Answer.GAME), Mood.COMEBACK)
+        self.assertIs(moments.gated_swing_mood(self.chat, Answer.NO_OP, Answer.GAME), Mood.COMEBACK)
 
     def test_the_cooldown_is_per_chat(self):
-        moments.gated_swing_mood(CHAT_ID, Answer.GAME, Answer.NO_OP)
-        self.assertIs(moments.gated_swing_mood(CHAT_ID + 1, Answer.GAME, Answer.NO_OP), Mood.BAIL)
+        moments.gated_swing_mood(self.chat, Answer.GAME, Answer.NO_OP)
+        self.assertIs(moments.gated_swing_mood(Chat(CHAT_ID + 1), Answer.GAME, Answer.NO_OP), Mood.BAIL)
 
     def test_a_lost_roll_does_not_start_the_cooldown(self):
         self.roll = 0.99
-        moments.gated_swing_mood(CHAT_ID, Answer.GAME, Answer.NO_OP)
+        moments.gated_swing_mood(self.chat, Answer.GAME, Answer.NO_OP)
         self.roll = 0.0
-        self.assertIs(moments.gated_swing_mood(CHAT_ID, Answer.GAME, Answer.NO_OP), Mood.BAIL)
+        self.assertIs(moments.gated_swing_mood(self.chat, Answer.GAME, Answer.NO_OP), Mood.BAIL)
+
+    def test_a_chat_with_gifs_off_neither_rolls_nor_starts_the_cooldown(self):
+        self.chat.gifs_enabled = False
+        with self.assertNoLogs("gifs.moments", level="INFO"):
+            self.assertIsNone(moments.gated_swing_mood(self.chat, Answer.GAME, Answer.NO_OP))
+        self.dice.assert_not_called()
+
+        self.chat.gifs_enabled = True
+        self.assertIs(moments.gated_swing_mood(self.chat, Answer.GAME, Answer.NO_OP), Mood.BAIL)
 
     def test_a_quiet_path_neither_rolls_nor_starts_the_cooldown(self):
-        self.assertIsNone(moments.gated_swing_mood(CHAT_ID, None, Answer.GAME))
-        self.assertIs(moments.gated_swing_mood(CHAT_ID, Answer.GAME, Answer.NO_OP), Mood.BAIL)
+        self.assertIsNone(moments.gated_swing_mood(self.chat, None, Answer.GAME))
+        self.assertIs(moments.gated_swing_mood(self.chat, Answer.GAME, Answer.NO_OP), Mood.BAIL)
 
 
 class StackTextTest(unittest.TestCase):

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram import ReplyParameters
 from telegram.constants import ParseMode
-from telegram.error import BadRequest, TelegramError
+from telegram.error import BadRequest, TelegramError, TimedOut
 
 from ongabot.chat import Chat
 from ongabot.gifs import send
@@ -52,6 +52,7 @@ class SendWithGifTest(unittest.IsolatedAsyncioTestCase):
             CHAT_ID,
             PICKED.gif.mp4_url,
             caption="<b>hi</b>",
+            read_timeout=send.ANIMATION_READ_TIMEOUT,
             parse_mode=ParseMode.HTML,
             reply_parameters=reply,
             disable_notification=True,
@@ -100,6 +101,17 @@ class SendWithGifTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message.message_id, 2)
         self.bot.send_message.assert_awaited_once()
         self.assertIn("caption is too long", "\n".join(logs.output))
+
+    async def test_a_timed_out_gif_is_not_followed_by_the_text(self):
+        """Telegram may still deliver an animation the client gave up on, and a text fallback
+        would then post the moment twice - a poke would ping everyone twice."""
+        self.bot.send_animation.side_effect = TimedOut()
+
+        with self.assertLogs("ongabot.gifs.send", level="WARNING") as logs:
+            self.assertIsNone(await send.send_with_gif(self.bot, self.chat, "hi", Mood.POKE))
+
+        self.bot.send_message.assert_not_awaited()
+        self.assertIn("may still arrive", "\n".join(logs.output))
 
     async def test_a_failing_text_send_raises(self):
         self.pick_gif.return_value = None

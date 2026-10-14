@@ -1,7 +1,7 @@
 """This module contains the Event class."""
 
 import logging
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import Collection, Dict, Optional, Set
 
 
@@ -259,14 +259,18 @@ class Event:
                 return option.text
         return None
 
-    def claim_stack_celebration(self) -> Optional[str]:
+    def claim_stack_celebration(self, now: datetime) -> Optional[str]:
         """Claim the once-per-event full-stack celebration, returning the slot it is for.
 
-        None when there is nothing to celebrate: no full slot, a closed event, or one that was
-        celebrated already. Synchronous, so a caller claims it before its first await and two
-        poll updates in a row can never both celebrate.
+        None when there is nothing to celebrate: no full slot, a closed event, one that was
+        celebrated already, or one that has started - a slot filling up after the fact, say to
+        keep a played streak, is no news. now is aware, in the chat's zone. Synchronous, so a
+        caller claims it before its first await and two poll updates in a row can never both
+        celebrate.
         """
         if self.stack_celebrated or self.completed or self.cancelled:
+            return None
+        if now >= datetime.combine(self.event_date, self.start_time, tzinfo=now.tzinfo):
             return None
         slot = self.full_stack_slot()
         if slot is not None:

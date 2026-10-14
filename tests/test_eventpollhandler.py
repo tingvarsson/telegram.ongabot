@@ -1,5 +1,5 @@
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram.error import TelegramError
@@ -49,9 +49,10 @@ class EventPollCallbackUnverifiedBadgeTest(unittest.IsolatedAsyncioTestCase):
         event.update_status_message.assert_awaited_once_with(context.bot, unverified={42: "Will"})
 
 
-def _open_event(slot_votes):
-    """An open event with slot_votes votes on each of its time slots."""
-    event = message_fixtures.event(date(2026, 10, 14), [], [])
+def _open_event(slot_votes, event_date=None):
+    """An open event with slot_votes votes on each of its time slots, a week ahead by default
+    so it has not started yet."""
+    event = message_fixtures.event(event_date or date.today() + timedelta(weeks=1), [], [])
     event.completed = False
     for option, votes in zip(event.poll.options, slot_votes):
         option.voter_count = votes
@@ -114,6 +115,15 @@ class EventPollStackCelebrationTest(unittest.IsolatedAsyncioTestCase):
                 await self._vote(event)
                 self.send.assert_not_awaited()
                 self.assertFalse(event.stack_celebrated)
+
+    async def test_a_stack_filling_up_after_the_start_is_no_news(self):
+        """A fifth tick at 23:00, say to keep a played streak, does not celebrate the 19.10 slot."""
+        event = _open_event([5, 0, 0], event_date=date.today() - timedelta(days=1))
+
+        await self._vote(event)
+
+        self.send.assert_not_awaited()
+        self.assertFalse(event.stack_celebrated)
 
     async def test_a_failed_celebration_is_retried_on_the_next_vote(self):
         event = _open_event([5, 0, 0])

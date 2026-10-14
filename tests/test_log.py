@@ -170,6 +170,18 @@ class TokenRedactionTest(unittest.TestCase):
         self.assertIn(f"?key={log.API_KEY_PLACEHOLDER}", self.stream.getvalue())
         self.assertNotIn("AIzaSyFAKE", self.stream.getvalue())
 
+    def test_giphy_api_key_parameter_is_masked(self):
+        # httpx's request log line for a Giphy search, which names its key api_key.
+        self.child.info(
+            'HTTP Request: %s %s "%s"',
+            "GET",
+            "https://api.giphy.com/v1/gifs/search?api_key=GiPhYfAkE123abc&q=rage+quit&rating=pg-13",
+            "HTTP/1.1 200 OK",
+        )
+        output = self.stream.getvalue()
+        self.assertNotIn("GiPhYfAkE123abc", output)
+        self.assertIn(f"?api_key={log.API_KEY_PLACEHOLDER}&q=rage+quit", output)
+
     def test_other_parameters_ending_in_key_are_left_alone(self):
         self.child.info("GET https://example.com/?apikey=visible&monkey=business")
         self.assertIn("apikey=visible&monkey=business", self.stream.getvalue())

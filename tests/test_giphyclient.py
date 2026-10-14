@@ -93,6 +93,11 @@ class GiphySearchTest(unittest.IsolatedAsyncioTestCase):
         results = await _search(GiphyClient("key"), lambda _r: httpx.Response(200, json={"data": [entry]}))
         self.assertEqual(results, [Gif("nosize", "https://media.giphy.com/nosize.mp4")])
 
+    def test_has_key(self):
+        self.assertTrue(GiphyClient("key").has_key)
+        self.assertFalse(GiphyClient(None).has_key)
+        self.assertFalse(GiphyClient("").has_key)
+
     def test_size_limit_is_telegrams_url_limit(self):
         self.assertEqual(MAX_MP4_BYTES, 20 * 1024 * 1024)
 

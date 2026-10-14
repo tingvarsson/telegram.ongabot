@@ -637,9 +637,11 @@ class EventPollAnswerGifTest(unittest.IsolatedAsyncioTestCase):
 
         await callback(self._update((5,)), context)
 
-        context.bot.send_animation.assert_awaited_once_with(
-            1, "u.mp4", caption="<Alice|game|No-op>\n— <GAME_TO_NO_OP>", disable_notification=False
-        )
+        context.bot.send_animation.assert_awaited_once()
+        args, kwargs = context.bot.send_animation.call_args
+        self.assertEqual(args, (1, "u.mp4"))
+        self.assertEqual(kwargs["caption"], "<Alice|game|No-op>\n— <GAME_TO_NO_OP>")
+        self.assertIs(kwargs["disable_notification"], False)
         context.bot.send_message.assert_not_called()
 
     async def test_a_calm_vote_stays_text(self):

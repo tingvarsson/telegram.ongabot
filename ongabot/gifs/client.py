@@ -70,6 +70,11 @@ class GiphyClient:
         # tests can substitute their own transport before anything is allocated.
         self._client: Optional[httpx.AsyncClient] = None
 
+    @property
+    def has_key(self) -> bool:
+        """Whether an API key is set, without which every search comes back empty-handed."""
+        return bool(self._api_key)
+
     def _http(self) -> httpx.AsyncClient:
         """Return the shared AsyncClient, creating it on first use."""
         if self._client is None:

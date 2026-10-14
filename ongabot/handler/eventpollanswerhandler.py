@@ -107,7 +107,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
             context.bot,
             chat,
             response,
-            gated_swing_mood(chat.chat_id, previous, categorize(update.poll_answer.option_ids, event.num_slots)),
+            gated_swing_mood(chat, previous, categorize(update.poll_answer.option_ids, event.num_slots)),
             disable_notification=quiet,
         )
 
@@ -223,7 +223,7 @@ async def retraction_reply_callback(context: CallbackContext) -> None:
     )
     name = badged(user_data.user.name, unverified)
     # Quietly pulling a game vote sometimes gets a GIF, with the reply as its caption.
-    mood = gated_swing_mood(chat.chat_id, previous, None)
+    mood = gated_swing_mood(chat, previous, None)
     await send_with_gif(
         context.bot, chat, build_retraction_reply(name, previous, unverified), mood, disable_notification=quiet
     )

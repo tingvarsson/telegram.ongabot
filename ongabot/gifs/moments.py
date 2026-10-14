@@ -56,14 +56,16 @@ def swing_mood(previous: Optional[Answer], new: Optional[Answer]) -> Optional[Mo
     return SWING_MOODS.get((previous, new))
 
 
-def gated_swing_mood(chat_id: int, previous: Optional[Answer], new: Optional[Answer]) -> Optional[Mood]:
-    """The swing's mood if this one gets a GIF: a dramatic path, past the cooldown, and a won roll.
+def gated_swing_mood(chat: Chat, previous: Optional[Answer], new: Optional[Answer]) -> Optional[Mood]:
+    """The swing's mood if this one gets a GIF: a dramatic path in a chat with GIFs on, past the
+    cooldown, and a won roll.
 
     Granting a GIF starts the chat's cooldown, whether or not one is found in the end.
     """
     mood = swing_mood(previous, new)
-    if mood is None:
+    if mood is None or not chat.gifs_enabled:
         return None
+    chat_id = chat.chat_id
     since = _clock() - _last_swing_gif.get(chat_id, float("-inf"))
     if since < SWING_GIF_COOLDOWN_SECONDS:
         _logger.info("No %s GIF for chat_id=%s: cooldown, last one %.0fs ago", mood.name, chat_id, since)

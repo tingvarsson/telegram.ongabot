@@ -1,10 +1,10 @@
 """/gifs: show and switch the GIFs at the bot's big moments."""
 
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from ongabot.chat import Chat
-from ongabot.handler.gifscommandhandler import ATTRIBUTION, callback
+from ongabot.handler.gifscommandhandler import ATTRIBUTION, NO_KEY_NOTE, callback
 from ongabot.utils.commands import GIFS
 
 CHAT_ID = 42
@@ -28,6 +28,9 @@ class GifsCommandTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.chat = Chat(CHAT_ID)
         self.update = _update()
+        client = patch("ongabot.handler.gifscommandhandler.get_client", return_value=MagicMock(has_key=True))
+        self.get_client = client.start()
+        self.addCleanup(client.stop)
 
     async def _run(self, *args) -> str:
         await callback(self.update, _context(self.chat, list(args)))
@@ -51,6 +54,22 @@ class GifsCommandTest(unittest.IsolatedAsyncioTestCase):
         reply = await self._run("ON")
         self.assertTrue(self.chat.gifs_enabled)
         self.assertIn(ATTRIBUTION, reply)
+
+    async def test_without_a_key_it_says_so_instead_of_promising_gifs(self):
+        self.get_client.return_value.has_key = False
+        reply = await self._run()
+        self.assertIn(NO_KEY_NOTE, reply)
+        self.assertNotIn(ATTRIBUTION, reply)
+
+    async def test_turning_them_on_without_a_key_says_so(self):
+        self.get_client.return_value.has_key = False
+        self.chat.gifs_enabled = False
+        self.assertIn(NO_KEY_NOTE, await self._run("on"))
+
+    async def test_off_without_a_key_needs_no_note(self):
+        self.get_client.return_value.has_key = False
+        self.chat.gifs_enabled = False
+        self.assertNotIn(NO_KEY_NOTE, await self._run())
 
     async def test_already_on(self):
         self.assertEqual(await self._run("on"), "GIFs are already on in this chat.")

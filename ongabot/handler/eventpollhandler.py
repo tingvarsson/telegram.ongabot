@@ -39,7 +39,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
     # Poll updates carry the per-slot vote counts, so this is where a slot is seen reaching a
     # full stack. Claimed before the first await, so the next update cannot celebrate it again.
-    slot = event.claim_stack_celebration()
+    slot = event.claim_stack_celebration(chat.now())
     if slot is not None:
         try:
             await send_stack_celebration(context.bot, chat, event.poll_id, slot)

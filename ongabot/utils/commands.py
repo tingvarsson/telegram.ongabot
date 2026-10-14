@@ -286,7 +286,8 @@ GIFS = CommandInfo(
         "  on: add a GIF to the big moments - a full five-stack,\n"
         "  bails and comebacks, the CS2 night's verdict and the\n"
         "  game-day poke. On by default.\n"
-        "  off: stop adding GIFs; messages go out as plain text"
+        "  off: no GIFs - the moments go out as plain text,\n"
+        "  and the CS2 verdict is skipped"
     ),
     menu_description="Show or switch GIFs at big moments [on|off]",
 )
