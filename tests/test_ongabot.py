@@ -472,5 +472,23 @@ class PostInitVersionTrackingTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(application.bot_data.last_known_version)
 
 
+class ErrorHandlerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_logs_the_traceback_at_error_level(self):
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError as e:
+            raised = e
+        context = MagicMock()
+        context.error = raised
+
+        with self.assertLogs(ongabot.logger, level="ERROR") as logs:
+            await ongabot.error("the update", context)
+
+        record = logs.records[0]
+        self.assertEqual(record.levelname, "ERROR")
+        self.assertIs(record.exc_info[1], raised)
+        self.assertIn("Traceback", logs.output[0])
+
+
 if __name__ == "__main__":
     unittest.main()

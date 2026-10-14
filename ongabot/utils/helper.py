@@ -153,8 +153,9 @@ def parse_named_args(args: list[str], allowed_keys: set[str]) -> dict[str, str]:
     key and exactly one argument; with more than one allowed key a bare value would be
     ambiguous, so key=value is still required.
 
-    Raises ValueError if any arg is not key=value (outside the exception above), or if a
-    key is not in allowed_keys.
+    Raises ValueError if any arg is not key=value (outside the exception above), if a
+    key is not in allowed_keys, or if a key is given more than once (keys are matched
+    case-insensitively, so "Day=… day=…" is a duplicate too).
     """
     if len(args) == 1 and len(allowed_keys) == 1 and "=" not in args[0]:
         (sole_key,) = allowed_keys
@@ -168,5 +169,7 @@ def parse_named_args(args: list[str], allowed_keys: set[str]) -> dict[str, str]:
         if key.lower() not in allowed_keys:
             known = ", ".join(sorted(allowed_keys))
             raise ValueError(f"Unknown argument key: {key!r}. Known keys: {known}")
+        if key.lower() in result:
+            raise ValueError(f"Duplicate argument key: {key.lower()!r}")
         result[key.lower()] = value
     return result

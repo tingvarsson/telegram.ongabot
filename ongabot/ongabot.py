@@ -586,8 +586,8 @@ async def post_init(application: Application) -> None:
 
 
 async def error(update: object, context: CallbackContext) -> None:
-    """Log Errors caused by Updates."""
-    logger.warning('Update "%s" caused error "%s"', update, context.error)
+    """Log Errors caused by Updates, with the traceback so they can be troubleshot."""
+    logger.error('Update "%s" caused error "%s"', update, context.error, exc_info=context.error)
 
 
 def register_handlers(application: Application) -> None:

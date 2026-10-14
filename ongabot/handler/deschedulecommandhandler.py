@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 
 
 class DeScheduleCommandHandler(CommandHandler):
-    """Handler for /schedule command"""
+    """Handler for /deschedule command"""
 
     def __init__(self) -> None:
         super().__init__("deschedule", callback=callback)

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Commands that take `key=value` arguments reject a key given twice instead of silently using
+  the last one.
+- `/deschedule` and `/reschedule` no longer report a failure when they did clear the schedule.
+
 ## [1.14.0] - 2026-10-14
 
 ### Added
