@@ -21,6 +21,8 @@ from cs2.report import event_session, render_results
 from cs2.steamnews import SteamNewsItem
 from cs2.steamnews import get_client as get_steam_news_client
 from event import Event
+from gifs.client import get_client as get_giphy_client
+from gifs.moments import send_cs2_verdict
 from handler import AuthorizationHandler
 from handler import AuthorizeCommandHandler
 from handler import CancelEventCommandHandler
@@ -32,6 +34,7 @@ from handler import DeScheduleCommandHandler
 from handler import DmGroupPickCallbackHandler
 from handler import EventPollAnswerHandler
 from handler import EventPollHandler
+from handler import GifsCommandHandler
 from handler import HelpCommandHandler
 from handler import LeaderboardCommandHandler
 from handler import LinkSteamCommandHandler
@@ -368,6 +371,8 @@ async def cs2_sweep_callback(context: CallbackContext) -> None:
             event_date,
             len(session.matches),
         )
+        # Recorded first: the verdict is a flourish, and never fails the sweep.
+        await send_cs2_verdict(context.bot, chat, session, message_id, disable_notification=chat.is_quiet())
     else:
         logger.info(
             "Updated live CS2 results for chat_id=%s on %s: %d match(es) so far",
@@ -616,6 +621,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(LinkSteamCommandHandler())
     application.add_handler(UnLinkSteamCommandHandler())
     application.add_handler(ShortCommandHandler())
+    application.add_handler(GifsCommandHandler())
     application.add_handler(UnverifyCommandHandler())
     application.add_handler(VerifyCommandHandler())
 
@@ -630,6 +636,8 @@ def main() -> None:
     if not api_token:
         logger.error("API_TOKEN environment variable is not set. Exiting.")
         return
+    # Created now rather than at the first big moment, so a missing GIPHY_API_KEY is logged at startup.
+    get_giphy_client()
 
     application = (
         Application.builder()

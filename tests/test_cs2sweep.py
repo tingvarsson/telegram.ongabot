@@ -153,6 +153,25 @@ class Cs2SweepCallbackTest(unittest.IsolatedAsyncioTestCase):
         event.record_cs2_session.assert_called_once_with({11, 22})
         context.job.schedule_removal.assert_called_once()
 
+    async def test_the_final_pass_replies_with_the_nights_verdict(self):
+        context, _event = _context(seen=["m1"], quiet_since=_settled(), message_id=42)
+        session = _session(["m1"])
+
+        with _patch_session(session), patch("ongabot.ongabot.send_cs2_verdict", AsyncMock()) as verdict:
+            await ongabot.cs2_sweep_callback(context)
+
+        verdict.assert_awaited_once_with(
+            context.bot, context.bot_data.get_chat.return_value, session, 42, disable_notification=False
+        )
+
+    async def test_a_live_pass_has_no_verdict_yet(self):
+        context, _event = _context()
+
+        with _patch_session(_session(["m1"])), patch("ongabot.ongabot.send_cs2_verdict", AsyncMock()) as verdict:
+            await ongabot.cs2_sweep_callback(context)
+
+        verdict.assert_not_awaited()
+
     async def test_keeps_waiting_when_nothing_has_been_played_yet(self):
         context, _event = _context()
 

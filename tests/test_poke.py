@@ -350,6 +350,37 @@ class PokeCallbackTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(chat.get_event_by_date(EVENT_DATE).poked)
 
+    async def test_the_poke_is_the_caption_of_a_gif(self):
+        chat = _chat(_event(EVENT_DATE, {}), _history())
+        chat.pinned_polls[chat.get_event_by_date(EVENT_DATE).poll_id] = MagicMock(message_id=POLL_MESSAGE_ID)
+        context = _context(chat)
+        context.bot.send_animation = AsyncMock()
+        picked = MagicMock(gif=MagicMock(mp4_url="https://media.giphy.com/poke.mp4"))
+
+        # poke sees the top-level gifs module (pythonpath is ongabot/).
+        with patch("gifs.send.pick_gif", AsyncMock(return_value=picked)) as pick:
+            await poke.poke_callback(context)
+
+        self.assertEqual(pick.await_args.args[1].name, "POKE")
+        context.bot.send_animation.assert_awaited_once()
+        args, kwargs = context.bot.send_animation.call_args
+        self.assertEqual(args, (CHAT_ID, "https://media.giphy.com/poke.mp4"))
+        self.assertIn(f"tg://user?id={ANNA.id}", kwargs["caption"])
+        self.assertEqual(kwargs["parse_mode"], ParseMode.HTML)
+        self.assertEqual(kwargs["reply_parameters"].message_id, POLL_MESSAGE_ID)
+        context.bot.send_message.assert_not_awaited()
+
+    async def test_a_caption_too_long_for_a_gif_goes_out_as_text(self):
+        chat = _chat(_event(EVENT_DATE, {}), _history())
+        context = _context(chat)
+        context.bot.send_animation = AsyncMock(side_effect=BadRequest("Message caption is too long"))
+
+        with patch("gifs.send.pick_gif", AsyncMock(return_value=MagicMock())):
+            await poke.poke_callback(context)
+
+        context.bot.send_message.assert_awaited_once()
+        self.assertTrue(chat.get_event_by_date(EVENT_DATE).poked)
+
     async def test_skips_an_event_that_closed_meanwhile(self):
         for flag in ("poked", "cancelled", "completed"):
             with self.subTest(flag=flag):

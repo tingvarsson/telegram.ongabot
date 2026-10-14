@@ -3,8 +3,10 @@
 import logging
 
 from telegram import Update
+from telegram.error import TelegramError
 from telegram.ext import CallbackContext, PollHandler
 
+from gifs.moments import send_stack_celebration
 from utils.log import log
 
 _logger = logging.getLogger(__name__)
@@ -34,4 +36,16 @@ async def callback(update: Update, context: CallbackContext) -> None:
         return
     event.update_poll(update.poll)
     chat = context.bot_data.get_chat(event.chat_id)
+
+    # Poll updates carry the per-slot vote counts, so this is where a slot is seen reaching a
+    # full stack. Claimed before the first await, so the next update cannot celebrate it again.
+    slot = event.claim_stack_celebration()
+    if slot is not None:
+        try:
+            await send_stack_celebration(context.bot, chat, event.poll_id, slot)
+        except TelegramError as e:
+            # Released, so the next vote on the poll retries the celebration.
+            event.stack_celebrated = False
+            _logger.warning("Failed to celebrate a full stack in chat_id=%s: %s", event.chat_id, e)
+
     await event.update_status_message(context.bot, unverified=chat.unverified)

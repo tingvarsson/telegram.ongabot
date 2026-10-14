@@ -11,6 +11,7 @@ from .deschedulecommandhandler import DeScheduleCommandHandler
 from .dmgrouppickcallbackhandler import DmGroupPickCallbackHandler
 from .eventpollanswerhandler import EventPollAnswerHandler
 from .eventpollhandler import EventPollHandler
+from .gifscommandhandler import GifsCommandHandler
 from .helpcommandhandler import HelpCommandHandler
 from .leaderboardcommandhandler import LeaderboardCommandHandler
 from .linksteamcommandhandler import LinkSteamCommandHandler
@@ -40,6 +41,7 @@ __all__ = (
     "DmGroupPickCallbackHandler",
     "EventPollAnswerHandler",
     "EventPollHandler",
+    "GifsCommandHandler",
     "HelpCommandHandler",
     "LeaderboardCommandHandler",
     "LinkSteamCommandHandler",

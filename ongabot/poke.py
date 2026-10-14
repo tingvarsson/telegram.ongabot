@@ -24,7 +24,9 @@ from telegram.ext import CallbackContext, JobQueue
 
 from botdata import BotData
 from chat import Chat
-from event import Event
+from event import FULL_STACK, Event
+from gifs.moods import Mood
+from gifs.send import send_with_gif
 from quips import Banter, next_banter
 from utils import clock, log
 from verification import badged
@@ -33,8 +35,6 @@ _logger = logging.getLogger(__name__)
 
 # How long before the start the poke goes out: early on the event day for the default 18:30.
 DEFAULT_POKE_LEAD_HOURS = 10.0
-# Votes one slot needs before the event counts as a full stack, and nobody is poked.
-FULL_STACK = 5
 # How many of the chat's latest events count towards its regulars. About two months of weekly
 # polls: long enough to include someone who skipped a few, short enough to drop the departed.
 POKE_RECENT_EVENTS = 8
@@ -219,14 +219,19 @@ async def poke_callback(context: CallbackContext) -> None:
     poll_message = chat.pinned_polls.get(event.poll_id)
     reply = ReplyParameters(poll_message.message_id, allow_sending_without_reply=True) if poll_message else None
     try:
-        await context.bot.send_message(
-            job.chat_id,
+        # The poke is the caption of a GIF when one is found; a long mention list that does
+        # not fit a caption goes out as plain text instead.
+        await send_with_gif(
+            context.bot,
+            chat,
             render_poke_message(event, users, chat.unverified),
+            Mood.POKE,
             parse_mode=ParseMode.HTML,
             reply_parameters=reply,
         )
     except TelegramError as e:
-        # Released, so the next hourly pass retries until the event starts.
+        # Only the plain text failing gets here. Released, so the next hourly pass retries
+        # until the event starts.
         event.poked = False
         _logger.warning("Failed to send poke for chat_id=%s on %s: %s", job.chat_id, event_date, e)
         return

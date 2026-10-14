@@ -118,6 +118,21 @@ no Leetify data is stored: stats are fetched when a message is rendered and then
 ONGAbot persists only its own derived facts — who was seen playing, and whether the results
 have been posted.
 
+## GIFs at big moments
+
+ONGAbot marks the group's big moments with a GIF: a time slot reaching a full five-stack, a
+dramatic vote swing (bailing from game to No-op, coming back from No-op, or quietly pulling a
+game vote), the CS2 night's verdict when it had more wins or more losses, and the game-day
+poke. The message the moment sends anyway becomes the GIF's caption. Swings are rationed: about
+one in three gets a GIF, and at most one every 30 minutes per chat.
+
+GIFs come from the [Giphy API](https://developers.giphy.com/), rated PG-13 at most. Set
+`GIPHY_API_KEY` in `.env` to turn them on; a free beta key is plenty. Without one, or whenever
+Giphy is unreachable, every moment goes out as plain text, as it did before. A chat that wants
+none runs `/gifs off`.
+
+GIFs are Powered by GIPHY.
+
 ## Code cleaners
 
 For code formatting `black` is used, together with `flake8` and `pylint` for linting.

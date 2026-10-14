@@ -8,6 +8,8 @@ from telegram import PollAnswer, Update, User
 from telegram.ext import CallbackContext, JobQueue, PollAnswerHandler
 
 from chat import Chat
+from gifs.moments import gated_swing_mood
+from gifs.send import send_with_gif
 from quips import Answer, build_retraction_reply, build_vote_reply, categorize, slot_count
 from userdata import UserData
 from utils.log import log
@@ -99,7 +101,15 @@ async def callback(update: Update, context: CallbackContext) -> None:
         # answered without a sound.
         quiet = chat.is_quiet()
         _logger.debug("Replying to the vote on poll_id=%s (silent=%s)", poll_id, quiet)
-        await context.bot.send_message(event.chat_id, response, disable_notification=quiet)
+        # Bailing and coming back sometimes get a GIF, with the reply as its caption. A reply
+        # only exists for a vote with options, so categorizing them is safe here.
+        await send_with_gif(
+            context.bot,
+            chat,
+            response,
+            gated_swing_mood(chat.chat_id, previous, categorize(update.poll_answer.option_ids, event.num_slots)),
+            disable_notification=quiet,
+        )
 
 
 def _build_reply(
@@ -212,6 +222,8 @@ async def retraction_reply_callback(context: CallbackContext) -> None:
         quiet,
     )
     name = badged(user_data.user.name, unverified)
-    await context.bot.send_message(
-        event.chat_id, build_retraction_reply(name, previous, unverified), disable_notification=quiet
+    # Quietly pulling a game vote sometimes gets a GIF, with the reply as its caption.
+    mood = gated_swing_mood(chat.chat_id, previous, None)
+    await send_with_gif(
+        context.bot, chat, build_retraction_reply(name, previous, unverified), mood, disable_notification=quiet
     )
