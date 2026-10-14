@@ -97,6 +97,12 @@ class PokeTimeTest(unittest.TestCase):
         with patch.dict(os.environ, {"QUIET_HOURS": "22:00-06:30"}, clear=True):
             self.assertEqual(poke.poke_time(event, TOKYO), datetime.combine(EVENT_DATE, time(6, 30), tzinfo=TOKYO))
 
+    def test_a_window_ending_after_the_start_does_not_push_the_poke_past_it(self):
+        with patch.dict(os.environ, {"QUIET_HOURS": "22:00-23:30"}, clear=True):
+            self.assertEqual(
+                poke.poke_time(_event(EVENT_DATE, {}), TOKYO), datetime.combine(EVENT_DATE, time(8, 30), tzinfo=TOKYO)
+            )
+
     def test_never_pokes_the_day_before_with_quiet_hours_off(self):
         event = _event(EVENT_DATE, {})
         event.data.start_time = time(9, 0)

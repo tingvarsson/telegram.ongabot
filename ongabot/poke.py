@@ -73,9 +73,15 @@ def poke_time(event: Event, tz: datetime.tzinfo) -> datetime.datetime:
     but never before quiet hours end on its day.
 
     The clamp keeps an early start, or a long lead time, from poking the evening before or in
-    the middle of the night: a ping nobody hears does no good.
+    the middle of the night: a ping nobody hears does no good. A QUIET_HOURS window that ends
+    only after the event starts (22:00-23:30, say) is no morning to wait for, so the floor is
+    then the start of the day instead.
     """
-    return max(_starts_at(event, tz) - poke_lead_time(), clock.quiet_end(event.event_date, tz))
+    starts_at = _starts_at(event, tz)
+    floor = clock.quiet_end(event.event_date, tz)
+    if floor >= starts_at:
+        floor = datetime.datetime.combine(event.event_date, datetime.time.min, tzinfo=tz)
+    return max(starts_at - poke_lead_time(), floor)
 
 
 def poke_job_name(chat_id: int, event_date: datetime.date) -> str:

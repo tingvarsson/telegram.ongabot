@@ -288,6 +288,7 @@ async def _publish_cs2_results(
     message = await context.bot.send_message(
         event.chat_id, text, disable_notification=disable_notification, **send_args
     )
+    logger.info("Posted CS2 results in chat_id=%s (silent=%s)", event.chat_id, disable_notification)
     return message.message_id
 
 
