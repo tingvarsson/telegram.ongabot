@@ -5,6 +5,9 @@ from unittest.mock import patch
 from ongabot import quips
 from ongabot.quips import (
     BANTER_BY_PATH,
+    HEADLINES,
+    HEADLINES_PER_PATH,
+    MAX_HEADLINE_LENGTH,
     MAX_LINE_LENGTH,
     POOL_SIZE,
     POOLS,
@@ -14,6 +17,8 @@ from ongabot.quips import (
     build_vote_reply,
     categorize,
     next_banter,
+    next_headline,
+    slot_count,
 )
 
 # 5 time slots, so option 5 is No-op and option 6 is Maybe Baby.
@@ -45,6 +50,60 @@ class CategorizeTest(unittest.TestCase):
         # With 3 slots, option 3 is No-op and option 4 is Maybe Baby.
         self.assertIs(categorize((3,), 3), Answer.NO_OP)
         self.assertIs(categorize((4,), 3), Answer.MAYBE)
+
+
+class SlotCountTest(unittest.TestCase):
+    def test_counts_only_time_slots(self):
+        self.assertEqual(slot_count((0, 2, NO_OP, MAYBE), NUM_SLOTS), 2)
+
+    def test_every_slot(self):
+        self.assertEqual(slot_count(range(NUM_SLOTS), NUM_SLOTS), NUM_SLOTS)
+
+    def test_no_slot(self):
+        self.assertEqual(slot_count((NO_OP,), NUM_SLOTS), 0)
+
+
+class HeadlinesTest(unittest.TestCase):
+    """The headlines are hand-written per path, so guard the shape of the data."""
+
+    def test_every_banter_path_has_its_headlines(self):
+        self.assertEqual(set(HEADLINES), set(BANTER_BY_PATH))
+
+    def test_every_path_has_the_full_set_of_unique_headlines(self):
+        for path, templates in HEADLINES.items():
+            with self.subTest(path=path):
+                self.assertEqual(len(templates), HEADLINES_PER_PATH)
+                self.assertEqual(len(set(templates)), HEADLINES_PER_PATH, "duplicate headline")
+
+    def test_every_headline_names_the_voter_and_both_ends(self):
+        # The reply has always said what was answered or switched, from what to what.
+        for (previous, new), templates in HEADLINES.items():
+            for template in templates:
+                with self.subTest(template=template):
+                    self.assertIn("{name}", template)
+                    self.assertEqual("{previous}" in template, previous is not None)
+                    self.assertEqual("{new}" in template, new is not None)
+
+    def test_every_headline_fits_the_length_limit(self):
+        for (previous, new), templates in HEADLINES.items():
+            for template in templates:
+                headline = template.format(
+                    name="", previous=previous.value if previous else "", new=new.value if new else ""
+                )
+                with self.subTest(template=template):
+                    self.assertLessEqual(len(headline), MAX_HEADLINE_LENGTH)
+
+    def test_next_headline_rotates_without_back_to_back_repeats(self):
+        quips._bags.clear()
+        quips._last.clear()
+        self.addCleanup(quips._bags.clear)
+        self.addCleanup(quips._last.clear)
+        path = (Answer.GAME, Answer.NO_OP)
+        dealt = [next_headline(path) for _ in range(HEADLINES_PER_PATH * 10)]
+
+        self.assertCountEqual(dealt[:HEADLINES_PER_PATH], HEADLINES[path])
+        for previous, current in zip(dealt, dealt[1:]):
+            self.assertNotEqual(previous, current)
 
 
 class PoolsTest(unittest.TestCase):
@@ -79,9 +138,10 @@ class PoolsTest(unittest.TestCase):
 
 class BanterByPathTest(unittest.TestCase):
     def test_every_banter_kind_is_reachable_from_exactly_one_path(self):
-        # UNVERIFIED is picked by who votes, not by the path, see build_vote_reply. POKE is the
-        # morning poke, not a vote reply at all.
-        path_kinds = [kind for kind in Banter if kind not in (Banter.UNVERIFIED, Banter.POKE)]
+        # UNVERIFIED is picked by who votes, and ALL_SLOTS/SOME_SLOTS by how many slots, not by
+        # the path, see build_vote_reply. POKE is the morning poke, not a vote reply at all.
+        off_path = (Banter.UNVERIFIED, Banter.POKE, Banter.ALL_SLOTS, Banter.SOME_SLOTS)
+        path_kinds = [kind for kind in Banter if kind not in off_path]
         self.assertCountEqual(BANTER_BY_PATH.values(), path_kinds)
 
     def test_covers_every_path_that_gets_banter(self):
@@ -121,68 +181,129 @@ class NextBanterTest(unittest.TestCase):
         self.assertNotIn(Banter.FIRST_NO_OP, quips._bags)
 
 
-class BuildVoteReplyTest(unittest.TestCase):
-    def setUp(self):
-        patcher = patch("ongabot.quips.next_banter", side_effect=lambda kind: f"<{kind.name}>")
-        self.addCleanup(patcher.stop)
+def _patch_randomness(test: unittest.TestCase) -> None:
+    """Swap the random banter for its pool name and the random headline for a template that
+    shows what it was filled in with, so a reply shows exactly where each part came from."""
+    for target, fake in (
+        ("ongabot.quips.next_banter", lambda kind: f"<{kind.name}>"),
+        ("ongabot.quips.next_headline", lambda path: "<{name}|{previous}|{new}>"),
+    ):
+        patcher = patch(target, side_effect=fake)
+        test.addCleanup(patcher.stop)
         patcher.start()
 
-    def test_first_game_vote_keeps_the_classic_praise(self):
+
+class BuildVoteReplyTest(unittest.TestCase):
+    def setUp(self):
+        _patch_randomness(self)
+
+    def test_first_vote_for_every_slot_is_praised(self):
         self.assertEqual(
-            build_vote_reply("Alice", None, Answer.GAME), "Wow Alice, what a great job answering that poll!"
+            build_vote_reply("Alice", None, Answer.GAME, slots=5, num_slots=5),
+            "👑 Alice votes ALL 5 slots!\n— <ALL_SLOTS>",
+        )
+
+    def test_first_vote_for_some_slots_is_shamed(self):
+        self.assertEqual(
+            build_vote_reply("Alice", None, Answer.GAME, slots=2, num_slots=5),
+            "🤨 Alice votes 2 of 5 slots\n— <SOME_SLOTS>",
+        )
+
+    def test_first_game_vote_on_a_single_slot_poll_gets_the_classic_praise(self):
+        self.assertEqual(
+            build_vote_reply("Alice", None, Answer.GAME, slots=1, num_slots=1),
+            "🎉 Wow Alice, what a great job answering that poll!",
+        )
+
+    def test_first_game_vote_without_slot_counts_gets_the_classic_praise(self):
+        self.assertEqual(
+            build_vote_reply("Alice", None, Answer.GAME), "🎉 Wow Alice, what a great job answering that poll!"
         )
 
     def test_first_maybe_vote(self):
-        self.assertEqual(build_vote_reply("Alice", None, Answer.MAYBE), "Alice votes Maybe — <FIRST_MAYBE>")
+        self.assertEqual(build_vote_reply("Alice", None, Answer.MAYBE), "<Alice||Maybe>\n— <FIRST_MAYBE>")
 
     def test_first_no_op_vote(self):
-        self.assertEqual(build_vote_reply("Alice", None, Answer.NO_OP), "Alice votes No-op — <FIRST_NO_OP>")
+        self.assertEqual(build_vote_reply("Alice", None, Answer.NO_OP), "<Alice||No-op>\n— <FIRST_NO_OP>")
 
-    def test_same_category_change_keeps_the_suspicious_line(self):
+    def test_same_category_change_gets_the_suspicious_line(self):
         for answer in Answer:
             with self.subTest(answer=answer):
                 self.assertEqual(
-                    build_vote_reply("Alice", answer, answer),
-                    "Hmm suspicious, looks like Alice changed their vote...",
+                    build_vote_reply("Alice", answer, answer, slots=2, previous_slots=3, num_slots=5),
+                    "🕵️ Hmm, suspicious... Alice changed their vote",
                 )
+
+    def test_moving_up_to_every_slot_is_praised(self):
+        self.assertEqual(
+            build_vote_reply("Alice", Answer.GAME, Answer.GAME, slots=5, previous_slots=2, num_slots=5),
+            "👑 Alice went from 2 to ALL 5 slots!\n— <ALL_SLOTS>",
+        )
+
+    def test_dropping_from_every_slot_is_shamed(self):
+        self.assertEqual(
+            build_vote_reply("Alice", Answer.GAME, Answer.GAME, slots=3, previous_slots=5, num_slots=5),
+            "📉 Alice went from all 5 to 3 of 5 slots\n— <SOME_SLOTS>",
+        )
 
     def test_every_change_names_both_ends_and_uses_its_own_pool(self):
         expected = {
-            (Answer.GAME, Answer.MAYBE): "Alice went from game to Maybe — <GAME_TO_MAYBE>",
-            (Answer.GAME, Answer.NO_OP): "Alice went from game to No-op — <GAME_TO_NO_OP>",
-            (Answer.MAYBE, Answer.NO_OP): "Alice went from Maybe to No-op — <MAYBE_TO_NO_OP>",
-            (Answer.NO_OP, Answer.MAYBE): "Alice went from No-op to Maybe — <NO_OP_TO_MAYBE>",
-            (Answer.MAYBE, Answer.GAME): "Alice went from Maybe to game — <MAYBE_TO_GAME>",
-            (Answer.NO_OP, Answer.GAME): "Alice went from No-op to game — <NO_OP_TO_GAME>",
+            (Answer.GAME, Answer.MAYBE): "<Alice|game|Maybe>\n— <GAME_TO_MAYBE>",
+            (Answer.GAME, Answer.NO_OP): "<Alice|game|No-op>\n— <GAME_TO_NO_OP>",
+            (Answer.MAYBE, Answer.NO_OP): "<Alice|Maybe|No-op>\n— <MAYBE_TO_NO_OP>",
+            (Answer.NO_OP, Answer.MAYBE): "<Alice|No-op|Maybe>\n— <NO_OP_TO_MAYBE>",
+            (Answer.MAYBE, Answer.GAME): "<Alice|Maybe|game>\n— <MAYBE_TO_GAME>",
+            (Answer.NO_OP, Answer.GAME): "<Alice|No-op|game>\n— <NO_OP_TO_GAME>",
         }
         for (previous, new), reply in expected.items():
             with self.subTest(previous=previous, new=new):
                 self.assertEqual(build_vote_reply("Alice", previous, new), reply)
 
+    def test_switching_to_some_slots_adds_the_shame(self):
+        self.assertEqual(
+            build_vote_reply("Alice", Answer.MAYBE, Answer.GAME, slots=1, num_slots=5),
+            "<Alice|Maybe|game>\n— <MAYBE_TO_GAME>\n🤨 Only 1 of 5 slots though — <SOME_SLOTS>",
+        )
+
+    def test_switching_to_every_slot_adds_the_praise(self):
+        self.assertEqual(
+            build_vote_reply("Alice", Answer.NO_OP, Answer.GAME, slots=5, num_slots=5),
+            "<Alice|No-op|game>\n— <NO_OP_TO_GAME>\n👑 ALL 5 slots, too — <ALL_SLOTS>",
+        )
+
+    def test_switching_to_game_on_a_single_slot_poll_has_no_verdict(self):
+        self.assertEqual(
+            build_vote_reply("Alice", Answer.NO_OP, Answer.GAME, slots=1, num_slots=1),
+            "<Alice|No-op|game>\n— <NO_OP_TO_GAME>",
+        )
+
     def test_unverified_voter_is_roasted_on_every_path(self):
-        # Even the paths that normally keep a fixed line get the UNVERIFIED pool.
+        # Even the paths that normally keep a fixed line get the UNVERIFIED pool, and the slot
+        # verdict is left out so the roast stays the point.
         expected = {
             (None, Answer.GAME): "Will votes game — <UNVERIFIED>",
             (None, Answer.NO_OP): "Will votes No-op — <UNVERIFIED>",
             (Answer.GAME, Answer.GAME): "Will changed their vote — <UNVERIFIED>",
             (Answer.GAME, Answer.MAYBE): "Will went from game to Maybe — <UNVERIFIED>",
+            (Answer.MAYBE, Answer.GAME): "Will went from Maybe to game — <UNVERIFIED>",
         }
         for (previous, new), reply in expected.items():
             with self.subTest(previous=previous, new=new):
-                self.assertEqual(build_vote_reply("Will", previous, new, unverified=True), reply)
+                self.assertEqual(
+                    build_vote_reply("Will", previous, new, unverified=True, slots=5, previous_slots=2, num_slots=5),
+                    reply,
+                )
 
 
 class BuildRetractionReplyTest(unittest.TestCase):
     def setUp(self):
-        patcher = patch("ongabot.quips.next_banter", side_effect=lambda kind: f"<{kind.name}>")
-        self.addCleanup(patcher.stop)
-        patcher.start()
+        _patch_randomness(self)
 
     def test_each_retracted_answer_uses_its_own_pool(self):
         expected = {
-            Answer.GAME: "Alice pulled their game vote — <RETRACTED_GAME>",
-            Answer.MAYBE: "Alice pulled their Maybe vote — <RETRACTED_MAYBE>",
-            Answer.NO_OP: "Alice pulled their No-op vote — <RETRACTED_NO_OP>",
+            Answer.GAME: "<Alice|game|>\n— <RETRACTED_GAME>",
+            Answer.MAYBE: "<Alice|Maybe|>\n— <RETRACTED_MAYBE>",
+            Answer.NO_OP: "<Alice|No-op|>\n— <RETRACTED_NO_OP>",
         }
         for previous, reply in expected.items():
             with self.subTest(previous=previous):

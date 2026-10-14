@@ -118,12 +118,27 @@ def _event_recap() -> List[str]:
 
 
 def _vote_replies() -> List[str]:
-    """One reply per path in the vote-reply matrix, banter pinned to each pool's first line."""
+    """One reply per path in the vote-reply matrix, banter and headlines pinned to each pool's
+    first line, plus the slot verdicts on a 5-slot poll."""
     first_line = lambda kind: quips.POOLS[kind][0]  # noqa: E731
-    with patch("ongabot.quips.next_banter", side_effect=first_line):
+    first_headline = lambda path: quips.HEADLINES[path][0]  # noqa: E731
+    with (
+        patch("ongabot.quips.next_banter", side_effect=first_line),
+        patch("ongabot.quips.next_headline", side_effect=first_headline),
+    ):
         replies = [quips.build_vote_reply("Alice", None, new) for new in quips.Answer]
         replies += [quips.build_vote_reply("Alice", previous, new) for previous in quips.Answer for new in quips.Answer]
         replies += [quips.build_retraction_reply("Alice", previous) for previous in quips.Answer]
+        # The slot verdicts: every slot, some slots, switching in to game, moving up and down.
+        game = quips.Answer.GAME
+        replies += [
+            quips.build_vote_reply("Alice", None, game, slots=5, num_slots=5),
+            quips.build_vote_reply("Alice", None, game, slots=2, num_slots=5),
+            quips.build_vote_reply("Alice", quips.Answer.MAYBE, game, slots=1, num_slots=5),
+            quips.build_vote_reply("Alice", quips.Answer.NO_OP, game, slots=5, num_slots=5),
+            quips.build_vote_reply("Alice", game, game, slots=5, previous_slots=2, num_slots=5),
+            quips.build_vote_reply("Alice", game, game, slots=3, previous_slots=5, num_slots=5),
+        ]
         # An unverified voter: the badge, and the roast pool on every path.
         replies += [
             quips.build_vote_reply(badged("Will", True), None, quips.Answer.GAME, unverified=True),
