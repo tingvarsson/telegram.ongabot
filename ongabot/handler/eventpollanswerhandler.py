@@ -95,7 +95,11 @@ async def callback(update: Update, context: CallbackContext) -> None:
     await event.update_status_message(context.bot, unverified=chat.unverified)
 
     if response:
-        await context.bot.send_message(event.chat_id, response)
+        # The banter goes to the whole group, not just the voter, so a vote at night is
+        # answered without a sound.
+        quiet = chat.is_quiet()
+        _logger.debug("Replying to the vote on poll_id=%s (silent=%s)", poll_id, quiet)
+        await context.bot.send_message(event.chat_id, response, disable_notification=quiet)
 
 
 def _build_reply(chat: Chat, poll_answer: PollAnswer, previous: Optional[Answer], num_slots: int) -> str:
@@ -173,13 +177,18 @@ async def retraction_reply_callback(context: CallbackContext) -> None:
         return
 
     previous = categorize(last_ids, event.num_slots)
-    unverified = context.bot_data.get_chat(event.chat_id).is_unverified(user_data.user.id)
+    chat = context.bot_data.get_chat(event.chat_id)
+    unverified = chat.is_unverified(user_data.user.id)
+    quiet = chat.is_quiet()
     _logger.info(
-        "Sending retraction reply for user_id=%s on poll_id=%s (%s, unverified=%s)",
+        "Sending retraction reply for user_id=%s on poll_id=%s (%s, unverified=%s, silent=%s)",
         user_data.user.id,
         poll_id,
         previous,
         unverified,
+        quiet,
     )
     name = badged(user_data.user.name, unverified)
-    await context.bot.send_message(event.chat_id, build_retraction_reply(name, previous, unverified))
+    await context.bot.send_message(
+        event.chat_id, build_retraction_reply(name, previous, unverified), disable_notification=quiet
+    )

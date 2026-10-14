@@ -206,11 +206,15 @@ async def close_vote_callback(context: CallbackContext) -> None:
         chat.set_unverified(vote.target_id, vote.target_name, vote.unverify)
         await _redraw_status_messages(context.bot, chat, vote.target_id)
 
+    # The verdict lands an hour after the vote started, possibly in quiet hours.
+    quiet = chat.is_quiet()
     await context.bot.send_message(
         vote.chat_id,
         verdict_text(vote, yes, no),
         reply_parameters=ReplyParameters(vote.message_id, allow_sending_without_reply=True),
+        disable_notification=quiet,
     )
+    _logger.info("Posted the verdict of poll_id=%s in chat_id=%s (silent=%s)", poll_id, chat.chat_id, quiet)
 
 
 def reschedule_open_votes(chats: Iterable["Chat"], job_queue: JobQueue) -> None:

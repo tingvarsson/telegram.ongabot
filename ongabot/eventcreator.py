@@ -69,6 +69,11 @@ async def create_event(
             _logger.debug("Cancelled event exists for date %s, force=True required.", event_data.event_date)
             return
 
+    # A poll created at night - a catch-up after a restart, or a late /newevent - goes out
+    # without a sound, along with its status message.
+    quiet = chat.is_quiet()
+    if quiet:
+        _logger.info("Creating the poll for chat_id=%s silently: quiet hours", chat_id)
     try:
         poll_message = await context.bot.send_poll(
             chat_id,
@@ -76,6 +81,7 @@ async def create_event(
             options=_create_poll_options(event_data.start_time, event_data.num_slots),
             is_anonymous=False,
             allows_multiple_answers=True,
+            disable_notification=quiet,
         )
     except TelegramError as e:
         _logger.error("Failed to send poll for chat_id=%s: %s", chat_id, e)
@@ -86,7 +92,7 @@ async def create_event(
     event = Event(chat_id, poll_message.poll, event_data)
 
     try:
-        await event.send_status_message(context.bot)
+        await event.send_status_message(context.bot, disable_notification=quiet)
     except TelegramError as e:
         _logger.error("Failed to send status message for chat_id=%s poll_id=%s: %s", chat_id, event.poll_id, e)
 

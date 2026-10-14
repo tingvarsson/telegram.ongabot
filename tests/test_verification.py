@@ -1,7 +1,7 @@
 import pickle
 import unittest
 from datetime import date, datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram import User
 from telegram.error import TelegramError
@@ -296,6 +296,14 @@ class CloseVoteCallbackTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(args[0], 1)
         self.assertIn("officially unverified", args[1])
         self.assertEqual(kwargs["reply_parameters"].message_id, 100)
+
+    async def test_verdict_follows_quiet_hours(self):
+        for quiet in (False, True):
+            with self.subTest(quiet=quiet):
+                context = self._context(_vote(), yes=3, no=1)
+                with patch.object(self.chat, "is_quiet", return_value=quiet):
+                    await close_vote_callback(context)
+                self.assertIs(context.bot.send_message.call_args.kwargs["disable_notification"], quiet)
 
     async def test_the_poll_update_sent_by_stopping_the_poll_logs_no_error(self):
         # Stopping the poll makes Telegram send a final poll update, after the vote is closed.

@@ -189,10 +189,18 @@ async def _announce_cs2_patch_notes(
     """
     messages = render_patch_notes_html(items)
     for chat_id in chat_ids:
+        # Valve ships at any hour, often in the European night.
+        quiet = bot_data.is_quiet(chat_id)
         try:
             for message in messages:
-                await send_html_with_fallback(bot, chat_id, message)
-            logger.info("Sent %d CS2 patch note(s) to chat_id=%s (%d message(s))", len(items), chat_id, len(messages))
+                await send_html_with_fallback(bot, chat_id, message, disable_notification=quiet)
+            logger.info(
+                "Sent %d CS2 patch note(s) to chat_id=%s (%d message(s), silent=%s)",
+                len(items),
+                chat_id,
+                len(messages),
+                quiet,
+            )
         except (Forbidden, ChatMigrated) as e:
             logger.warning("Unsubscribing chat_id=%s from CS2 patch notes, bot can no longer post: %s", chat_id, e)
             bot_data.unsubscribe_from_cs2_patchnotes(chat_id)
@@ -240,12 +248,15 @@ async def cs2_patchnotes_sweep_callback(context: CallbackContext) -> None:
         await _announce_cs2_patch_notes(context.bot, bot_data, new_items, recipients)
 
 
-async def _publish_cs2_results(context: CallbackContext, event: Event, text: str) -> int:
+async def _publish_cs2_results(
+    context: CallbackContext, event: Event, text: str, disable_notification: bool = False
+) -> int:
     """Send the CS2 results message, or edit the one this event already has.
 
     Returns the message id it wrote to. Raises TelegramError so the caller can decide whether
     to retry; a message that has been deleted from the chat resets the event to "not posted"
-    and is then sent afresh.
+    and is then sent afresh. disable_notification applies to a fresh send only, since an edit
+    never notifies.
     """
     send_args = {
         "parse_mode": ParseMode.MARKDOWN_V2,
@@ -274,7 +285,10 @@ async def _publish_cs2_results(context: CallbackContext, event: Event, text: str
             )
             event.cs2_message_id = 0
 
-    message = await context.bot.send_message(event.chat_id, text, **send_args)
+    message = await context.bot.send_message(
+        event.chat_id, text, disable_notification=disable_notification, **send_args
+    )
+    logger.info("Posted CS2 results in chat_id=%s (silent=%s)", event.chat_id, disable_notification)
     return message.message_id
 
 
@@ -334,7 +348,9 @@ async def cs2_sweep_callback(context: CallbackContext) -> None:
         return
 
     try:
-        message_id = await _publish_cs2_results(context, event, render_results(session, live=not final))
+        message_id = await _publish_cs2_results(
+            context, event, render_results(session, live=not final), disable_notification=chat.is_quiet()
+        )
     except TelegramError as e:
         # Leave the event unreported and the job alive, so the next pass can try again.
         logger.warning("Failed to write CS2 results for chat_id=%s on %s: %s", job.chat_id, event_date, e)
@@ -399,11 +415,21 @@ async def complete_past_events_callback(context: CallbackContext) -> None:
                 # dropping the update. Cancelled events are skipped: /cancelevent completes
                 # them too, and they are excluded from scoring entirely.
                 if not event.cancelled:
+                    # Completion lands just after the chat's midnight, so the recap normally
+                    # goes out in quiet hours, without a sound.
+                    quiet = chat.is_quiet()
                     try:
                         await context.bot.send_message(
                             chat.chat_id,
                             render_event_recap_message(chat, event),
                             parse_mode=ParseMode.MARKDOWN_V2,
+                            disable_notification=quiet,
+                        )
+                        logger.info(
+                            "Sent Banger Points recap for chat_id=%s poll_id=%s (silent=%s)",
+                            chat.chat_id,
+                            event.poll_id,
+                            quiet,
                         )
                     except TelegramError as e:
                         logger.warning(
@@ -465,10 +491,14 @@ async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, n
     messages = render_changelog_html(delta, headline=headline)
 
     for chat_id in bot_data.authorized_chats:
+        # The upgrade lands whenever the container restarts, which can be at night.
+        quiet = bot_data.is_quiet(chat_id)
         try:
             for message in messages:
-                await send_html_with_fallback(bot, chat_id, message)
-            logger.info("Sent version announcement to chat_id=%s (%d message(s))", chat_id, len(messages))
+                await send_html_with_fallback(bot, chat_id, message, disable_notification=quiet)
+            logger.info(
+                "Sent version announcement to chat_id=%s (%d message(s), silent=%s)", chat_id, len(messages), quiet
+            )
         except TelegramError as e:
             logger.error("Failed to send version announcement to chat_id=%s: %s", chat_id, e)
 

@@ -179,14 +179,26 @@ def pack_sections(sections: List[Tuple[str, List[str]]], limit: int = MAX_MESSAG
     return messages
 
 
-async def send_html_with_fallback(bot: Bot, chat_id: int, text: str) -> None:
+async def send_html_with_fallback(bot: Bot, chat_id: int, text: str, disable_notification: bool = False) -> None:
     """Send one message as Telegram HTML, falling back to plain text if Telegram rejects it.
 
     A malformed entity fails the whole message. Callers of this send an announcement or a
     patch note unprompted, so an unformatted message beats a silently missing one.
+    disable_notification sends it without a sound, for quiet hours.
     """
     try:
-        await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, link_preview_options=_NO_PREVIEW)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            parse_mode=ParseMode.HTML,
+            link_preview_options=_NO_PREVIEW,
+            disable_notification=disable_notification,
+        )
     except BadRequest as e:
         _logger.warning("Message to chat_id=%s rejected as HTML (%s); resending as plain text", chat_id, e)
-        await bot.send_message(chat_id=chat_id, text=to_plain_text(text), link_preview_options=_NO_PREVIEW)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=to_plain_text(text),
+            link_preview_options=_NO_PREVIEW,
+            disable_notification=disable_notification,
+        )

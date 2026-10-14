@@ -65,8 +65,14 @@ class AnnounceCs2PatchNotesTest(unittest.IsolatedAsyncioTestCase):
         sender = await self._announce(None)
         self.assertEqual(_sent_chats(sender), {101, 202})
 
+    async def test_a_chat_in_quiet_hours_gets_it_silently(self) -> None:
+        with patch.object(self.bot_data, "is_quiet", side_effect=lambda chat_id: chat_id == 101):
+            sender = await self._announce(None)
+        silent = {call.args[1]: call.kwargs["disable_notification"] for call in sender.await_args_list}
+        self.assertEqual(silent, {101: True, 202: False})
+
     async def test_one_failing_chat_does_not_stop_the_others_and_stays_subscribed(self) -> None:
-        async def send(_bot, chat_id, _text):
+        async def send(_bot, chat_id, _text, **_kwargs):
             if chat_id == 101:
                 raise TelegramError("timed out")
 
@@ -75,7 +81,7 @@ class AnnounceCs2PatchNotesTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.bot_data.is_subscribed_to_cs2_patchnotes(101))
 
     async def test_a_chat_that_blocked_or_removed_the_bot_is_unsubscribed(self) -> None:
-        async def send(_bot, chat_id, _text):
+        async def send(_bot, chat_id, _text, **_kwargs):
             if chat_id == 101:
                 raise Forbidden("bot was kicked from the group chat")
 
@@ -83,7 +89,7 @@ class AnnounceCs2PatchNotesTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bot_data.cs2_patchnotes_subscribers, {202})
 
     async def test_a_chat_that_migrated_is_unsubscribed(self) -> None:
-        async def send(_bot, chat_id, _text):
+        async def send(_bot, chat_id, _text, **_kwargs):
             if chat_id == 101:
                 raise ChatMigrated(-100999)
 
@@ -114,7 +120,7 @@ class Cs2PatchNotesSweepTest(unittest.IsolatedAsyncioTestCase):
         self.bot_data.cs2_patchnotes_seen_gids = {"a"}
         seen_during_send: List[bool] = []
 
-        async def send(_bot, _chat_id, _text):
+        async def send(_bot, _chat_id, _text, **_kwargs):
             seen_during_send.append("b" in self.bot_data.cs2_patchnotes_seen_gids)
 
         await self._sweep([_item("b", date=2), _item("a", date=1)], send)
@@ -123,7 +129,7 @@ class Cs2PatchNotesSweepTest(unittest.IsolatedAsyncioTestCase):
     async def test_a_chat_subscribing_mid_broadcast_is_left_to_its_own_command(self) -> None:
         self.bot_data.cs2_patchnotes_seen_gids = {"a"}
 
-        async def send(_bot, _chat_id, _text):
+        async def send(_bot, _chat_id, _text, **_kwargs):
             self.bot_data.subscribe_to_cs2_patchnotes(303)
 
         send_mock = await self._sweep([_item("b", date=2), _item("a", date=1)], send)

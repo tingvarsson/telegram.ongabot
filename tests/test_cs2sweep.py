@@ -89,6 +89,16 @@ class Cs2SweepCallbackTest(unittest.IsolatedAsyncioTestCase):
         event.update_cs2_progress.assert_called_once_with(NEW_MESSAGE_ID, {11, 22})
         event.record_cs2_session.assert_not_called()
         context.job.schedule_removal.assert_not_called()
+        self.assertIs(kwargs["disable_notification"], False)
+
+    async def test_first_post_in_quiet_hours_is_silent(self):
+        context, _event = _context()
+        context.bot_data.get_chat.return_value.is_quiet.return_value = True
+
+        with _patch_session(_session(["m1"])):
+            await ongabot.cs2_sweep_callback(context)
+
+        self.assertIs(context.bot.send_message.await_args.kwargs["disable_notification"], True)
 
     async def test_edits_the_same_message_when_another_match_lands(self):
         """One message per night that grows, rather than one message per match."""

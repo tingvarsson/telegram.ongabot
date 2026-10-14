@@ -1,6 +1,6 @@
 import unittest
 from datetime import date, time
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from telegram import User
 
@@ -208,6 +208,22 @@ class EventStatusMessageUnverifiedBadgeTest(unittest.TestCase):
         event = _make_event_with_answer(self.user, [0])
 
         self.assertNotIn("🔞", event._create_status_message_text(5, unverified={7: "Bob"}))
+
+
+class EventSendStatusMessageTest(unittest.IsolatedAsyncioTestCase):
+    async def test_passes_disable_notification_on(self):
+        """A poll created in quiet hours must not have its status message ring every phone."""
+        for quiet in (False, True):
+            with self.subTest(quiet=quiet):
+                event = _make_event_with_answer(User(id=42, first_name="Alice", is_bot=False), [0])
+                bot = MagicMock()
+                bot.get_chat_member_count = AsyncMock(return_value=5)
+                bot.send_message = AsyncMock(return_value=MagicMock(message_id=77))
+
+                await event.send_status_message(bot, disable_notification=quiet)
+
+                self.assertIs(bot.send_message.call_args.kwargs["disable_notification"], quiet)
+                self.assertEqual(event.status_message_id, 77)
 
 
 if __name__ == "__main__":
