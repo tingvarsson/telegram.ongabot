@@ -175,14 +175,21 @@ HEADLINES: Dict[Tuple[Optional[Answer], Optional[Answer]], List[str]] = {
     ],
 }
 
-# Fixed headlines for the replies that are about the slots rather than a path.
-FIRST_ALL_SLOTS = "👑 {name} votes ALL {num_slots} slots!"
-FIRST_SOME_SLOTS = "🤨 {name} votes {slots} of {num_slots} slots"
-UP_TO_ALL_SLOTS = "👑 {name} went from {previous_slots} to ALL {num_slots} slots!"
-DOWN_TO_SOME_SLOTS = "📉 {name} went from all {num_slots} to {slots} of {num_slots} slots"
-# The verdict line appended when someone switches to game from Maybe or No-op.
-VERDICT_ALL_SLOTS = "👑 ALL {num_slots} slots, too"
-VERDICT_SOME_SLOTS = "🤨 Only {slots} of {num_slots} slots though"
+# Fixed headlines for the replies that are about the slots rather than a path: a first game
+# vote, and a change within game that moves up to every slot or down from it.
+FIRST_GAME_HEADLINES: Dict[Coverage, str] = {
+    Coverage.ALL: "👑 {name} votes ALL {num_slots} slots!",
+    Coverage.SOME: "🤨 {name} votes {slots} of {num_slots} slots",
+}
+SLOT_CHANGE_HEADLINES: Dict[Coverage, str] = {
+    Coverage.ALL: "👑 {name} went from {previous_slots} to ALL {num_slots} slots!",
+    Coverage.SOME: "📉 {name} went from all {num_slots} to {slots} of {num_slots} slots",
+}
+# The lead of the verdict line appended when someone switches to game from Maybe or No-op.
+VERDICT_LEADS: Dict[Coverage, str] = {
+    Coverage.ALL: "👑 ALL {num_slots} slots, too",
+    Coverage.SOME: "🤨 Only {slots} of {num_slots} slots though",
+}
 # A first game vote on a single-slot poll, and a change that stays within one category.
 CLASSIC_PRAISE = "🎉 Wow {name}, what a great job answering that poll!"
 SUSPICIOUS = "🕵️ Hmm, suspicious... {name} changed their vote"
@@ -729,7 +736,7 @@ def _with_banter(headline: str, banter: str) -> str:
     return f"{headline}\n— {banter}"
 
 
-def build_vote_reply(  # pylint: disable=too-many-arguments,too-many-return-statements
+def build_vote_reply(  # pylint: disable=too-many-arguments
     name: str,
     previous: Optional[Answer],
     new: Answer,
@@ -753,14 +760,7 @@ def build_vote_reply(  # pylint: disable=too-many-arguments,too-many-return-stat
     keep a fixed line, followed by a line from the UNVERIFIED pool and no verdict.
     """
     if unverified:
-        if previous is None:
-            lead = f"{name} votes {new.value}"
-        elif previous is new:
-            lead = f"{name} changed their vote"
-        else:
-            lead = f"{name} went from {previous.value} to {new.value}"
-        _logger.debug("Vote reply for unverified %s uses banter pool %s", name, Banter.UNVERIFIED.name)
-        return f"{lead} — {next_banter(Banter.UNVERIFIED)}"
+        return _unverified_vote_reply(name, previous, new)
 
     counts = {"name": name, "slots": slots, "previous_slots": previous_slots, "num_slots": num_slots}
     coverage = _coverage(new, slots, num_slots)
@@ -768,26 +768,34 @@ def build_vote_reply(  # pylint: disable=too-many-arguments,too-many-return-stat
     if previous is None and new is Answer.GAME:
         if coverage is None:
             return CLASSIC_PRAISE.format(**counts)
-        headline = FIRST_ALL_SLOTS if coverage is Coverage.ALL else FIRST_SOME_SLOTS
-        return _with_banter(headline.format(**counts), next_banter(VERDICT_POOL[coverage]))
+        return _with_banter(FIRST_GAME_HEADLINES[coverage].format(**counts), next_banter(VERDICT_POOL[coverage]))
     if previous is new:
         before = _coverage(previous, previous_slots, num_slots)
         if coverage is not None and before is not None and coverage is not before:
-            headline = UP_TO_ALL_SLOTS if coverage is Coverage.ALL else DOWN_TO_SOME_SLOTS
-            return _with_banter(headline.format(**counts), next_banter(VERDICT_POOL[coverage]))
+            return _with_banter(SLOT_CHANGE_HEADLINES[coverage].format(**counts), next_banter(VERDICT_POOL[coverage]))
         # Covers slot-to-slot moves, like 19.00 -> 19.40, as well as re-voting the same thing.
         return SUSPICIOUS.format(**counts)
 
     path = (previous, new)
-    kind = BANTER_BY_PATH[path]
-    _logger.debug("Vote reply for %s uses banter pool %s", name, kind.name)
+    _logger.debug("Vote reply for %s uses banter pool %s", name, BANTER_BY_PATH[path].name)
     headline = next_headline(path).format(name=name, previous=previous.value if previous else "", new=new.value)
-    reply = _with_banter(headline, next_banter(kind))
+    reply = _with_banter(headline, next_banter(BANTER_BY_PATH[path]))
     if coverage is not None:
         # Switching to game from Maybe or No-op: the hype line stays, the slots get judged too.
-        verdict = VERDICT_ALL_SLOTS if coverage is Coverage.ALL else VERDICT_SOME_SLOTS
-        reply += f"\n{verdict.format(**counts)} — {next_banter(VERDICT_POOL[coverage])}"
+        reply += f"\n{VERDICT_LEADS[coverage].format(**counts)} — {next_banter(VERDICT_POOL[coverage])}"
     return reply
+
+
+def _unverified_vote_reply(name: str, previous: Optional[Answer], new: Answer) -> str:
+    """A plain lead saying what happened, followed by a roast from the UNVERIFIED pool."""
+    if previous is None:
+        lead = f"{name} votes {new.value}"
+    elif previous is new:
+        lead = f"{name} changed their vote"
+    else:
+        lead = f"{name} went from {previous.value} to {new.value}"
+    _logger.debug("Vote reply for unverified %s uses banter pool %s", name, Banter.UNVERIFIED.name)
+    return f"{lead} — {next_banter(Banter.UNVERIFIED)}"
 
 
 def build_retraction_reply(name: str, previous: Answer, unverified: bool = False) -> str:

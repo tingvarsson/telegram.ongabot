@@ -2,7 +2,7 @@
 
 import logging
 from datetime import timedelta
-from typing import Optional, cast
+from typing import Optional, Sequence, cast
 
 from telegram import PollAnswer, Update, User
 from telegram.ext import CallbackContext, JobQueue, PollAnswerHandler
@@ -66,11 +66,10 @@ async def callback(update: Update, context: CallbackContext) -> None:
     # answer, since Telegram changes a vote as retract-then-vote.
     last_ids = user_data.get_last_poll_answer(poll_id)
     previous = categorize(last_ids, event.num_slots) if last_ids else None
-    previous_slots = slot_count(last_ids, event.num_slots) if last_ids else 0
 
     response = None
     if update.poll_answer.option_ids:
-        response = _build_reply(chat, update.poll_answer, previous, previous_slots, event.num_slots)
+        response = _build_reply(chat, update.poll_answer, previous, last_ids, event.num_slots)
     elif previous is not None and job_queue is not None:
         # A retraction is usually the first half of a vote change, so only reply if no new
         # vote follows within RETRACTION_REPLY_DELAY.
@@ -104,18 +103,23 @@ async def callback(update: Update, context: CallbackContext) -> None:
 
 
 def _build_reply(
-    chat: Chat, poll_answer: PollAnswer, previous: Optional[Answer], previous_slots: int, num_slots: int
+    chat: Chat,
+    poll_answer: PollAnswer,
+    previous: Optional[Answer],
+    last_ids: Optional[Sequence[int]],
+    num_slots: int,
 ) -> str:
     """Build the reply to a (non-empty) vote; a voter the group voted unverified gets roasted.
 
-    previous_slots is how many time slots the user's previous answer picked, so the reply can
-    tell a move up to every slot, or down from it, apart from a plain slot change.
+    last_ids is the user's previous answer, so the reply can tell a move up to every slot, or
+    down from it, apart from a plain slot change.
     """
     # The callback only gets here with a user, see its guard at the top.
     user = cast(User, poll_answer.user)
     unverified = chat.is_unverified(user.id)
     new = categorize(poll_answer.option_ids, num_slots)
     slots = slot_count(poll_answer.option_ids, num_slots)
+    previous_slots = slot_count(last_ids, num_slots) if last_ids else 0
     _logger.debug(
         "Vote by user_id=%s on poll_id=%s: %s -> %s, slots %s -> %s of %s (unverified=%s)",
         user.id,
