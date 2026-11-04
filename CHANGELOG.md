@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The bot now runs on Python 3.15.
+
 ## [1.14.0] - 2026-10-14
 
 ### Added

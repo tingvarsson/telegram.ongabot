@@ -33,7 +33,7 @@ cp .env.example .env.d/ongadev3
 
 ### Local Python environment
 
-Recommended Python 3.14.
+Recommended Python 3.15.
 
 ```bash
 make venv
