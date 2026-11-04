@@ -1,5 +1,5 @@
 black==26.10.1
-bump-my-version==1.6.7
+bump-my-version==1.8.1
 flake8==7.5.0
 mypy==2.3.1
 pylint==4.1.3
