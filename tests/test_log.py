@@ -203,27 +203,37 @@ class TokenRedactionTest(unittest.TestCase):
             root.removeHandler(handler)
 
 
-class QuietHttpRequestLogsTest(unittest.TestCase):
+class QuietNoisyLibraryLogsTest(unittest.TestCase):
+    # The loggers that actually emit: httpx itself, and the executor apscheduler's job queue runs on.
+    NAMES = ("httpx", "apscheduler.executors.default")
+
     def setUp(self):
         self.root = logging.getLogger()
-        self.httpx = logging.getLogger("httpx")
-        self.saved = (self.root.level, self.httpx.level)
-        self.httpx.setLevel(logging.NOTSET)
+        quieted = ("httpx", "apscheduler.executors")
+        self.saved = [(self.root, self.root.level)] + [
+            (logging.getLogger(n), logging.getLogger(n).level) for n in quieted
+        ]
+        for name in quieted:
+            logging.getLogger(name).setLevel(logging.NOTSET)
 
     def tearDown(self):
-        self.root.setLevel(self.saved[0])
-        self.httpx.setLevel(self.saved[1])
+        for logger, level in self.saved:
+            logger.setLevel(level)
 
-    def test_httpx_requests_are_hidden_at_info(self):
+    def test_routine_lines_are_hidden_at_info_but_warnings_kept(self):
         self.root.setLevel(logging.INFO)
-        log.quiet_http_request_logs()
-        self.assertFalse(self.httpx.isEnabledFor(logging.INFO))
-        self.assertTrue(self.httpx.isEnabledFor(logging.WARNING))
+        log.quiet_noisy_library_logs()
+        for name in self.NAMES:
+            with self.subTest(logger=name):
+                self.assertFalse(logging.getLogger(name).isEnabledFor(logging.INFO))
+                self.assertTrue(logging.getLogger(name).isEnabledFor(logging.WARNING))
 
-    def test_httpx_requests_are_kept_at_debug(self):
+    def test_routine_lines_are_kept_at_debug(self):
         self.root.setLevel(logging.DEBUG)
-        log.quiet_http_request_logs()
-        self.assertTrue(self.httpx.isEnabledFor(logging.INFO))
+        log.quiet_noisy_library_logs()
+        for name in self.NAMES:
+            with self.subTest(logger=name):
+                self.assertTrue(logging.getLogger(name).isEnabledFor(logging.INFO))
 
 
 if __name__ == "__main__":

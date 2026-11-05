@@ -69,7 +69,7 @@ logging.basicConfig(
 )
 # API URLs contain the bot token and are logged by python-telegram-bot (DEBUG) and httpx (INFO).
 log.redact_tokens_in_logs()
-log.quiet_http_request_logs()
+log.quiet_noisy_library_logs()
 logger = logging.getLogger(__name__)
 
 

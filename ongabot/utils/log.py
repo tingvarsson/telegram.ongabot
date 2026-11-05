@@ -51,15 +51,25 @@ def redact_tokens_in_logs() -> None:
         handler.addFilter(TokenRedactingFilter())
 
 
-def quiet_http_request_logs() -> None:
-    """Keep httpx's per-request INFO lines out of the log unless the root level is DEBUG.
+# Libraries that log routine activity at INFO, which would bury the bot's own lines.
+_NOISY_LOGGERS = (
+    # Every request, and the bot long-polls getUpdates around the clock. Failed requests still
+    # surface through the bot's own warnings and the error handler.
+    "httpx",
+    # "Running job" and "executed successfully" on every run of every repeating job. Missed runs
+    # (WARNING) and jobs that raise (ERROR) still get through.
+    "apscheduler.executors",
+)
 
-    httpx logs every request at INFO, and the bot long-polls getUpdates around the clock, so at
-    the default level the log is little else. Failed requests still surface through the bot's own
-    warnings and the error handler. Call after logging.basicConfig().
+
+def quiet_noisy_library_logs() -> None:
+    """Keep libraries' routine INFO lines out of the log unless the root level is DEBUG.
+
+    Call after logging.basicConfig().
     """
     if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
-        logging.getLogger("httpx").setLevel(logging.WARNING)
+        for name in _NOISY_LOGGERS:
+            logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def log(func: F) -> F:
