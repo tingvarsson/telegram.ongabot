@@ -51,6 +51,27 @@ def redact_tokens_in_logs() -> None:
         handler.addFilter(TokenRedactingFilter())
 
 
+# Libraries that log routine activity at INFO, which would bury the bot's own lines.
+_NOISY_LOGGERS = (
+    # Every request, and the bot long-polls getUpdates around the clock. Failed requests still
+    # surface through the bot's own warnings and the error handler.
+    "httpx",
+    # "Running job" and "executed successfully" on every run of every repeating job. Missed runs
+    # (WARNING) and jobs that raise (ERROR) still get through.
+    "apscheduler.executors",
+)
+
+
+def quiet_noisy_library_logs() -> None:
+    """Keep libraries' routine INFO lines out of the log unless the root level is DEBUG.
+
+    Call after logging.basicConfig().
+    """
+    if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
+        for name in _NOISY_LOGGERS:
+            logging.getLogger(name).setLevel(logging.WARNING)
+
+
 def log(func: F) -> F:
     """Log decorator to give ENTER/EXIT logs of a function"""
     if inspect.iscoroutinefunction(func):

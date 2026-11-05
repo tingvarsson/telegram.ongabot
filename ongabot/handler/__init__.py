@@ -27,6 +27,7 @@ from .statisticssortcallbackhandler import StatisticsSortCallbackHandler
 from .timezonecommandhandler import TimezoneCommandHandler
 from .unlinksteamcommandhandler import UnLinkSteamCommandHandler
 from .updateeventcommandhandler import UpdateEventCommandHandler
+from .updatelogginghandler import UpdateLoggingHandler
 from .verifycommandhandler import UnverifyCommandHandler, VerifyCommandHandler
 
 __all__ = (
@@ -58,5 +59,6 @@ __all__ = (
     "UnLinkSteamCommandHandler",
     "UnverifyCommandHandler",
     "UpdateEventCommandHandler",
+    "UpdateLoggingHandler",
     "VerifyCommandHandler",
 )

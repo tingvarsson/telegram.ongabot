@@ -203,5 +203,38 @@ class TokenRedactionTest(unittest.TestCase):
             root.removeHandler(handler)
 
 
+class QuietNoisyLibraryLogsTest(unittest.TestCase):
+    # The loggers that actually emit: httpx itself, and the executor apscheduler's job queue runs on.
+    NAMES = ("httpx", "apscheduler.executors.default")
+
+    def setUp(self):
+        self.root = logging.getLogger()
+        quieted = ("httpx", "apscheduler.executors")
+        self.saved = [(self.root, self.root.level)] + [
+            (logging.getLogger(n), logging.getLogger(n).level) for n in quieted
+        ]
+        for name in quieted:
+            logging.getLogger(name).setLevel(logging.NOTSET)
+
+    def tearDown(self):
+        for logger, level in self.saved:
+            logger.setLevel(level)
+
+    def test_routine_lines_are_hidden_at_info_but_warnings_kept(self):
+        self.root.setLevel(logging.INFO)
+        log.quiet_noisy_library_logs()
+        for name in self.NAMES:
+            with self.subTest(logger=name):
+                self.assertFalse(logging.getLogger(name).isEnabledFor(logging.INFO))
+                self.assertTrue(logging.getLogger(name).isEnabledFor(logging.WARNING))
+
+    def test_routine_lines_are_kept_at_debug(self):
+        self.root.setLevel(logging.DEBUG)
+        log.quiet_noisy_library_logs()
+        for name in self.NAMES:
+            with self.subTest(logger=name):
+                self.assertTrue(logging.getLogger(name).isEnabledFor(logging.INFO))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -51,6 +51,7 @@ from handler import TimezoneCommandHandler
 from handler import UnLinkSteamCommandHandler
 from handler import UnverifyCommandHandler
 from handler import UpdateEventCommandHandler
+from handler import UpdateLoggingHandler
 from handler import VerifyCommandHandler
 from poke import schedule_todays_pokes_callback
 from userdata import UserData
@@ -68,6 +69,7 @@ logging.basicConfig(
 )
 # API URLs contain the bot token and are logged by python-telegram-bot (DEBUG) and httpx (INFO).
 log.redact_tokens_in_logs()
+log.quiet_noisy_library_logs()
 logger = logging.getLogger(__name__)
 
 
@@ -592,6 +594,9 @@ async def error(update: object, context: CallbackContext) -> None:
 
 def register_handlers(application: Application) -> None:
     """Register every update handler. Kept out of main() so tests can check the command set."""
+    # One INFO line per user action — runs first (group -2), so blocked updates are logged too
+    application.add_handler(UpdateLoggingHandler(), group=-2)
+
     # Authorization gate — runs before all other handlers (group -1)
     application.add_handler(AuthorizationHandler(), group=-1)
 
