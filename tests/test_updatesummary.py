@@ -10,6 +10,7 @@ from ongabot.handler.authorizationhandler import AuthorizationHandler
 from ongabot.handler.updatelogginghandler import UpdateLoggingHandler, callback
 from ongabot.ongabot import register_handlers
 from ongabot.utils.updatesummary import command_of, describe_update
+from tests.test_commands import _RecordingApplication
 
 GROUP = Chat(id=-100123, type=ChatType.SUPERGROUP)
 USER = User(id=7, first_name="Alice", is_bot=False)
@@ -36,6 +37,9 @@ class CommandOfTest(unittest.TestCase):
 
     def test_update_without_message_is_not_a_command(self):
         self.assertIsNone(command_of(Update(update_id=1, poll_answer=_answer((0,)))))
+
+    def test_a_pasted_path_is_not_a_command(self):
+        self.assertIsNone(command_of(Update(update_id=1, message=_message("/home/alice/notes.txt"))))
 
 
 class DescribeUpdateTest(unittest.TestCase):
@@ -75,10 +79,20 @@ class DescribeUpdateTest(unittest.TestCase):
         self.assertEqual(level, logging.DEBUG)
         self.assertEqual(summary, f"message {FROM_GROUP}")
 
-    def test_edited_command_is_debug_and_named_by_kind(self):
+    def test_edited_command_is_info_as_its_handler_runs_too(self):
         level, summary = describe_update(Update(update_id=1, edited_message=_message("/onga")))
+        self.assertEqual(level, logging.INFO)
+        self.assertEqual(summary, f"/onga (edited) {FROM_GROUP}")
+
+    def test_edited_plain_message_is_debug_and_named_by_kind(self):
+        level, summary = describe_update(Update(update_id=1, edited_message=_message("typo")))
         self.assertEqual(level, logging.DEBUG)
         self.assertEqual(summary, f"edited_message {FROM_GROUP}")
+
+    def test_vote_cast_as_a_chat_names_the_sender_chat(self):
+        answer = PollAnswer("p1", (1,), voter_chat=GROUP, option_persistent_ids=["1"])
+        _, summary = describe_update(Update(update_id=1, poll_answer=answer))
+        self.assertEqual(summary, "poll answer (options [1]) on poll_id=p1 from sender_chat_id=-100123")
 
 
 class UpdateLoggingHandlerTest(unittest.IsolatedAsyncioTestCase):
@@ -90,14 +104,6 @@ class UpdateLoggingHandlerTest(unittest.IsolatedAsyncioTestCase):
 
     def test_handles_every_update(self):
         self.assertTrue(UpdateLoggingHandler().check_update(Update(update_id=1, message=_message("hi"))))
-
-
-class _RecordingApplication:
-    def __init__(self):
-        self.handlers = []
-
-    def add_handler(self, handler, group=0):
-        self.handlers.append((handler, group))
 
 
 class RegistrationTest(unittest.TestCase):

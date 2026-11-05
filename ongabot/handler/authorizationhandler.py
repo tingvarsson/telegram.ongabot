@@ -11,7 +11,7 @@ from utils.commands import PRIVATE_COMMAND_NAMES, PRIVATE_COMMANDS
 from utils.dm import DM_PICK_PREFIX
 from utils.log import log
 from utils.statistics import CALLBACK_DATA_PREFIX as STATS_SORT_PREFIX
-from utils.updatesummary import command_of
+from utils.updatesummary import command_of, update_kind
 
 _logger = logging.getLogger(__name__)
 
@@ -61,8 +61,14 @@ async def callback(update: Update, context: CallbackContext) -> None:
     if private and _allowed_in_private_chat(update):
         return
 
-    # The update itself was already summarized by UpdateLoggingHandler; the update id ties the two lines together.
-    _logger.info("Blocked update %s from unauthorized chat_id=%s (%s)", update.update_id, chat.id, chat.type)
+    # Names what was blocked itself: UpdateLoggingHandler summarizes plain messages only at DEBUG.
+    _logger.info(
+        "Blocked update %s (%s) from unauthorized chat_id=%s (%s)",
+        update.update_id,
+        command_of(update) or update_kind(update),
+        chat.id,
+        chat.type,
+    )
     msg = update.effective_message
     if msg:
         await msg.reply_text(PRIVATE_CHAT_HINT if private else NOT_ENABLED)

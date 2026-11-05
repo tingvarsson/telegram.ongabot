@@ -9,8 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The bot's log now records each command, button tap and poll vote instead of a constant
-  stream of connection noise.
+- Logs now show each command, button tap and vote instead of connection noise.
 
 ## [1.15.0] - 2026-11-04
 

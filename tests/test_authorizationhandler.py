@@ -52,7 +52,9 @@ class AuthorizationHandlerTest(unittest.IsolatedAsyncioTestCase):
         with self.assertLogs("ongabot.handler.authorizationhandler", "INFO") as logs:
             with self.assertRaises(ApplicationHandlerStop):
                 await callback(update, _context())
-        self.assertIn("Blocked update 4711 from unauthorized chat_id=-100123 (supergroup)", logs.output[-1])
+        self.assertIn(
+            "Blocked update 4711 (/statistics) from unauthorized chat_id=-100123 (supergroup)", logs.output[-1]
+        )
 
     async def test_update_without_chat_passes(self):
         update = _update()
