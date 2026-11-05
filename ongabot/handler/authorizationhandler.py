@@ -11,6 +11,7 @@ from utils.commands import PRIVATE_COMMAND_NAMES, PRIVATE_COMMANDS
 from utils.dm import DM_PICK_PREFIX
 from utils.log import log
 from utils.statistics import CALLBACK_DATA_PREFIX as STATS_SORT_PREFIX
+from utils.updatesummary import command_of
 
 _logger = logging.getLogger(__name__)
 
@@ -32,20 +33,12 @@ class AuthorizationHandler(TypeHandler):
         super().__init__(Update, callback)
 
 
-def _command(update: Update) -> str | None:
-    """The command an update's message starts with, lowercased and without @botname."""
-    msg = update.effective_message
-    if msg and msg.text and msg.text.startswith("/"):
-        return msg.text.split()[0].split("@")[0].lower()
-    return None
-
-
 def _allowed_in_private_chat(update: Update) -> bool:
     """True for the updates an unauthorized private chat may send: private commands and their buttons."""
     query = update.callback_query
     if query is not None:
         return query.data is not None and query.data.split(":", 1)[0] in _PRIVATE_CALLBACK_PREFIXES
-    command = _command(update)
+    command = command_of(update)
     return command is not None and command.removeprefix("/") in PRIVATE_COMMAND_NAMES
 
 
@@ -57,7 +50,7 @@ async def callback(update: Update, context: CallbackContext) -> None:
         return  # PollAnswer updates carry no chat; let them through
 
     # Allow bot admins to run /authorize and /deauthorize in any chat
-    if _command(update) in ("/authorize", "/deauthorize"):
+    if command_of(update) in ("/authorize", "/deauthorize"):
         if update.effective_user and update.effective_user.id in get_bot_admins():
             return
 
@@ -68,6 +61,8 @@ async def callback(update: Update, context: CallbackContext) -> None:
     if private and _allowed_in_private_chat(update):
         return
 
+    # The update itself was already summarized by UpdateLoggingHandler; the update id ties the two lines together.
+    _logger.info("Blocked update %s from unauthorized chat_id=%s (%s)", update.update_id, chat.id, chat.type)
     msg = update.effective_message
     if msg:
         await msg.reply_text(PRIVATE_CHAT_HINT if private else NOT_ENABLED)

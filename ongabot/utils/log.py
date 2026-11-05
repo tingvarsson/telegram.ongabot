@@ -51,6 +51,17 @@ def redact_tokens_in_logs() -> None:
         handler.addFilter(TokenRedactingFilter())
 
 
+def quiet_http_request_logs() -> None:
+    """Keep httpx's per-request INFO lines out of the log unless the root level is DEBUG.
+
+    httpx logs every request at INFO, and the bot long-polls getUpdates around the clock, so at
+    the default level the log is little else. Failed requests still surface through the bot's own
+    warnings and the error handler. Call after logging.basicConfig().
+    """
+    if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
 def log(func: F) -> F:
     """Log decorator to give ENTER/EXIT logs of a function"""
     if inspect.iscoroutinefunction(func):

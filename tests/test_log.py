@@ -203,5 +203,28 @@ class TokenRedactionTest(unittest.TestCase):
             root.removeHandler(handler)
 
 
+class QuietHttpRequestLogsTest(unittest.TestCase):
+    def setUp(self):
+        self.root = logging.getLogger()
+        self.httpx = logging.getLogger("httpx")
+        self.saved = (self.root.level, self.httpx.level)
+        self.httpx.setLevel(logging.NOTSET)
+
+    def tearDown(self):
+        self.root.setLevel(self.saved[0])
+        self.httpx.setLevel(self.saved[1])
+
+    def test_httpx_requests_are_hidden_at_info(self):
+        self.root.setLevel(logging.INFO)
+        log.quiet_http_request_logs()
+        self.assertFalse(self.httpx.isEnabledFor(logging.INFO))
+        self.assertTrue(self.httpx.isEnabledFor(logging.WARNING))
+
+    def test_httpx_requests_are_kept_at_debug(self):
+        self.root.setLevel(logging.DEBUG)
+        log.quiet_http_request_logs()
+        self.assertTrue(self.httpx.isEnabledFor(logging.INFO))
+
+
 if __name__ == "__main__":
     unittest.main()
