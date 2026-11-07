@@ -1,10 +1,13 @@
+import os
+import tempfile
 import unittest
 from datetime import date, datetime, timezone
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram import BotCommandScopeAllPrivateChats
 from telegram.constants import ParseMode
-from telegram.error import BadRequest, TelegramError
+from telegram.error import BadRequest, NetworkError, TelegramError
 
 from ongabot import ongabot
 from ongabot.chat import Chat
@@ -224,7 +227,7 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
         await post_init(application)
 
         # Hourly event cleanup (from right after boot), the hourly CS2 sweep and poke
-        # schedulers, and the CS2 patch-notes poll are all registered.
+        # schedulers, the CS2 patch-notes poll and the healthcheck heartbeat are all registered.
         scheduled = [
             call.kwargs["name"]
             for calls in (
@@ -240,9 +243,107 @@ class PostInitSchedulingFailsTest(unittest.IsolatedAsyncioTestCase):
                 "complete_past_events",
                 "cs2_patchnotes_sweep",
                 "cs2_sweeps",
+                "healthcheck_heartbeat",
                 "poke_schedule",
             ],
         )
+
+
+class _HeartbeatFileTest(unittest.IsolatedAsyncioTestCase):
+    """Points DB_PATH, and so the heartbeat file, into a temp dir."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()  # pylint: disable=consider-using-with
+        self.addCleanup(tmp.cleanup)
+        db_path = os.path.join(tmp.name, "ongabot.db")
+        env = patch.dict(os.environ, {"DB_PATH": db_path})
+        env.start()
+        self.addCleanup(env.stop)
+        self.heartbeat = Path(db_path + ".heartbeat")
+
+
+class HeartbeatCallbackTest(_HeartbeatFileTest):
+    def _context(self, running=True):
+        context = MagicMock()
+        context.application.updater.running = running
+        context.bot = AsyncMock()
+        context.job.data = {"healthy": None}
+        return context
+
+    async def test_writes_heartbeat_when_polling_and_telegram_answers(self):
+        context = self._context()
+        await ongabot.heartbeat_callback(context)
+        context.bot.get_me.assert_awaited_once()
+        self.assertTrue(self.heartbeat.exists())
+        self.assertTrue(context.job.data["healthy"])
+
+    async def test_no_heartbeat_when_updater_stopped(self):
+        context = self._context(running=False)
+        with self.assertLogs("ongabot.ongabot", level="WARNING") as logs:
+            await ongabot.heartbeat_callback(context)
+        self.assertFalse(self.heartbeat.exists())
+        self.assertIn("updater is not polling", logs.output[0])
+        context.bot.get_me.assert_not_awaited()
+
+    async def test_no_heartbeat_without_an_updater(self):
+        context = self._context()
+        context.application.updater = None
+        await ongabot.heartbeat_callback(context)
+        self.assertFalse(self.heartbeat.exists())
+        self.assertFalse(context.job.data["healthy"])
+
+    async def test_no_heartbeat_when_telegram_unreachable(self):
+        context = self._context()
+        context.bot.get_me.side_effect = NetworkError("connection refused")
+        with self.assertLogs("ongabot.ongabot", level="WARNING") as logs:
+            await ongabot.heartbeat_callback(context)
+        self.assertFalse(self.heartbeat.exists())
+        self.assertIn("connection refused", logs.output[0])
+
+    async def test_no_heartbeat_when_file_cannot_be_written(self):
+        context = self._context()
+        with patch.dict(os.environ, {"DB_PATH": "/nonexistent-dir/ongabot.db"}):
+            with self.assertLogs("ongabot.ongabot", level="WARNING") as logs:
+                await ongabot.heartbeat_callback(context)
+        self.assertIn("cannot write", logs.output[0])
+        self.assertFalse(context.job.data["healthy"])
+
+    async def test_logs_only_when_health_flips(self):
+        context = self._context()
+        with self.assertLogs("ongabot.ongabot", level="INFO") as logs:
+            await ongabot.heartbeat_callback(context)
+            await ongabot.heartbeat_callback(context)
+            context.application.updater.running = False
+            await ongabot.heartbeat_callback(context)
+            await ongabot.heartbeat_callback(context)
+            context.application.updater.running = True
+            await ongabot.heartbeat_callback(context)
+        # healthy, stopped, recovered - the repeated states log nothing at INFO or above.
+        self.assertEqual(len(logs.records), 3)
+        self.assertEqual([record.levelname for record in logs.records], ["INFO", "WARNING", "INFO"])
+
+
+class PostInitHeartbeatTest(_HeartbeatFileTest):
+    async def test_post_init_clears_a_stale_heartbeat(self):
+        self.heartbeat.write_text("stale", encoding="utf-8")
+        application = MagicMock()
+        application.bot = AsyncMock()
+        application.job_queue = None
+
+        await post_init(application)
+
+        self.assertFalse(self.heartbeat.exists())
+
+    async def test_post_init_survives_a_heartbeat_it_cannot_remove(self):
+        application = MagicMock()
+        application.bot = AsyncMock()
+        application.job_queue = None
+
+        with patch.object(ongabot, "clear_heartbeat", side_effect=PermissionError("read-only")):
+            with self.assertLogs("ongabot.ongabot", level="WARNING") as logs:
+                await post_init(application)
+
+        self.assertIn("stale heartbeat", logs.output[0])
 
 
 class PostInitVerificationVotesTest(unittest.IsolatedAsyncioTestCase):

@@ -53,6 +53,7 @@ from handler import UnverifyCommandHandler
 from handler import UpdateEventCommandHandler
 from handler import UpdateLoggingHandler
 from handler import VerifyCommandHandler
+from healthcheck import HEARTBEAT_INTERVAL, clear_heartbeat, heartbeat_path, write_heartbeat
 from poke import schedule_todays_pokes_callback
 from userdata import UserData
 from utils import log
@@ -510,9 +511,55 @@ async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, n
             logger.error("Failed to send version announcement to chat_id=%s: %s", chat_id, e)
 
 
+def _report_health(data: Dict[str, Any], healthy: bool, reason: str) -> None:
+    """Log the health state only when it flips, so a steady state costs no log lines."""
+    if data.get("healthy") == healthy:
+        logger.debug("Health heartbeat: %s", reason)
+        return
+    data["healthy"] = healthy
+    if healthy:
+        logger.info("Health heartbeat: %s", reason)
+    else:
+        logger.warning("Health heartbeat stopped: %s", reason)
+
+
+@log.log
+async def heartbeat_callback(context: CallbackContext) -> None:
+    """Write the healthcheck heartbeat, but only while the bot is demonstrably working.
+
+    The job firing at all shows the event loop and the JobQueue are alive. On top of that the
+    updater must still be polling, and Telegram must answer getMe, which catches both a lost
+    network and a revoked token. If any of these fail, no heartbeat is written, the file goes
+    stale and healthcheck.py reports the container unhealthy.
+    """
+    # Job.data is typed as object by python-telegram-bot; post_init always sets a dict.
+    data = cast(Dict[str, Any], context.job.data)
+    updater = context.application.updater
+    if updater is None or not updater.running:
+        _report_health(data, False, "updater is not polling Telegram")
+        return
+    try:
+        await context.bot.get_me()
+    except TelegramError as e:
+        _report_health(data, False, f"Telegram getMe failed: {e}")
+        return
+    try:
+        write_heartbeat(datetime.datetime.now(datetime.timezone.utc))
+    except OSError as e:
+        _report_health(data, False, f"cannot write {heartbeat_path()}: {e}")
+        return
+    _report_health(data, True, f"polling and Telegram reachable, writing {heartbeat_path()}")
+
+
 async def post_init(application: Application) -> None:
     """Called after the application initializes with persistence loaded."""
     bot_data: BotData = application.bot_data
+
+    # A heartbeat left by the previous process would report healthy before this one is up.
+    try:
+        clear_heartbeat()
+    except OSError as e:
+        logger.warning("Could not remove stale heartbeat %s: %s", heartbeat_path(), e)
 
     # Seed authorized chats from env var (idempotent; safe to keep in .env)
     for raw_id in os.getenv("AUTHORIZED_CHAT_IDS", "").split(","):
@@ -586,6 +633,16 @@ async def post_init(application: Application) -> None:
         name="cs2_patchnotes_sweep",
     )
 
+    # The Docker healthcheck reads this heartbeat; see healthcheck.py. The first beat comes
+    # right after boot so a fresh container turns healthy within seconds.
+    application.job_queue.run_repeating(
+        heartbeat_callback,
+        interval=HEARTBEAT_INTERVAL,
+        first=5,
+        name="healthcheck_heartbeat",
+        data={"healthy": None},
+    )
+
 
 async def error(update: object, context: CallbackContext) -> None:
     """Log Errors caused by Updates."""
@@ -635,6 +692,7 @@ def main() -> None:
     """Setup and run ONGAbot"""
     context_types = ContextTypes(bot_data=BotData, user_data=UserData)
 
+    # healthcheck.heartbeat_path() derives from DB_PATH with this same default.
     persistence = PicklePersistence(filepath=os.getenv("DB_PATH", "ongabot.db"), context_types=context_types)
 
     api_token = os.getenv("API_TOKEN")
