@@ -71,11 +71,12 @@ docker run --rm --env API_TOKEN=your_token tingvarsson/telegram.ongabot:latest
 
 #### Healthcheck
 
-The image has a built-in `HEALTHCHECK`. Every minute the bot checks that it is still polling
-Telegram and that Telegram answers, and if so it refreshes a heartbeat file next to its
+The image has a built-in `HEALTHCHECK`. Every minute the bot checks that Telegram has answered
+its update polling within the last minute, and if so it refreshes a heartbeat file next to its
 database (`<DB_PATH>.heartbeat`). The container is `healthy` while that file is less than
-three minutes old. If the polling loop stops, the job queue stalls, the network drops or the
-token is revoked, the heartbeat goes stale and the container turns `unhealthy`.
+three minutes old. If the polling loop dies, the job queue stalls, the network drops, the token
+is revoked or a second instance polls the same token, the heartbeat goes stale and the
+container turns `unhealthy`.
 
 ```bash
 docker ps                                                   # STATUS shows (healthy)

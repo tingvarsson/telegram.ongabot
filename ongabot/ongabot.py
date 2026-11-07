@@ -62,6 +62,7 @@ from utils.changelogformat import render_changelog_html
 from utils.commands import ALL_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION, PRIVATE_COMMANDS
 from utils.htmlblocks import send_html_with_fallback
 from utils.points import render_event_recap_message
+from utils.polling import PollTracker, PollTrackingRequest
 from verification import reschedule_open_votes
 
 logging.basicConfig(
@@ -511,6 +512,14 @@ async def _announce_new_version(bot: Bot, bot_data: BotData, old_version: str, n
             logger.error("Failed to send version announcement to chat_id=%s: %s", chat_id, e)
 
 
+# Fed by the getUpdates request built in main(), read by heartbeat_callback.
+POLL_TRACKER = PollTracker()
+# How long getUpdates may go unanswered before the bot counts as not polling. A live long-poll
+# is answered at least every 10s (run_polling's default timeout); this leaves room for PTB's
+# retry backoff after a brief network error.
+POLL_MAX_SILENCE = datetime.timedelta(seconds=60)
+
+
 def _report_health(data: Dict[str, Any], healthy: bool, reason: str) -> None:
     """Log the health state only when it flips, so a steady state costs no log lines."""
     if data.get("healthy") == healthy:
@@ -527,39 +536,41 @@ def _report_health(data: Dict[str, Any], healthy: bool, reason: str) -> None:
 async def heartbeat_callback(context: CallbackContext) -> None:
     """Write the healthcheck heartbeat, but only while the bot is demonstrably working.
 
-    The job firing at all shows the event loop and the JobQueue are alive. On top of that the
-    updater must still be polling, and Telegram must answer getMe, which catches both a lost
-    network and a revoked token. If any of these fail, no heartbeat is written, the file goes
-    stale and healthcheck.py reports the container unhealthy.
+    The job firing at all shows the event loop and the JobQueue are alive. On top of that
+    Telegram must have answered a getUpdates long-poll within POLL_MAX_SILENCE, which shows
+    that updates are still being fetched (see utils/polling.py for why Updater.running cannot
+    tell). If either fails, no heartbeat is written, the file goes stale and healthcheck.py
+    reports the container unhealthy.
     """
-    # Job.data is typed as object by python-telegram-bot; post_init always sets a dict.
+    # Job.data is typed as object by python-telegram-bot; post_init always sets this dict.
     data = cast(Dict[str, Any], context.job.data)
-    updater = context.application.updater
-    if updater is None or not updater.running:
-        _report_health(data, False, "updater is not polling Telegram")
+    tracker: PollTracker = data["polls"]
+    silence = tracker.seconds_since_success()
+    if silence is None:
+        _report_health(data, False, "Telegram has not answered getUpdates yet")
         return
-    try:
-        await context.bot.get_me()
-    except TelegramError as e:
-        _report_health(data, False, f"Telegram getMe failed: {e}")
+    if silence > POLL_MAX_SILENCE.total_seconds():
+        _report_health(data, False, f"Telegram last answered getUpdates {int(silence)}s ago")
         return
     try:
         write_heartbeat(datetime.datetime.now(datetime.timezone.utc))
     except OSError as e:
         _report_health(data, False, f"cannot write {heartbeat_path()}: {e}")
         return
-    _report_health(data, True, f"polling and Telegram reachable, writing {heartbeat_path()}")
+    _report_health(data, True, f"polling Telegram, writing {heartbeat_path()}")
+
+
+def clear_stale_heartbeat() -> None:
+    """Remove a heartbeat left by an earlier process; never fails startup."""
+    try:
+        clear_heartbeat()
+    except OSError as e:
+        logger.warning("Could not remove stale heartbeat %s: %s", heartbeat_path(), e)
 
 
 async def post_init(application: Application) -> None:
     """Called after the application initializes with persistence loaded."""
     bot_data: BotData = application.bot_data
-
-    # A heartbeat left by the previous process would report healthy before this one is up.
-    try:
-        clear_heartbeat()
-    except OSError as e:
-        logger.warning("Could not remove stale heartbeat %s: %s", heartbeat_path(), e)
 
     # Seed authorized chats from env var (idempotent; safe to keep in .env)
     for raw_id in os.getenv("AUTHORIZED_CHAT_IDS", "").split(","):
@@ -634,13 +645,14 @@ async def post_init(application: Application) -> None:
     )
 
     # The Docker healthcheck reads this heartbeat; see healthcheck.py. The first beat comes
-    # right after boot so a fresh container turns healthy within seconds.
+    # soon after boot so a fresh container turns healthy within seconds, but after the first
+    # getUpdates has had time to complete: an idle long-poll takes run_polling's 10s timeout.
     application.job_queue.run_repeating(
         heartbeat_callback,
         interval=HEARTBEAT_INTERVAL,
-        first=5,
+        first=15,
         name="healthcheck_heartbeat",
-        data={"healthy": None},
+        data={"healthy": None, "polls": POLL_TRACKER},
     )
 
 
@@ -702,9 +714,15 @@ def main() -> None:
     # Created now rather than at the first big moment, so a missing GIPHY_API_KEY is logged at startup.
     get_giphy_client()
 
+    # Cleared before anything can fail: Application.initialize() calls getMe, and a boot that
+    # crash-loops there would otherwise keep reporting the previous run's heartbeat as healthy.
+    clear_stale_heartbeat()
+
     application = (
         Application.builder()
         .token(api_token)
+        # getUpdates goes through a request that records each answer, for heartbeat_callback.
+        .get_updates_request(PollTrackingRequest(POLL_TRACKER))
         .persistence(persistence)
         .context_types(context_types)
         .post_init(post_init)

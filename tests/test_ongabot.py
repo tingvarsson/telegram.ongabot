@@ -7,11 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram import BotCommandScopeAllPrivateChats
 from telegram.constants import ParseMode
-from telegram.error import BadRequest, NetworkError, TelegramError
+from telegram.error import BadRequest, TelegramError
 
 from ongabot import ongabot
 from ongabot.chat import Chat
 from ongabot.ongabot import post_init, setup_bot_metadata
+from ongabot.utils.polling import PollTracker
 from ongabot.verification import VerificationVote
 from tests.fake_clock import with_clock
 
@@ -263,45 +264,36 @@ class _HeartbeatFileTest(unittest.IsolatedAsyncioTestCase):
 
 
 class HeartbeatCallbackTest(_HeartbeatFileTest):
-    def _context(self, running=True):
+    def _context(self, silence):
+        """A job context whose tracker last saw getUpdates answered `silence` seconds ago."""
+        tracker = MagicMock(spec=PollTracker)
+        tracker.seconds_since_success.return_value = silence
         context = MagicMock()
-        context.application.updater.running = running
-        context.bot = AsyncMock()
-        context.job.data = {"healthy": None}
+        context.job.data = {"healthy": None, "polls": tracker}
         return context
 
-    async def test_writes_heartbeat_when_polling_and_telegram_answers(self):
-        context = self._context()
+    async def test_writes_heartbeat_while_getupdates_is_answered(self):
+        context = self._context(silence=5)
         await ongabot.heartbeat_callback(context)
-        context.bot.get_me.assert_awaited_once()
         self.assertTrue(self.heartbeat.exists())
         self.assertTrue(context.job.data["healthy"])
 
-    async def test_no_heartbeat_when_updater_stopped(self):
-        context = self._context(running=False)
+    async def test_no_heartbeat_before_the_first_getupdates_answer(self):
+        context = self._context(silence=None)
         with self.assertLogs("ongabot.ongabot", level="WARNING") as logs:
             await ongabot.heartbeat_callback(context)
         self.assertFalse(self.heartbeat.exists())
-        self.assertIn("updater is not polling", logs.output[0])
-        context.bot.get_me.assert_not_awaited()
+        self.assertIn("has not answered getUpdates yet", logs.output[0])
 
-    async def test_no_heartbeat_without_an_updater(self):
-        context = self._context()
-        context.application.updater = None
-        await ongabot.heartbeat_callback(context)
-        self.assertFalse(self.heartbeat.exists())
-        self.assertFalse(context.job.data["healthy"])
-
-    async def test_no_heartbeat_when_telegram_unreachable(self):
-        context = self._context()
-        context.bot.get_me.side_effect = NetworkError("connection refused")
+    async def test_no_heartbeat_once_polling_has_gone_quiet(self):
+        context = self._context(silence=ongabot.POLL_MAX_SILENCE.total_seconds() + 1)
         with self.assertLogs("ongabot.ongabot", level="WARNING") as logs:
             await ongabot.heartbeat_callback(context)
         self.assertFalse(self.heartbeat.exists())
-        self.assertIn("connection refused", logs.output[0])
+        self.assertIn("last answered getUpdates 61s ago", logs.output[0])
 
     async def test_no_heartbeat_when_file_cannot_be_written(self):
-        context = self._context()
+        context = self._context(silence=5)
         with patch.dict(os.environ, {"DB_PATH": "/nonexistent-dir/ongabot.db"}):
             with self.assertLogs("ongabot.ongabot", level="WARNING") as logs:
                 await ongabot.heartbeat_callback(context)
@@ -309,40 +301,44 @@ class HeartbeatCallbackTest(_HeartbeatFileTest):
         self.assertFalse(context.job.data["healthy"])
 
     async def test_logs_only_when_health_flips(self):
-        context = self._context()
+        context = self._context(silence=5)
+        tracker = context.job.data["polls"]
         with self.assertLogs("ongabot.ongabot", level="INFO") as logs:
             await ongabot.heartbeat_callback(context)
             await ongabot.heartbeat_callback(context)
-            context.application.updater.running = False
+            tracker.seconds_since_success.return_value = 600
             await ongabot.heartbeat_callback(context)
             await ongabot.heartbeat_callback(context)
-            context.application.updater.running = True
+            tracker.seconds_since_success.return_value = 5
             await ongabot.heartbeat_callback(context)
         # healthy, stopped, recovered - the repeated states log nothing at INFO or above.
-        self.assertEqual(len(logs.records), 3)
         self.assertEqual([record.levelname for record in logs.records], ["INFO", "WARNING", "INFO"])
 
-
-class PostInitHeartbeatTest(_HeartbeatFileTest):
-    async def test_post_init_clears_a_stale_heartbeat(self):
-        self.heartbeat.write_text("stale", encoding="utf-8")
+    async def test_post_init_hands_the_job_the_poll_tracker(self):
         application = MagicMock()
         application.bot = AsyncMock()
-        application.job_queue = None
+        application.job_queue = MagicMock()
 
         await post_init(application)
 
+        heartbeat = [
+            call
+            for call in application.job_queue.run_repeating.call_args_list
+            if call.kwargs["name"] == "healthcheck_heartbeat"
+        ]
+        self.assertIs(heartbeat[0].kwargs["data"]["polls"], ongabot.POLL_TRACKER)
+
+
+class ClearStaleHeartbeatTest(_HeartbeatFileTest):
+    def test_removes_a_stale_heartbeat(self):
+        self.heartbeat.write_text("stale", encoding="utf-8")
+        ongabot.clear_stale_heartbeat()
         self.assertFalse(self.heartbeat.exists())
 
-    async def test_post_init_survives_a_heartbeat_it_cannot_remove(self):
-        application = MagicMock()
-        application.bot = AsyncMock()
-        application.job_queue = None
-
+    def test_a_heartbeat_it_cannot_remove_does_not_stop_startup(self):
         with patch.object(ongabot, "clear_heartbeat", side_effect=PermissionError("read-only")):
             with self.assertLogs("ongabot.ongabot", level="WARNING") as logs:
-                await post_init(application)
-
+                ongabot.clear_stale_heartbeat()
         self.assertIn("stale heartbeat", logs.output[0])
 
 
