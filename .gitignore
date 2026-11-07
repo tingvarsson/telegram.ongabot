@@ -117,3 +117,6 @@ ongabot.db
 ongabot-*.db
 # Database snapshots, e.g. a prod backup copied in to seed dev databases
 ongabot.db.*
+# Healthcheck heartbeat, written next to the database (ongabot-<bot>.db.heartbeat)
+*.heartbeat
+
